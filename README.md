@@ -155,13 +155,4 @@ Centro Universitário Católica de Santa Catarina, Jaraguá do Sul, SC, Brasil.
 
 ---
 
-## Referências
-
-1. LINDEN, G.; SMITH, B.; YORK, J. Amazon.com Recommendations: Item-to-Item Collaborative Filtering. *IEEE Internet Computing*, v. 7, n. 1, 2003.
-2. YING, R. et al. Graph Convolutional Neural Networks for Web-Scale Recommender Systems. *ACM SIGKDD*, 2018.
-3. GOMEZ-URIBE, C. A.; HUNT, N. The Netflix Recommender System. *ACM TMIS*, v. 6, n. 4, 2015.
-4. KOREN, Y.; BELL, R.; VOLINSKY, C. Matrix Factorization Techniques for Recommender Systems. *IEEE Computer*, v. 42, n. 8, 2009.
-
----
-
 *Apresentação do PAC VIII — 2026/1 | SBC Computing Reviews*
