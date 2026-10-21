@@ -302,42 +302,53 @@ Atende [RF24](02-REQUISITOS.md) e [04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFIC
 
 ### 4.11 `score_produto`
 
-Cache do score produto×usuário. Recalculado em batch pelos workers; evita recomputar em toda leitura.
+Cache do score produto×(usuário **ou** visitante). Recalculado em batch pelos workers; evita recomputar em toda leitura. Visitante tem o score migrado para `usuario_id` ao autenticar ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)).
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
-| `usuario_id` | `BIGINT` | NOT NULL, FK `usuario(id)` ON DELETE CASCADE | |
+| `id` | `BIGSERIAL` | PK | |
+| `usuario_id` | `BIGINT` | NULL, FK `usuario(id)` ON DELETE CASCADE | Preenchido para autenticado |
+| `visitante_id` | `BIGINT` | NULL, FK `visitante(id)` ON DELETE CASCADE | Preenchido para visitante |
 | `produto_id` | `BIGINT` | NOT NULL, FK `produto(id)` ON DELETE CASCADE | |
 | `valor` | `NUMERIC(5,2)` | NOT NULL | [0, 100] |
 | `calculado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 
-**PK composta:** `(usuario_id, produto_id)`.
-**Índices:** `(usuario_id, valor DESC)` para ranking.
+**Constraints:** `CHECK ((usuario_id IS NULL) <> (visitante_id IS NULL))` — exatamente um dos dois preenchido (XOR).
+**Unique:** dois índices parciais — `UNIQUE (usuario_id, produto_id) WHERE usuario_id IS NOT NULL` e `UNIQUE (visitante_id, produto_id) WHERE visitante_id IS NOT NULL`.
+**Índices:** `(usuario_id, valor DESC)` e `(visitante_id, valor DESC)` para ranking.
 
 ### 4.12 `score_categoria`
 
-Análogo a `score_produto`, para categorias.
+Análogo a `score_produto`, para categorias. Suporta usuário autenticado **ou** visitante.
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
-| `usuario_id` | `BIGINT` | NOT NULL, FK `usuario(id)` ON DELETE CASCADE | |
+| `id` | `BIGSERIAL` | PK | |
+| `usuario_id` | `BIGINT` | NULL, FK `usuario(id)` ON DELETE CASCADE | |
+| `visitante_id` | `BIGINT` | NULL, FK `visitante(id)` ON DELETE CASCADE | |
 | `categoria_id` | `BIGINT` | NOT NULL, FK `categoria(id)` ON DELETE CASCADE | |
 | `valor` | `NUMERIC(5,2)` | NOT NULL | [0, 100] |
 | `calculado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 
-**PK composta:** `(usuario_id, categoria_id)`.
+**Constraints:** `CHECK ((usuario_id IS NULL) <> (visitante_id IS NULL))`.
+**Unique:** `UNIQUE (usuario_id, categoria_id) WHERE usuario_id IS NOT NULL` e `UNIQUE (visitante_id, categoria_id) WHERE visitante_id IS NOT NULL`.
 
 ### 4.13 `faixa_preco_usuario`
 
-Faixa de preço calculada com e sem conversão, por usuário ([04-ESPECIFICACAO-TECNICA.md §8](04-ESPECIFICACAO-TECNICA.md)).
+Faixa de preço calculada com e sem conversão, por usuário ou visitante ([04-ESPECIFICACAO-TECNICA.md §8](04-ESPECIFICACAO-TECNICA.md)).
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
-| `usuario_id` | `BIGINT` | PK, FK `usuario(id)` ON DELETE CASCADE | |
+| `id` | `BIGSERIAL` | PK | |
+| `usuario_id` | `BIGINT` | NULL, FK `usuario(id)` ON DELETE CASCADE | |
+| `visitante_id` | `BIGINT` | NULL, FK `visitante(id)` ON DELETE CASCADE | |
 | `mediana_com_conversao` | `NUMERIC(12,2)` | NULL | |
 | `mediana_sem_conversao` | `NUMERIC(12,2)` | NULL | |
 | `gap_preco` | `NUMERIC(12,2)` | NULL | Diferença (sinal de barreira de preço) |
 | `calculado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
+
+**Constraints:** `CHECK ((usuario_id IS NULL) <> (visitante_id IS NULL))`.
+**Unique:** `UNIQUE (usuario_id) WHERE usuario_id IS NOT NULL` e `UNIQUE (visitante_id) WHERE visitante_id IS NOT NULL`.
 
 ### 4.14 `produto_aresta` (Camada 3 — grafo)
 
@@ -369,17 +380,18 @@ Pesos ajustáveis das métricas de scoring. Permite ajuste sem redeploy ([RNF13]
 
 ### 4.16 `parametro_decay`
 
-Taxa de decaimento λ por categoria (ou global com `categoria_id IS NULL`).
+Taxa de decaimento λ e boost pós-conversão por categoria (ou global com `categoria_id IS NULL`).
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
 | `id` | `BIGSERIAL` | PK | |
 | `categoria_id` | `BIGINT` | NULL, FK `categoria(id)` ON DELETE CASCADE | NULL = valor global |
 | `lambda` | `NUMERIC(6,5)` | NOT NULL | Ex: 0.00500 |
+| `boost_conversao` | `NUMERIC(3,2)` | NOT NULL DEFAULT 1.00 | Multiplicador aplicado no Score de Categoria após conversão recente (1.00 = sem boost, até 1.50; ver [04 §4.3](04-ESPECIFICACAO-TECNICA.md)) |
 | `atualizado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `atualizado_por` | `BIGINT` | NULL, FK `usuario(id)` | |
 
-**Constraints:** `UNIQUE (categoria_id)` — uma linha por categoria + uma linha global.
+**Constraints:** garantir exatamente uma linha por categoria + exatamente uma linha global. Como `UNIQUE (categoria_id)` em Postgres trata múltiplos NULL como distintos, usar **índices parciais**: `CREATE UNIQUE INDEX ON parametro_decay (categoria_id) WHERE categoria_id IS NOT NULL;` e `CREATE UNIQUE INDEX ON parametro_decay ((TRUE)) WHERE categoria_id IS NULL;` — ou, em Postgres 15+, `UNIQUE NULLS NOT DISTINCT (categoria_id)`.
 
 ### 4.17 `solicitacao_lgpd`
 
@@ -415,11 +427,14 @@ Colocar cada payload numa coluna separada inflaria o schema. JSONB preserva flex
 Tabelas com `deleted_at`:
 - `usuario`, `favorito`, `evento`, `compra`.
 
-Quando o usuário solicita exclusão ([RF30](02-REQUISITOS.md)):
-- Marca `deleted_at = now()` em suas linhas, OU
-- Faz hard delete + anonimiza referências históricas (ex: `compra.usuario_id = NULL` com observação "titular excluído").
+Quando o usuário solicita exclusão ([RF30](02-REQUISITOS.md)) o sistema aplica **soft delete com anonimização de PII**:
 
-A escolha entre as duas estratégias deve ser documentada na política de retenção e implementada consistentemente.
+1. `UPDATE usuario SET deleted_at = now(), nome_completo = NULL, cpf = NULL, cnpj = NULL, razao_social = NULL, email = 'anon_' || id || '@removido.local', senha_hash = '!', telefone = NULL, email_alternativo = NULL WHERE id = :id;`
+2. `UPDATE favorito SET deleted_at = now() WHERE usuario_id = :id;` e análogo para `evento`, `compra`.
+3. Registros agregados (`score_produto`, `score_categoria`, `faixa_preco_usuario`, `evento`, `compra`) **continuam referenciando `usuario_id`** para preservar valor estatístico; a PII já não é mais acessível por joins.
+4. `solicitacao_lgpd` passa a `ATENDIDA` com `atendido_em = now()`.
+
+A estratégia preserva histórico comportamental e vendas para análise sem violar o direito à exclusão (os dados pessoais foram removidos; o que permanece é anônimo).
 
 ### 5.3 Migração de histórico de visitante
 

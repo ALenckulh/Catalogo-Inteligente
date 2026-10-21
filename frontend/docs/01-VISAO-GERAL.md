@@ -9,14 +9,14 @@ Este TCC propõe o desenvolvimento de um sistema de e-commerce com um diferencia
 
 ## 2. Objetivos
 
-**Objetivo geral:** desenvolver uma plataforma de catálogo online B2B que colete dados comportamentais, calcule scores de intenção de compra por usuário e por produto, e apresente leads qualificados ao vendedor.
+**Objetivo geral:** desenvolver uma plataforma de catálogo online B2B que colete dados comportamentais, calcule scores de intenção de compra por usuário e por produto, e apresente leads qualificados ao dono do catálogo.
 
 **Objetivos específicos:**
 1. Modelar e implementar o sistema de scoring descrito em [04-ESPECIFICACAO-TECNICA.md](04-ESPECIFICACAO-TECNICA.md).
 2. Construir frontend em Next.js com interface minimalista baseada em Ant Design (ver [03-PAGINAS-E-UX.md](03-PAGINAS-E-UX.md)).
 3. Construir backend em Spring Boot com persistência em PostgreSQL e processamento assíncrono de eventos via mensageria.
 4. Garantir conformidade com a LGPD em toda a coleta e tratamento de dados.
-5. Entregar uma lista de leads priorizados por score ao usuário administrador, com visão detalhada por cliente.
+5. Entregar uma lista de leads priorizados por score ao dono do catálogo, com visão detalhada por cliente.
 
 ## 3. Público-Alvo e Modelo de Negócio
 
@@ -30,7 +30,7 @@ O sistema funciona como **vitrine inteligente e catálogo gerenciável**, onde:
 2. **Scoring:** cada interação alimenta um motor de scoring em quatro camadas (ver [04-ESPECIFICACAO-TECNICA.md](04-ESPECIFICACAO-TECNICA.md) §4), gerando scores por produto e por categoria para cada usuário.
 3. **Personalização e ação:** com base no score de intenção, a vitrine se adapta:
    - **Para o comprador:** ordenação de produtos e recomendações personalizadas.
-   - **Para o vendedor:** lista inteligente de leads priorizados, permitindo contato proativo via WhatsApp.
+   - **Para o dono do catálogo:** lista inteligente de leads priorizados, permitindo contato proativo via WhatsApp.
 
 ## 5. Stack Tecnológica
 

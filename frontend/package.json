@@ -6,9 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.0.0",
+    "@ant-design/nextjs-registry": "^1.1.0",
+    "antd": "^6.3.1",
+    "dayjs": "^1.11.13",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"

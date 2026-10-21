@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: catalogo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-catalogo}
+      POSTGRES_USER: ${POSTGRES_USER:-catalogo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catalogo}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-catalogo} -d ${POSTGRES_DB:-catalogo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - catalogo_net
+
+  flyway:
+    image: flyway/flyway:10-alpine
+    container_name: catalogo_flyway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-catalogo}
+      FLYWAY_USER: ${POSTGRES_USER:-catalogo}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-catalogo}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_CONNECT_RETRIES: "10"
+    volumes:
+      - ./migrations:/flyway/sql:ro
+    command: ["migrate"]
+    networks:
+      - catalogo_net
+    profiles:
+      - migrate
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: catalogo_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@catalogo.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - catalogo_net
+    profiles:
+      - tools
+
+volumes:
+  pgdata:
+  pgadmin_data:
+
+networks:
+  catalogo_net:
+    driver: bridge

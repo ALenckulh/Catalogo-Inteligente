@@ -66,6 +66,8 @@ A fila de eventos (RabbitMQ ou Kafka) é parte **central** da arquitetura:
 
 **Política de retentativa:** tentativa inicial + 3 retentativas com backoff exponencial; falhas definitivas vão para DLQ.
 
+**Granularidade de filas vs `tipo_evento`:** o enum `tipo_evento` ([08 §3](08-MODELO-DE-DADOS.md)) é mais fino que a lista de filas acima — `SCROLL_DEPTH`, `TEMPO_PAGINA` e `FILTRO_APLICADO` são agrupados em `events.product.view` por compartilharem o worker consumidor; `DESFAVORITAR` compartilha `events.product.favorite`. Essa agregação mantém poucas filas sem perder expressividade do evento, já que o `tipo` persiste no payload.
+
 ## 3. Modelo de dados
 
 A modelagem relacional completa (tabelas, colunas, tipos, constraints, enums e índices) está documentada em **[08-MODELO-DE-DADOS.md](08-MODELO-DE-DADOS.md)**.
@@ -81,15 +83,18 @@ Resumo das entidades principais:
 
 ## 4. Esboço de API REST
 
-Endpoints de alto nível. Nomes finais podem variar.
+> **Fonte de verdade:** [11-API-ENDPOINTS.md](11-API-ENDPOINTS.md). O esboço abaixo é apenas um índice; qualquer divergência entre este arquivo e o 11 resolve pelo 11.
 
 ### Público / consumidor
 
 ```
 POST   /api/auth/signup                    Cria conta (PF ou PJ)
 POST   /api/auth/login                     Autentica usuário
+POST   /api/auth/logout                    Encerra sessão
 POST   /api/auth/password-reset            Solicita recuperação
 POST   /api/auth/password-reset/confirm    Confirma nova senha
+POST   /api/auth/migrar-historico          Migração visitante → usuário (RF19)
+POST   /api/visitantes/sessao              Bootstrap cookie/sessão anônima
 
 GET    /api/produtos                       Lista produtos (ordenado por score)
 GET    /api/produtos/{slug}                Detalhe de produto
@@ -106,6 +111,7 @@ GET    /api/conta                          Dados do usuário logado
 PATCH  /api/conta                          Atualiza dados
 POST   /api/conta/consentimentos           Atualiza consentimentos LGPD
 GET    /api/conta/exportar                 LGPD — portabilidade
+POST   /api/conta/solicitacoes-lgpd        LGPD — solicitações (export/exclusão)
 DELETE /api/conta                          LGPD — exclusão
 ```
 
@@ -125,13 +131,19 @@ DELETE /api/admin/produtos/{id}            Remove produto
 
 GET    /api/admin/dashboard                KPIs + leads priorizados
 
+GET    /api/admin/conta                    Dados do admin logado
+PATCH  /api/admin/conta                    Atualiza e-mail/senha/telefone
+
 GET    /api/admin/configuracao/pesos       Lê pesos de métricas
 PATCH  /api/admin/configuracao/pesos       Atualiza pesos
+GET    /api/admin/configuracao/decay       Lê λ (global + por categoria)
+PATCH  /api/admin/configuracao/decay       Atualiza λ
 ```
 
 ## 5. Decisões arquiteturais relevantes
 
-- **Monorepo com `frontend/` separado** para o Next.js; backend Java provavelmente ficará em diretório irmão (ex: `backend/`), a confirmar.
+- **Monorepo com `frontend/` separado** para o Next.js; backend Java fica em `backend/` (diretório irmão). A estrutura concreta — módulos, build Gradle/Maven, perfis — será documentada quando o backend for iniciado.
+- **Ambiente de banco em `database/`** — Docker Compose com PostgreSQL + Flyway + pgAdmin. Scripts de criação em `database/migrations/`. Ver [`database/README.md`](../../database/README.md).
 - **Sem carrinho/pagamento:** decisão de escopo (ver [01-VISAO-GERAL.md §3](01-VISAO-GERAL.md)).
-- **PostgreSQL único**, com uso de JSONB para `Evento.metadados` para flexibilidade na coleta sem migrações frequentes.
+- **PostgreSQL único**, com uso de JSONB para `evento.metadados` para flexibilidade na coleta sem migrações frequentes.
 - **ML em processo separado**, lendo do Postgres em batch — não acoplado ao fluxo síncrono de resposta ao usuário.

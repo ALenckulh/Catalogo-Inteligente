@@ -20,7 +20,7 @@ SUMÁRIO
 
 1. Visão Geral do Projeto
 Este projeto consiste em um catálogo online com sistema de recomendação inteligente voltado majoritariamente para transações B2B, com suporte a B2C. O objetivo central é atribuir scores a usuários de forma a identificar sua provável próxima compra e as categorias de produto de maior interesse, permitindo que o dono do catálogo entre em contato proativamente com leads qualificados.
-O sistema não processa pagamentos nem frete — a conversão final ocorre fora da plataforma, o que é uma decisão de escopo intencional para viabilizar diferentes modelos de entrega e negociação direta entre comprador e vendedor.
+O sistema não processa pagamentos nem frete — a conversão final ocorre fora da plataforma, o que é uma decisão de escopo intencional para viabilizar diferentes modelos de entrega e negociação direta entre comprador e o dono do catálogo.
 
 2. Tipos de Usuário
 2.1 Pessoa Física
@@ -41,7 +41,7 @@ Score de Categoria de Produto
 Relação de produtos de interesse com faixa de preço (diferenciada por conversão vs. não-conversão)
 Lista de possíveis produtos e categorias de interesse visível ao dono do catálogo
 Página inicial personalizada com produtos e categorias de maior probabilidade de compra
-Botão de contato com vendedor habilitado
+CTA "Entrar em contato" (WhatsApp) habilitado
 
 2.2 Pessoa Jurídica
 Perfil destinado a empresas (B2B).
@@ -60,20 +60,20 @@ Score de Categoria
 Relação de produtos de interesse com faixa de preço (diferenciada por conversão vs. não-conversão)
 Lista de possíveis produtos e categorias de interesse visível ao dono do catálogo
 Página inicial personalizada com produtos e categorias de maior probabilidade de compra
-Botão de contato com vendedor habilitado
+CTA "Entrar em contato" (WhatsApp) habilitado
 
 2.3 Visitante (Não Autenticado)
-Usuário sem cadastro. Identificado via cookie de sessão/fingerprint, sujeito às restrições da LGPD.
+Usuário sem cadastro. Identificado via cookie de sessão (30 dias) + fingerprint como fallback secundário, sujeito às restrições da LGPD.
 Funcionalidades disponíveis:
-Score de Produto (baseado em sessão)
-Score de Categoria (baseado em sessão)
+Score de Produto (persistido em `score_produto` com `visitante_id`; migrado para `usuario_id` no login via `POST /api/auth/migrar-historico`, ver §7)
+Score de Categoria (persistido em `score_categoria` com `visitante_id`; mesma lógica de migração)
 Página inicial com produtos e categorias de maior probabilidade de compra — usa Popularidade Global como base inicial, evoluindo para score comportamental conforme interações na sessão
 Pesquisa e filtros ordenados por maior possibilidade de compra
 
 Funcionalidades indisponíveis:
-Relação de faixa de preço
-Botão de contato com vendedor
-Persistência de histórico entre sessões (a menos que faça login)
+Relação de faixa de preço (persistida apenas para usuários autenticados)
+CTA "Entrar em contato"
+Persistência de histórico entre sessões além da janela do cookie (resolvida ao autenticar)
 
 3. Métricas de Coleta de Dados
 Todas as métricas comportamentais só são coletadas após consentimento explícito de cookies. Para visitantes, o consentimento é solicitado via banner padrão (LGPD). Para usuários autenticados, o consentimento é registrado no cadastro.
@@ -89,10 +89,10 @@ Favoritar produto
 Intenção explícita de interesse
 Médio
 Contato sobre produto visualizado
-Alta intenção de compra — produto específico
+Alta intenção de compra — produto específico (CTA "Entrar em contato" na ficha)
 Alto
-Contato sobre carrinho
-Alta intenção de compra — múltiplos produtos
+Contato sobre lista de favoritos
+Alta intenção de compra — múltiplos produtos acumulados (CTA "Entrar em contato" em /favoritos; proxy do antigo "carrinho")
 Alto
 Pesquisas do usuário
 Termos buscados indicam interesse por categoria/produto
@@ -150,21 +150,21 @@ O fator_decay é calculado conforme descrito na seção 5. O Score_máximo é o 
 4.3 Score de Categoria
 Calculado como média ponderada logarítmica dos scores dos produtos pertencentes à categoria. A ponderação logarítmica reduz a distorção causada por um único produto com número muito alto de interações, mantendo ainda assim a proporcionalidade:
 Score(categoria) = Σ [ Score(produto_i) × log(1 + interações_i) ]  ÷  Σ [ log(1 + interações_i) ]
-Adicionalmente, se o usuário realizou qualquer conversão nos últimos 30 dias em produtos desta categoria, aplica-se um boost multiplicativo de 1,2× a 1,5× (configurável) sobre o Score de Categoria, pois conversão recente é o sinal de intenção mais forte disponível.
-Atenção: o boost pós-conversão é mais adequado para produtos de reposição frequente (insumos, consumíveis). Para equipamentos ou bens duráveis, uma conversão recente pode indicar necessidade já atendida. Recomenda-se configurar o boost por tipo de produto ou categoria.
+Adicionalmente, se o usuário realizou qualquer conversão nos últimos 30 dias em produtos desta categoria, aplica-se um boost multiplicativo de 1,00× a 1,50× (persistido em `parametro_decay.boost_conversao`, ver [08 §4.16](08-MODELO-DE-DADOS.md)) sobre o Score de Categoria, pois conversão recente é o sinal de intenção mais forte disponível.
+Atenção: o boost pós-conversão é mais adequado para categorias de reposição frequente (insumos, consumíveis). Para categorias de equipamentos ou bens duráveis, uma conversão recente pode indicar necessidade já atendida — o dono do catálogo deve reduzir o boost dessas categorias para próximo de 1,00.
 
 4.4 Grafo de Produtos e Regras Sequenciais
 O grafo é composto por:
 Nós: produtos e categorias
 Arestas de co-ocorrência: criadas pelas Regras Sequenciais quando dois produtos são visitados em sequência na mesma sessão ou em sessões próximas
-Arestas de co-compra: criadas quando dois produtos aparecem no mesmo histórico de compras do vendedor
+Arestas de co-compra: criadas quando dois produtos aparecem no mesmo histórico de compras do cliente
 Arestas de pertencimento: produto → categoria
 
 As Regras Sequenciais só criam arestas com peso confiável quando o padrão é observado em pelo menos 3 usuários distintos, evitando distorções por coincidência com poucos dados.
 O PPR é executado por usuário a partir dos produtos com score mais alto (nós de origem), propagando relevância pelas arestas do grafo para identificar produtos relacionados com alta probabilidade de interesse, mesmo sem interação direta do usuário com eles.
 
 4.5 Pesos Ajustáveis
-Os pesos de cada métrica são configuráveis pelo administrador do catálogo, permitindo ajuste fino conforme o tipo de negócio. O peso do histórico de compras possui ajuste adicional baseado na completude dos dados (ver seção 9). Os parâmetros do PPR (fator de amortecimento, número de iterações) também são configuráveis.
+Os pesos de cada métrica são configuráveis pelo dono do catálogo, permitindo ajuste fino conforme o tipo de negócio. O peso do histórico de compras possui ajuste adicional baseado na completude dos dados (ver seção 9). Os parâmetros do PPR (fator de amortecimento, número de iterações) também são configuráveis.
 
 4.6 Mapeamento de Outputs por Algoritmo
 
@@ -180,7 +180,7 @@ Nó de categoria no grafo — propagação via PPR
 Faixa de Preço (conversão vs. não-conversão)
 Regras Explícitas (mediana por tipo de evento)
 —
-Lista de interesse ao vendedor
+Lista de interesse ao dono do catálogo
 Ranking por Score de Produto
 —
 Página inicial personalizada
@@ -201,7 +201,7 @@ Contexto B2B importante: ciclos de compra longos são a regra em mercados B2B. U
 5.1 Modelo de Decaimento
 Adota-se um modelo de decaimento exponencial negativo:
 fator_decay = e^( −λ × dias_desde_interação )
-Onde λ (lambda) é a taxa de decaimento, configurável pelo administrador por tipo de produto ou categoria. Valores de referência:
+Onde λ (lambda) é a taxa de decaimento, configurável pelo dono do catálogo por categoria (ou global com `categoria_id IS NULL`). Valores de referência:
 
 Valor de λ
 Meia-vida aprox.
@@ -253,7 +253,7 @@ Regras Sequenciais: padrões de co-ocorrência muito antigos (> 180 dias sem ref
 Histórico de compras confirmadas: não sofre decaimento por interação. Compras acima de 2 anos recebem redução de peso configurável para refletir possível mudança de perfil do comprador
 
 5.4 Reinicialização do Ciclo de Decaimento
-Qualquer evento de contato com o vendedor — Conversão Leve, Forte ou Confirmada (ver seção 8.1) — pausa o decaimento para o produto em questão enquanto a negociação permanecer ativa. Isso é especialmente relevante no contexto B2B, onde negociações podem se estender por meses.
+Qualquer evento de contato com o dono do catálogo — Conversão Leve, Forte ou Confirmada (ver seção 8.1) — pausa o decaimento para o produto em questão enquanto a negociação permanecer ativa. Isso é especialmente relevante no contexto B2B, onde negociações podem se estender por meses.
 O ciclo de decaimento só é retomado se nenhum novo evento de contato ocorrer por um período configurável (padrão sugerido: 60 dias). Isso evita que um lead em negociação ativa seja erroneamente deprioritizado por ausência de novas interações passivas durante o processo de decisão.
 
 6. Fallback: Popularidade Global
@@ -268,7 +268,7 @@ Número de favoritações (últimos 30 dias)
 Médio
 Número de contatos iniciados pelo produto (últimos 30 dias)
 Alto
-Quantidade de vendas registradas pelo vendedor (últimos 90 dias)
+Quantidade de vendas registradas pelo dono do catálogo (últimos 90 dias)
 Alto
 
 
@@ -306,11 +306,11 @@ A faixa de preço ideal do usuário não deve ser calculada apenas com base nos 
 
 Evento
 Tipo
-Clicou em 'Entrar em contato' sobre produto
+Clicou em 'Entrar em contato' na ficha de um produto
 Conversão Leve
-Adicionou ao carrinho e clicou em 'Entrar em contato'
+Clicou em 'Entrar em contato' a partir da lista de favoritos (acumulando múltiplos produtos de interesse)
 Conversão Forte
-Compra registrada pelo vendedor
+Compra registrada pelo dono do catálogo
 Conversão Confirmada
 Visualizou, favoritou, mas nunca contatou
 Interesse sem Conversão
@@ -321,24 +321,25 @@ Interesse Fraco / Possível Barreira de Preço
 8.2 Cálculo da Faixa de Preço
 Faixa com conversão: mediana dos preços dos produtos que geraram conversão (leve, forte ou confirmada)
 Faixa sem conversão: mediana dos preços dos produtos com interesse mas sem conversão
-Se a faixa sem conversão for sistematicamente acima da faixa com conversão: sinalizar ao vendedor que o usuário pode ter sensibilidade a preço
+Se a faixa sem conversão for sistematicamente acima da faixa com conversão: sinalizar ao dono do catálogo que o usuário pode ter sensibilidade a preço
 Exibir ao dono do catálogo as duas faixas separadamente com indicador visual de gap
 
 Esta distinção é especialmente valiosa para B2B, onde o produto certo na faixa de preço errada pode ser a única barreira para o fechamento de negócio.
 
-9. Histórico de Compras Informado pelo Vendedor
-O vendedor pode registrar manualmente o histórico de compras de cada cliente. Esta é uma das métricas de maior valor preditivo do sistema.
-O peso desta métrica no score é definido inteiramente pelo administrador do catálogo, sem autoavaliação de completude. O administrador conhece a realidade do seu negócio e calibra o peso conforme a consistência com que mantém os registros. Se os dados forem esparsos, o peso deve ser reduzido manualmente; se os registros forem completos, pode-se atribuir peso máximo.
-9.1 Dados Registrados
-Produto(s) comprado(s)
-Categoria do produto
+9. Histórico de Compras Informado pelo Dono do Catálogo
+O dono do catálogo pode registrar manualmente o histórico de compras de cada cliente. Esta é uma das métricas de maior valor preditivo do sistema.
+O peso desta métrica no score é definido inteiramente pelo dono do catálogo, sem autoavaliação de completude. Ele conhece a realidade do seu negócio e calibra o peso conforme a consistência com que mantém os registros. Se os dados forem esparsos, o peso deve ser reduzido manualmente; se os registros forem completos, pode-se atribuir peso máximo.
+9.1 Dados Registrados por Linha de Compra
+Cada submissão do formulário cria uma linha em `compra`, representando **um produto por compra** ([08 §5.6](08-MODELO-DE-DADOS.md)). Para registrar múltiplos itens vendidos no mesmo dia, o dono do catálogo repete o lançamento por produto.
+Produto comprado
+Categoria do produto (derivada do produto)
 Preço unitário
 Quantidade comprada
 Valor total da transação
 Data da compra
 
 9.2 Threshold Mínimo de Registros
-Com menos de 3 registros de compra para um determinado cliente, a métrica de histórico é automaticamente zerada para aquele cliente, independentemente do peso configurado pelo administrador. Isso evita distorções causadas por amostras muito pequenas com peso elevado.
+Com menos de 3 registros de compra para um determinado cliente, a métrica de histórico é automaticamente zerada para aquele cliente, independentemente do peso configurado. Isso evita distorções causadas por amostras muito pequenas com peso elevado.
 
 9.3 Decaimento no Histórico de Compras
 Compras confirmadas NÃO sofrem decaimento de score, pois representam padrão real de comportamento
@@ -350,7 +351,7 @@ Por se tratar de sistema que coleta dados comportamentais de usuários brasileir
 10.1 No Cadastro de Usuário Autenticado
 Checkbox obrigatório: aceite dos Termos de Uso e Política de Privacidade — sem aceite, o cadastro não é concluído
 Checkbox separado e opcional: consentimento para coleta de dados comportamentais (cliques, tempo em página, navegação) para fins de personalização
-Checkbox separado e opcional: consentimento para receber contato proativo do vendedor com base no perfil de interesse
+Checkbox separado e opcional: consentimento para receber contato proativo do dono do catálogo com base no perfil de interesse
 Data e versão dos termos aceitos devem ser registradas no banco de dados
 Usuário pode revogar consentimentos a qualquer momento nas configurações do perfil
 
@@ -391,11 +392,11 @@ Métrica de histórico completamente anulada. Score baseado 100% em comportament
 Dois usuários com o mesmo dispositivo/rede
 Fingerprint não é suficiente para identificação segura. Priorizar cookie de sessão e login.
 Usuário revoga consentimento de cookies após acumular histórico
-Parar coleta imediatamente. Histórico existente pode ser mantido ou apagado conforme opção do usuário.
+Parar coleta imediatamente. Histórico existente é mantido para fins estatísticos; para apagá-lo, o usuário deve abrir uma solicitação de exclusão LGPD ([08 §5.2](08-MODELO-DE-DADOS.md)).
 Lead B2B em negociação ativa sem novas interações passivas
 Decay pausado enquanto houver evento de contato recente (< 60 dias). Ver seção 5.4.
-Boost pós-conversão em produto durável/equipamento
-Administrador deve desabilitar ou reduzir o boost para categorias de bens duráveis, onde conversão recente indica necessidade já atendida.
+Boost pós-conversão em categoria de bens duráveis
+Dono do catálogo deve reduzir `parametro_decay.boost_conversao` para próximo de 1,00 nessas categorias, onde conversão recente indica necessidade já atendida.
 Camada 3 (PPR) inativa por falta de usuários
 Esperado em catálogos B2B pequenos. Camadas 1 e 2 são suficientes para operação normal.
 
@@ -430,15 +431,15 @@ Distinção conversão vs. não-conversão
 Não
 Sim
 Sim
-Botão de contato com vendedor
+CTA "Entrar em contato"
 Não
 Sim
 Sim
-Lista de interesse visível ao vendedor
+Lista de interesse visível ao dono do catálogo
 Não
 Sim
 Sim
-Histórico de compras do vendedor
+Histórico de compras registrado pelo dono do catálogo
 Não
 Sim
 Sim
@@ -463,10 +464,11 @@ Heatmap de atenção nas páginas de produto — custo de implementação elevad
 Collaborative Filtering (KNN / Matrix Factorization) — recomendação baseada em similaridade entre usuários com perfis parecidos. Pressupõe matriz usuário×produto minimamente densa; viável a partir de ~50 usuários com histórico consistente. Identificada como a evolução natural da Camada 3 do sistema de scoring
 Integração com CRM externo — exportar leads qualificados diretamente para sistemas como Pipedrive ou HubSpot
 Score de sazonalidade automático — detecção automática de padrões sazonais por categoria
-Notificações proativas ao vendedor — alertas quando usuário atinge threshold de score para um produto
+Notificações proativas ao dono do catálogo — alertas quando usuário atinge threshold de score para um produto
+Boost pós-conversão configurável por `tipo_conversao` (LEVE/FORTE/CONFIRMADA) — hoje o modelo persiste um único `boost_conversao` por categoria
 A/B testing de pesos de métricas — experimentação para otimizar os pesos do modelo de scoring
 Modelo de machine learning — substituição gradual das regras manuais por modelo preditivo treinado com dados históricos
-Ajuste automático de λ por categoria — aprendizado da taxa de decaimento ideal com base no histórico de conversões por tipo de produto
+Ajuste automático de λ por categoria — aprendizado da taxa de decaimento ideal com base no histórico de conversões da própria categoria
 Camada 3 (Grafo/PPR) como funcionalidade condicional ao volume — ativação automática quando o catálogo atingir densidade mínima de usuários e interações para resultados confiáveis
 
 Documento gerado como especificação técnica para o TCC.

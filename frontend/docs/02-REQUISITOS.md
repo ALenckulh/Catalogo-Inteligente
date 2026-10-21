@@ -8,8 +8,8 @@ Requisitos funcionais e não-funcionais do sistema. A rastreabilidade entre pág
 
 | ID | Requisito |
 |---|---|
-| RF01 | O sistema deve permitir cadastro de usuário Pessoa Física (CPF, nome, e-mail, telefone opcional). |
-| RF02 | O sistema deve permitir cadastro de usuário Pessoa Jurídica (CNPJ, razão social, e-mail corporativo, telefone opcional). |
+| RF01 | O sistema deve permitir cadastro de usuário Pessoa Física (CPF com validação de dígito, nome completo, e-mail, idade opcional, telefone opcional, e-mail alternativo opcional). |
+| RF02 | O sistema deve permitir cadastro de usuário Pessoa Jurídica (CNPJ com validação de dígito, razão social, e-mail corporativo, telefone opcional, e-mail alternativo opcional). |
 | RF03 | O cadastro deve obrigar aceite dos Termos de Uso e Política de Privacidade (LGPD). |
 | RF04 | O cadastro deve oferecer consentimento separado e opcional para rastreamento comportamental. |
 | RF05 | O sistema deve permitir login de usuários cadastrados (PF, PJ, Admin). |
@@ -26,7 +26,7 @@ Requisitos funcionais e não-funcionais do sistema. A rastreabilidade entre pág
 | RF11 | O sistema deve permitir filtros por categoria, faixa de preço e outros atributos relevantes. |
 | RF12 | O sistema deve exibir a página de produto individual com ficha técnica, galeria e CTA de contato via WhatsApp. |
 | RF13 | O sistema deve permitir favoritar/desfavoritar produtos e manter uma lista de desejos por usuário. |
-| RF14 | O clique no botão "Falar com o vendedor" deve registrar um evento de conversão (ver [04-ESPECIFICACAO-TECNICA.md §8.1](04-ESPECIFICACAO-TECNICA.md)). |
+| RF14 | O clique no botão "Entrar em contato" (CTA de WhatsApp, visível apenas para usuários autenticados PF/PJ) deve registrar um evento de conversão (ver [04-ESPECIFICACAO-TECNICA.md §8.1](04-ESPECIFICACAO-TECNICA.md)). |
 
 ### 1.3 Coleta comportamental
 
@@ -35,20 +35,22 @@ Requisitos funcionais e não-funcionais do sistema. A rastreabilidade entre pág
 | RF15 | O sistema deve coletar eventos de visualização de página de produto. |
 | RF16 | O sistema deve coletar tempo ativo em página, scroll depth e sequência de navegação. |
 | RF17 | O sistema deve registrar favoritação, pesquisas e filtros aplicados. |
-| RF18 | Para visitantes anônimos, a coleta deve usar cookie de sessão identificador. |
+| RF18 | Para visitantes anônimos, a coleta deve usar cookie de sessão como identificador primário (persistido por 30 dias) e browser fingerprint como fallback secundário caso o cookie seja apagado ([04 §7.2](04-ESPECIFICACAO-TECNICA.md)). |
 | RF19 | Ao criar conta/login, o sistema deve oferecer migração do histórico de visitante ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)). |
 
 ### 1.4 Área administrativa
 
+Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"dono do catálogo"**.
+
 | ID | Requisito |
 |---|---|
 | RF20 | O sistema deve oferecer um dashboard com KPIs gerais e lista de leads priorizados por score. |
-| RF21 | O admin deve visualizar lista de usuários com score, categorias de interesse e próxima compra provável. |
-| RF22 | O admin deve acessar visão detalhada de um usuário com scores por produto/categoria, faixas de preço com e sem conversão, e histórico de compras. |
-| RF23 | O admin deve gerenciar o catálogo (CRUD de produtos). |
-| RF24 | O admin deve registrar manualmente histórico de compras por cliente ([04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFICACAO-TECNICA.md)). |
-| RF25 | O admin deve configurar pesos de métricas e taxa de decaimento (λ) por categoria. |
-| RF26 | O admin deve editar seus próprios dados (e-mail, senha, telefone). |
+| RF21 | O dono do catálogo deve visualizar lista de usuários com score, categorias de interesse e próxima compra provável. |
+| RF22 | O dono do catálogo deve acessar visão detalhada de um usuário com scores por produto/categoria, faixas de preço com e sem conversão, e histórico de compras. |
+| RF23 | O dono do catálogo deve gerenciar o catálogo (CRUD de produtos). |
+| RF24 | O dono do catálogo deve registrar manualmente histórico de compras por cliente ([04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFICACAO-TECNICA.md)). |
+| RF25 | O dono do catálogo deve configurar pesos de métricas, taxa de decaimento (λ) e boost pós-conversão por categoria. |
+| RF26 | O dono do catálogo deve editar seus próprios dados (e-mail, senha, telefone). |
 
 ### 1.5 LGPD e direitos do titular
 
@@ -75,7 +77,7 @@ Requisitos funcionais e não-funcionais do sistema. A rastreabilidade entre pág
 |---|---|
 | RNF04 | Senhas devem ser armazenadas com hash seguro (bcrypt ou argon2). |
 | RNF05 | Toda comunicação deve ser via HTTPS. |
-| RNF06 | Login e cadastro devem ter rate limit para prevenir força-bruta. |
+| RNF06 | Login, cadastro e recuperação de senha devem ter rate limit para prevenir força-bruta (limites concretos em [11 §1 Rate limit](11-API-ENDPOINTS.md)). |
 | RNF07 | A área administrativa deve ser acessível apenas via rota separada e autenticação distinta. |
 
 ### 2.3 Conformidade legal
