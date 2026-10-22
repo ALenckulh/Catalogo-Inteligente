@@ -13,20 +13,23 @@ export type { CardProps, CardShadow } from './Card'
 export { Select, PageableSelect, usePageableSelect } from './Select'
 export type { SelectProps, PageableSelectProps, PageableSelectPage } from './Select'
 
-export {
+import {
   Alert,
   Badge,
   Breadcrumb,
   Checkbox,
   Col,
+  Collapse,
   DatePicker,
   Descriptions,
   Divider,
   Drawer,
   Empty,
   Flex,
-  Layout,
-  Listy,
+  InputNumber,
+  Layout as AntLayout,
+  List as AntList,
+  Menu,
   Modal,
   Pagination,
   Popconfirm,
@@ -38,6 +41,7 @@ export {
   Spin,
   Statistic,
   Steps,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -47,5 +51,46 @@ export {
   message,
   notification,
 } from 'antd'
+
+/** Re-export com estáticos (Header/Content/…) — `export { Layout } from 'antd'` quebra no Turbopack. */
+export const Layout = AntLayout
+export const List = AntList
+
+export {
+  Alert,
+  Badge,
+  Breadcrumb,
+  Checkbox,
+  Col,
+  Collapse,
+  DatePicker,
+  Descriptions,
+  Divider,
+  Drawer,
+  Empty,
+  Flex,
+  InputNumber,
+  Menu,
+  Modal,
+  Pagination,
+  Popconfirm,
+  Progress,
+  Radio,
+  Result,
+  Row,
+  Space,
+  Spin,
+  Statistic,
+  Steps,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+  Timeline,
+  Tooltip,
+  Typography,
+  message,
+  notification,
+}
 
 export type { TableProps } from 'antd'

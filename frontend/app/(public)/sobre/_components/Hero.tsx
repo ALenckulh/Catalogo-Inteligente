@@ -1,7 +1,6 @@
 'use client'
 
-import { Badge, Card, Flex, Listy, Space, Statistic, Tag, Typography } from '@/components/ui'
-import { Button } from '@/components/ui'
+import { Badge, Button, Card, Flex, List, Space, Statistic, Tag, Typography } from '@/components/ui'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -97,21 +96,24 @@ export function Hero() {
             Σ peso × evento × e<Text style={{ fontSize: 'smaller' }}>⁻λt</Text>
           </Paragraph>
 
-          <Listy
-            items={SCORE_METRICS}
+          <List
+            dataSource={SCORE_METRICS}
             rowKey="label"
-            itemRender={(m) => (
-              <Flex
-                justify="space-between"
-                align="center"
-                style={{ width: '100%', padding: '6px 0' }}
-              >
-                <Text type="secondary">{m.label}</Text>
-                <Space size={8}>
-                  <Text strong>{m.value}</Text>
-                  <Text style={{ color: 'var(--secondary)', fontSize: 12 }}>×{m.weight}</Text>
-                </Space>
-              </Flex>
+            split={false}
+            renderItem={(m: (typeof SCORE_METRICS)[number]) => (
+              <List.Item style={{ padding: '6px 0', border: 'none' }}>
+                <Flex
+                  justify="space-between"
+                  align="center"
+                  style={{ width: '100%' }}
+                >
+                  <Text type="secondary">{m.label}</Text>
+                  <Space size={8}>
+                    <Text strong>{m.value}</Text>
+                    <Text style={{ color: 'var(--secondary)', fontSize: 12 }}>×{m.weight}</Text>
+                  </Space>
+                </Flex>
+              </List.Item>
             )}
           />
         </Card>

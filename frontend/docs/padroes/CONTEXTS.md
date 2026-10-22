@@ -185,7 +185,16 @@ const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 Expor o Context cru é aceito **só para teste** — produção segue consumindo pelo hook.
 
-## 9. Checklist
+## 9. Contexts instalados
+
+| Context | Pasta | Papel |
+|---|---|---|
+| `CurrentUser` | `lib/contexts/CurrentUser/` | Sessão PF/PJ/ADMIN (mock via `lib/api/auth` + localStorage) |
+| `CookieConsent` | `lib/contexts/CookieConsent/` | Preferência S4 (12 meses); `canTrackBehavioral` gate de `trackEvent` |
+
+Montados em `app/providers.tsx` dentro do `ConfigProvider`. Banner: `components/layout/CookieBanner.tsx`.
+
+## 10. Checklist
 
 - [ ] Tipos + `createContext` + hook em `*Context.ts` (não `.tsx`).
 - [ ] Provider em `*Provider.tsx` com `'use client'`.

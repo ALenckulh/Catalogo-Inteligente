@@ -1,14 +1,5 @@
-import { Layout } from '@/components/ui'
-
-const { Sider, Content } = Layout
+import { AdminShell } from '@/components/layout/AdminShell'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={240} />
-      <Layout>
-        <Content>{children}</Content>
-      </Layout>
-    </Layout>
-  )
+  return <AdminShell>{children}</AdminShell>
 }

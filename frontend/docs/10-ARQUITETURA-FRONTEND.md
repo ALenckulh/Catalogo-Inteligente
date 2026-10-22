@@ -5,6 +5,9 @@ Guia de estrutura de pastas, padrões de código e decisões do frontend do Cat�
 Links irmãos:
 - [padroes/HOOKS.md](padroes/HOOKS.md) — convenções para hooks custom
 - [padroes/CONTEXTS.md](padroes/CONTEXTS.md) — convenções para React Context
+- [padroes/SERVICES.md](padroes/SERVICES.md) — axios, mocks, `USE_MOCK`
+- [padroes/FORMATTERS.md](padroes/FORMATTERS.md) — money, CPF/CNPJ, datas
+- [padroes/PAGES.md](padroes/PAGES.md) — page.tsx, auth gate, Suspense
 
 ---
 
