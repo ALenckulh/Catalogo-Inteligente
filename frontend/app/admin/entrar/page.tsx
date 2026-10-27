@@ -14,6 +14,7 @@ import {
   Input,
   Typography,
 } from '@/components/ui'
+import { LoginOutlined } from '@ant-design/icons'
 
 const { Title, Paragraph } = Typography
 
@@ -49,7 +50,7 @@ export default function AdminEntrarPage() {
         </Title>
         <Paragraph type="secondary">Acesso restrito ao dono do catálogo.</Paragraph>
         {error && (
-          <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
         )}
         <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
           <FormItem
@@ -74,6 +75,7 @@ export default function AdminEntrarPage() {
             htmlType="submit"
             loading={submitting}
             block
+            icon={<LoginOutlined />}
           >
             Entrar
           </Button>

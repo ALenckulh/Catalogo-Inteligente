@@ -4,9 +4,10 @@ Modelagem relacional do sistema. SGBD: **PostgreSQL** (ver [05-ARQUITETURA.md](0
 
 ## 1. Convenções
 
-- **Nomenclatura:** `snake_case`, singular (`produto`, não `produtos`).
+- **Nomenclatura (DB):** `snake_case`, singular (`produto`, não `produtos`).
+- **JSON da API:** **camelCase** no wire (ex.: `emailAlternativo`, `fichaTecnica`) — ver [11-API-ENDPOINTS.md](11-API-ENDPOINTS.md). Mapear no backend (Jackson / MapStruct); colunas permanecem snake_case.
 - **Chave primária:** `id BIGSERIAL` por padrão. UUID (`gen_random_uuid()`) apenas onde a chave for exposta publicamente ou gerada no cliente (ex: `visitante.cookie_id`).
-- **Timestamps:** `TIMESTAMPTZ` com UTC. Toda tabela tem `created_at` e `updated_at` (mantidos via trigger ou JPA Auditing).
+- **Timestamps:** `TIMESTAMPTZ` com UTC. Toda tabela tem `created_at` e `updated_at` (mantidos via trigger ou JPA Auditing), salvo tabelas de cache/token onde indicado.
 - **Soft delete:** `deleted_at TIMESTAMPTZ NULL` em tabelas sujeitas ao direito de exclusão LGPD (ver [04-ESPECIFICACAO-TECNICA.md §10.3](04-ESPECIFICACAO-TECNICA.md)). Consultas filtram `WHERE deleted_at IS NULL`.
 - **Foreign keys:** `ON DELETE RESTRICT` por padrão; `CASCADE` apenas onde a semântica exige (ex: imagens dependem do produto).
 - **Enums:** tipos nativos `CREATE TYPE ... AS ENUM (...)`.
@@ -56,6 +57,7 @@ Modelagem relacional do sistema. SGBD: **PostgreSQL** (ver [05-ARQUITETURA.md](0
 
    Configuração:  peso_metrica, parametro_decay
    LGPD:          solicitacao_lgpd
+   Auth:          password_reset_token
 ```
 
 ## 3. Enums
@@ -231,9 +233,11 @@ Atende [RF13](02-REQUISITOS.md).
 | `usuario_id` | `BIGINT` | NOT NULL, FK `usuario(id)` ON DELETE CASCADE | |
 | `produto_id` | `BIGINT` | NOT NULL, FK `produto(id)` ON DELETE CASCADE | |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | Quando favoritou |
+| `deleted_at` | `TIMESTAMPTZ` | NULL | Soft delete LGPD (§5.2) |
 
 **PK composta:** `(usuario_id, produto_id)`.
-**Índices:** `produto_id` (para consultas inversas).
+**Índices:** `produto_id` (para consultas inversas); parcial ativos `WHERE deleted_at IS NULL` (opcional).
+Listagens públicas de favoritos filtram `deleted_at IS NULL`.
 
 ### 4.8 `sessao`
 
@@ -406,9 +410,27 @@ Atende [RF29, RF30](02-REQUISITOS.md) e [04-ESPECIFICACAO-TECNICA.md §10.3](04-
 | `status` | `status_solicitacao_lgpd` | NOT NULL DEFAULT 'PENDENTE' | |
 | `solicitado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `atendido_em` | `TIMESTAMPTZ` | NULL | |
-| `observacoes` | `TEXT` | NULL | |
+| `observacoes` | `TEXT` | NULL | Texto livre do pedido / resposta admin |
 
 **Índices:** `(usuario_id, solicitado_em)`.
+
+**API:** o campo wire `detalhes` de [11](11-API-ENDPOINTS.md) (`POST /api/conta/solicitacoes-lgpd`) mapeia para **`observacoes`** — sem coluna `detalhes` separada.
+
+### 4.18 `password_reset_token`
+
+Tokens de redefinição de senha ([RF06](02-REQUISITOS.md), [11](11-API-ENDPOINTS.md) `password-reset` / `confirm`).
+
+| Coluna | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| `id` | `BIGSERIAL` | PK | |
+| `usuario_id` | `BIGINT` | NOT NULL, FK `usuario(id)` ON DELETE CASCADE | |
+| `token` | `VARCHAR(64)` | NOT NULL, UNIQUE | Valor opaco enviado ao usuário (hash no storage se preferir) |
+| `expira_em` | `TIMESTAMPTZ` | NOT NULL | |
+| `usado_em` | `TIMESTAMPTZ` | NULL | Preenchido no confirm; reuso bloqueado |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
+
+**Índices:** `(usuario_id, created_at DESC)`.
+**Notas:** ao solicitar novo reset, invalidar tokens anteriores não usados do mesmo usuário (`usado_em IS NULL`).
 
 ## 5. Notas de projeto
 
@@ -453,6 +475,20 @@ UPDATE evento
 UPDATE sessao
    SET usuario_id = :novo_usuario_id
  WHERE visitante_id = (SELECT id FROM visitante WHERE cookie_id = :cookie_atual);
+
+-- Scores em cache (XOR visitante → usuario): preferir recalcular via worker;
+-- se migrar in-place, atualizar linhas visitante_id → usuario_id respeitando UNIQUE parcial.
+UPDATE score_produto
+   SET usuario_id = :novo_usuario_id, visitante_id = NULL
+ WHERE visitante_id = (SELECT id FROM visitante WHERE cookie_id = :cookie_atual);
+
+UPDATE score_categoria
+   SET usuario_id = :novo_usuario_id, visitante_id = NULL
+ WHERE visitante_id = (SELECT id FROM visitante WHERE cookie_id = :cookie_atual);
+
+UPDATE faixa_preco_usuario
+   SET usuario_id = :novo_usuario_id, visitante_id = NULL
+ WHERE visitante_id = (SELECT id FROM visitante WHERE cookie_id = :cookie_atual);
 ```
 
 ### 5.4 Cache de scores
@@ -472,3 +508,11 @@ Para o escopo do TCC, **aceitar a inconsistência** é recomendado — manter pr
 ### 5.6 Compra com múltiplos produtos
 
 Uma compra registrada manualmente pelo admin pode ter vários produtos. O schema atual trata **uma linha por produto** da compra (como item de pedido). Se for necessário agrupar, pode-se adicionar `pedido_id BIGINT` em `compra` referenciando uma tabela `pedido` futura. Para o escopo do TCC, uma linha por produto é suficiente.
+
+### 5.7 Query `destaque` (vitrine)
+
+A API expõe `GET /api/produtos?destaque=true` ([11](11-API-ENDPOINTS.md)). **Não há coluna `produto.destaque`.** O backend deve derivar o conjunto (ex.: top-N por Popularidade Global / `score_produto`, ou `ORDER BY … LIMIT`). Manter sem flag persistida evita estado desatualizado.
+
+### 5.8 Produto inativo vs exclusão
+
+Visibilidade no catálogo público usa `produto.ativo = false`. Soft delete com `deleted_at` em `produto` **não** faz parte do escopo do TCC.

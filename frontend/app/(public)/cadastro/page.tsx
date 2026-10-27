@@ -42,6 +42,9 @@ export default function CadastroPage() {
         email: String(values.email),
         senha: String(values.senha),
         telefone: values.telefone ? String(values.telefone) : undefined,
+        emailAlternativo: values.emailAlternativo
+          ? String(values.emailAlternativo)
+          : undefined,
         aceitaTermos: Boolean(values.aceitaTermos),
         aceitaPrivacidade: Boolean(values.aceitaPrivacidade),
         cookiesComportamentais: Boolean(values.cookiesComportamentais),
@@ -73,7 +76,7 @@ export default function CadastroPage() {
         <Paragraph type="secondary">Cadastro PF ou PJ com consentimentos LGPD.</Paragraph>
 
         {error && (
-          <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
         )}
 
         <Form
@@ -118,6 +121,15 @@ export default function CadastroPage() {
 
           <FormItem name="telefone" label="Telefone" tooltip="Opcional — para contato">
             <Input id="cadastro-telefone" placeholder="Informe o telefone" />
+          </FormItem>
+
+          <FormItem
+            name="emailAlternativo"
+            label="E-mail alternativo"
+            tooltip="Opcional para recuperação"
+            rules={[{ type: 'email', message: 'E-mail inválido' }]}
+          >
+            <Input id="cadastro-email-alt" placeholder="Informe o e-mail alternativo" />
           </FormItem>
 
           {tipo === 'PF' && (

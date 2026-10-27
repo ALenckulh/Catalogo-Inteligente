@@ -1,8 +1,23 @@
 import type { Page, Produto, ProdutosQuery } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
-import { mockProdutos, withCategoria } from '@/lib/mocks/data'
+import { mockCategorias, mockProdutos, withCategoria } from '@/lib/mocks/data'
 import { apiClient } from './client'
 import { USE_MOCK } from './config'
+
+function categoriaIdsComDescendentes(categoriaId: number): Set<number> {
+  const ids = new Set<number>([categoriaId])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const c of mockCategorias) {
+      if (c.parentId !== null && ids.has(c.parentId) && !ids.has(c.id)) {
+        ids.add(c.id)
+        grew = true
+      }
+    }
+  }
+  return ids
+}
 
 export async function listProdutos(query: ProdutosQuery = {}): Promise<Page<Produto>> {
   if (!USE_MOCK) {
@@ -17,7 +32,8 @@ export async function listProdutos(query: ProdutosQuery = {}): Promise<Page<Prod
     items = items.slice(0, 4)
   }
   if (query.categoria) {
-    items = items.filter((p) => p.categoriaId === query.categoria)
+    const ids = categoriaIdsComDescendentes(query.categoria)
+    items = items.filter((p) => ids.has(p.categoriaId))
   }
   if (query.q) {
     const term = query.q.toLowerCase()

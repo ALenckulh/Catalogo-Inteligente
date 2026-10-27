@@ -10,11 +10,13 @@ export type { FormProps, FormItemProps, FormInstance } from './Form'
 export { Card } from './Card'
 export type { CardProps, CardShadow } from './Card'
 
+export { Alert } from './Alert'
+export type { AlertProps } from './Alert'
+
 export { Select, PageableSelect, usePageableSelect } from './Select'
 export type { SelectProps, PageableSelectProps, PageableSelectPage } from './Select'
 
 import {
-  Alert,
   Badge,
   Breadcrumb,
   Checkbox,
@@ -47,6 +49,7 @@ import {
   Tag,
   Timeline,
   Tooltip,
+  TreeSelect,
   Typography,
   message,
   notification,
@@ -57,7 +60,6 @@ export const Layout = AntLayout
 export const List = AntList
 
 export {
-  Alert,
   Badge,
   Breadcrumb,
   Checkbox,
@@ -88,6 +90,7 @@ export {
   Tag,
   Timeline,
   Tooltip,
+  TreeSelect,
   Typography,
   message,
   notification,

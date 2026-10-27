@@ -23,7 +23,14 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     const extraStyle: React.CSSProperties = {}
     if (shadow) extraStyle.boxShadow = shadowMap[shadow]
     if (borderColor) extraStyle.borderColor = borderColor
-    return <AntCard ref={ref} style={{ ...extraStyle, ...style }} {...rest} />
+    return (
+      <AntCard
+        ref={ref}
+        style={{ ...extraStyle, ...style }}
+        suppressHydrationWarning
+        {...rest}
+      />
+    )
   },
 )
 

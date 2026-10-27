@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { WhatsAppOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, WhatsAppOutlined } from '@ant-design/icons'
 import { createCompra, getAdminUsuario } from '@/lib/api/admin'
 import { listProdutos } from '@/lib/api/produtos'
 import { whatsappUrl } from '@/lib/config'
@@ -190,7 +190,7 @@ export default function AdminUsuarioDetalhePage() {
                     style={{ marginTop: 16 }}
                     type="warning"
                     showIcon
-                    message="Gap sugere possível barreira de preço"
+                    title="Gap sugere possível barreira de preço"
                   />
                 )}
               </>
@@ -205,7 +205,7 @@ export default function AdminUsuarioDetalhePage() {
                   <Alert
                     type="info"
                     showIcon
-                    message="Menos de 3 compras: peso do histórico de compras = 0 no score."
+                    title="Menos de 3 compras: peso do histórico de compras = 0 no score."
                   />
                 )}
                 <Table
@@ -258,7 +258,12 @@ export default function AdminUsuarioDetalhePage() {
                   <FormItem name="observacoes" label="Observações" tooltip="Opcional">
                     <Input.TextArea id="admin-compra-obs" placeholder="Informe as observações" rows={2} />
                   </FormItem>
-                  <Button id="admin-compra-salvar" color="primary" htmlType="submit">
+                  <Button
+                    id="admin-compra-salvar"
+                    color="primary"
+                    htmlType="submit"
+                    icon={<ShoppingCartOutlined />}
+                  >
                     Registrar compra
                   </Button>
                 </Form>

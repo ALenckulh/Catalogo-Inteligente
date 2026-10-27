@@ -1,6 +1,7 @@
 import type {
   AdminDashboard,
   AdminUsuarioDetalhe,
+  AdminUsuarioListItem,
   Compra,
   Page,
   ParametroDecay,
@@ -35,11 +36,14 @@ export async function getDashboard(): Promise<AdminDashboard> {
 export async function listAdminUsuarios(params?: {
   q?: string
   tipo?: string
+  categoria?: string
   page?: number
   limit?: number
-}): Promise<Page<Usuario>> {
+}): Promise<Page<AdminUsuarioListItem>> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Page<Usuario>>('/admin/usuarios', { params })
+    const { data } = await apiClient.get<Page<AdminUsuarioListItem>>('/admin/usuarios', {
+      params,
+    })
     return data
   }
   await delay()
@@ -54,10 +58,29 @@ export async function listAdminUsuarios(params?: {
         (u.razaoSocial?.toLowerCase().includes(term) ?? false),
     )
   }
+  let enriched: AdminUsuarioListItem[] = items.map((u) => {
+    const lead = mockDashboard.leads.find((l) => l.usuarioId === u.id)
+    return {
+      ...u,
+      scoreMaxProduto: lead?.scoreMaxProduto ?? null,
+      topCategoria: lead?.topCategoria ?? null,
+      ultimaAtividade: lead?.ultimaAtividade ?? null,
+      ativo: true,
+    }
+  })
+  if (params?.categoria) {
+    const cat = params.categoria.toLowerCase()
+    enriched = enriched.filter((u) => u.topCategoria?.toLowerCase() === cat)
+  }
   const page = params?.page ?? 1
   const limit = params?.limit ?? 20
   const start = (page - 1) * limit
-  return { items: items.slice(start, start + limit), page, limit, total: items.length }
+  return {
+    items: enriched.slice(start, start + limit),
+    page,
+    limit,
+    total: enriched.length,
+  }
 }
 
 export async function getAdminUsuario(id: number): Promise<AdminUsuarioDetalhe> {
@@ -142,6 +165,22 @@ export async function getAdminProduto(id: number): Promise<Produto> {
   return withCategoria(produto)
 }
 
+function mapImagens(
+  produtoId: number,
+  imagens: ProdutoInput['imagens'] | undefined,
+): Produto['imagens'] {
+  if (!imagens?.length) return []
+  let nextId =
+    Math.max(0, ...mockProdutos.flatMap((p) => p.imagens.map((i) => i.id))) + 1
+  return imagens.map((img) => ({
+    id: nextId++,
+    produtoId,
+    url: img.url,
+    altText: img.altText ?? null,
+    ordem: img.ordem,
+  }))
+}
+
 export async function createProduto(body: ProdutoInput): Promise<Produto> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<Produto>('/admin/produtos', body)
@@ -149,8 +188,9 @@ export async function createProduto(body: ProdutoInput): Promise<Produto> {
   }
   await delay()
   const now = new Date().toISOString()
+  const id = Math.max(0, ...mockProdutos.map((p) => p.id)) + 1
   const produto: Produto = {
-    id: Math.max(0, ...mockProdutos.map((p) => p.id)) + 1,
+    id,
     nome: body.nome,
     slug: body.slug,
     descricao: body.descricao ?? null,
@@ -158,7 +198,7 @@ export async function createProduto(body: ProdutoInput): Promise<Produto> {
     preco: body.preco,
     categoriaId: body.categoriaId,
     ativo: body.ativo,
-    imagens: [],
+    imagens: mapImagens(id, body.imagens),
     createdAt: now,
     updatedAt: now,
   }
@@ -174,7 +214,11 @@ export async function updateProduto(id: number, body: Partial<ProdutoInput>): Pr
   await delay()
   const produto = mockProdutos.find((p) => p.id === id)
   if (!produto) throw new ApiError('NOT_FOUND', 'Produto não encontrado', 404)
-  Object.assign(produto, body, { updatedAt: new Date().toISOString() })
+  const { imagens, ...rest } = body
+  Object.assign(produto, rest, { updatedAt: new Date().toISOString() })
+  if (imagens !== undefined) {
+    produto.imagens = mapImagens(id, imagens)
+  }
   return withCategoria(produto)
 }
 

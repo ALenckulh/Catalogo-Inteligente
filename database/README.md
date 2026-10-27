@@ -92,13 +92,20 @@ database/
     ├── V008__create_indexes.sql
     ├── V009__create_updated_at_trigger.sql
     ├── V010__seed_config.sql               # pesos padrão + λ global
-    └── V011__seed_demo_data.sql            # admin + categorias + produtos
+    ├── V011__seed_demo_data.sql            # admin + categorias + produtos
+    └── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
+```
+
+Após puxar o repositório com V012 (ou qualquer migração nova):
+
+```bash
+docker compose run --rm flyway migrate
 ```
 
 ## Adicionando novas migrações
 
 1. Crie um novo arquivo em `migrations/` seguindo a convenção `V{numero}__{descricao}.sql`.
-   - Exemplo: `V012__add_coluna_x_em_produto.sql`.
+   - Exemplo: `V013__add_coluna_x_em_produto.sql`.
 2. Rode `docker compose run --rm flyway migrate`.
 
 **Nunca** edite uma migração que já foi aplicada no histórico — o Flyway detecta e rejeita. Sempre faça uma nova migração para alterar o schema.
@@ -111,7 +118,7 @@ Após `flyway migrate`, conecte via psql e cheque:
 -- 7 enums
 \dT+
 
--- 17 tabelas
+-- 18 tabelas (incl. password_reset_token a partir de V012)
 \dt
 
 -- Pesos de métrica populados

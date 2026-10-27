@@ -92,7 +92,7 @@ export default function RecuperarSenhaPage() {
         />
 
         {error && (
-          <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
         )}
 
         {step === 0 && (
@@ -126,7 +126,7 @@ export default function RecuperarSenhaPage() {
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`Se existir conta para ${email}, o token de redefinição foi enviado (mock: use token "mock-reset").`}
+              title={`Se existir conta para ${email}, o token de redefinição foi enviado (mock: use token "mock-reset").`}
             />
             <Form form={form2} layout="vertical" onFinish={redefinir} requiredMark={false}>
               <FormItem

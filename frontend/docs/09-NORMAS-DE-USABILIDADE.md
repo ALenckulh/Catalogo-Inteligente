@@ -26,6 +26,42 @@ Evite passar props iguais ao default do componente — polui o JSX e esconde a c
 <Button>Salvar</Button>
 ```
 
+### 1.2 Hierarquia de variantes de Button
+
+Wrapper `@/components/ui/Button` — ênfase visual (maior → menor):
+
+`solid` → `outlined` → `dashed` → `filled` → `text` → `link`
+
+Default do wrapper é `solid`. **Não** preencha o layout só com solid. No máximo **um** `solid` + `color="primary"` por contexto de tela/form (CTA principal). Em tabelas, ações por linha usam `text` — nunca solid repetido em cada row.
+
+| Variante | Quando usar |
+|---|---|
+| `solid` + `primary` | Única ação principal da tela/form (Salvar, Novo, Entrar, WhatsApp) |
+| `outlined` | Secundária no mesmo grupo (Cancelar, Reset) |
+| `dashed` / `filled` | Casos raros (adicionar item em lista, destaque suave) — evitar no admin atual |
+| `text` | Ações em **tabela** / toolbar densa (Abrir, Editar, Ativar, Excluir) |
+| `link` | Navegação auxiliar leve (ex.: Ver do KPI no dashboard) |
+
+**Ícones:**
+- **Tabela / ações por linha:** só ícone (`variant="text"`) + `tooltip` — sem children de texto.
+- **CTA e secundários de página/form:** texto permanece; acrescente `icon` ao lado quando houver ícone óbvio do Ant Design (`SaveOutlined`, `PlusOutlined`, etc.).
+- **Navegação leve (`link`):** ícone + texto curto (ex.: `EyeOutlined` + "Ver").
+
+```tsx
+// CTA da página — texto + ícone
+<Button color="primary" icon={<PlusOutlined />}>Novo produto</Button>
+
+// Secundário ao lado do CTA — texto + ícone
+<Button variant="outlined" icon={<CloseOutlined />}>Cancelar</Button>
+
+// Célula de ações da tabela — só ícone + tooltip
+<Button variant="text" size="small" icon={<EyeOutlined />} tooltip="Abrir" />
+<Button variant="text" size="small" color="danger" icon={<DeleteOutlined />} tooltip="Excluir" />
+
+// Navegação leve
+<Button variant="link" size="small" icon={<EyeOutlined />}>Ver</Button>
+```
+
 ## 2. Uso de cores
 
 Toda cor usada em TSX/CSS deve vir de um token:
@@ -34,7 +70,7 @@ Toda cor usada em TSX/CSS deve vir de um token:
 - **TSX inline style:** `color: 'var(--primary)'` **ou** `color: palette.primary[400]` importando `@/lib/theme/tokens`.
 - **ThemeConfig do antd:** já mapeia os tokens — para `colorPrimary` etc. não é preciso prop custom.
 
-❌ Nunca hardcode `#00ABB5`, `#F5F5F5`, `rgba(...)` em componente.
+❌ Nunca hardcode `#3D6F94`, `#F5F5F5`, `rgba(...)` em componente.
 
 ### 2.1 Grafia do projeto
 
@@ -55,13 +91,13 @@ Texto obrigatório: pergunta explícita + consequência. Botão primário com **
 
 ```tsx
 <Popconfirm
-  title="Remover produto do catálogo?"
+  message="Remover produto do catálogo?"
   description="Esta ação é permanente e não pode ser desfeita."
   okText="Remover"
   cancelText="Cancelar"
   onConfirm={handleDelete}
 >
-  <Button color="danger" icon={<DeleteOutlined />} />
+  <Button variant="text" color="danger" icon={<DeleteOutlined />} tooltip="Excluir" />
 </Popconfirm>
 ```
 
@@ -84,7 +120,7 @@ Em `notification`/`Alert`/`message` que exibam **apenas um ícone** (sem texto a
 
 ```tsx
 <Tooltip title="Expandir detalhes do erro">
-  <Button type="text" icon={<InfoCircleOutlined />} />
+  <Button variant="text" icon={<InfoCircleOutlined />} tooltip="Expandir detalhes do erro" />
 </Tooltip>
 ```
 
@@ -112,12 +148,17 @@ Default `bordered`. **Preenchida** só em status crítico (erro grave, bloqueio)
 <Tag color="error" bordered={false}>Bloqueado</Tag>
 ```
 
-## 8. Botões só com ícone
+## 8. Botões e ícones
 
-Qualquer `Button` sem texto visível **exige `tooltip`** (prop do wrapper `@/components/ui/Button`) ou `aria-label`:
+- **Só ícone** (tabela / toolbar densa): obrigatório `tooltip` (prop do wrapper) ou `aria-label`. Preferência em células de ação.
+- **CTA / secundário de formulário:** texto + `icon` quando houver ícone semântico claro. Não omita o verbo ("Salvar", "Cancelar").
 
 ```tsx
-<Button icon={<EditOutlined />} tooltip="Editar produto" />
+// Tabela — ícone-only
+<Button variant="text" icon={<EditOutlined />} tooltip="Editar produto" />
+
+// CTA — texto + ícone
+<Button color="primary" icon={<SaveOutlined />}>Salvar</Button>
 ```
 
 ## 9. Overflow
@@ -125,7 +166,7 @@ Qualquer `Button` sem texto visível **exige `tooltip`** (prop do wrapper `@/com
 Texto que pode estourar precisa truncar + revelar via `Tooltip`:
 
 ```tsx
-<Tooltip title={produto.nome}>
+<Tooltip message={produto.nome}>
   <Text ellipsis style={{ maxWidth: 240 }}>{produto.nome}</Text>
 </Tooltip>
 ```

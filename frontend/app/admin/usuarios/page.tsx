@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { listAdminUsuarios } from '@/lib/api/admin'
+import { listCategorias } from '@/lib/api/categorias'
+import { formatDateTime } from '@/lib/formatters'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
-import type { Usuario } from '@/lib/types'
+import type { AdminUsuarioListItem, Categoria } from '@/lib/types'
 import {
   Button,
   Flex,
@@ -16,26 +18,34 @@ import {
   Typography,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
+import { EyeOutlined } from '@ant-design/icons'
 
 const { Title } = Typography
 
 export default function AdminUsuariosPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const [items, setItems] = useState<Usuario[]>([])
+  const [items, setItems] = useState<AdminUsuarioListItem[]>([])
+  const [categorias, setCategorias] = useState<Categoria[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [tipo, setTipo] = useState<string | undefined>()
+  const [categoria, setCategoria] = useState<string | undefined>()
+
+  useEffect(() => {
+    if (!isAdmin) return
+    void listCategorias().then(setCategorias)
+  }, [isAdmin])
 
   useEffect(() => {
     if (!isAdmin) return
     const t = window.setTimeout(() => {
       setLoading(true)
-      void listAdminUsuarios({ q: q || undefined, tipo })
+      void listAdminUsuarios({ q: q || undefined, tipo, categoria })
         .then((r) => setItems(r.items))
         .finally(() => setLoading(false))
     }, 0)
     return () => window.clearTimeout(t)
-  }, [isAdmin, q, tipo])
+  }, [isAdmin, q, tipo, categoria])
 
   if (authLoading || !isAdmin) {
     return (
@@ -45,7 +55,7 @@ export default function AdminUsuariosPage() {
     )
   }
 
-  const columns: TableProps<Usuario>['columns'] = [
+  const columns: TableProps<AdminUsuarioListItem>['columns'] = [
     {
       title: 'Identificador',
       key: 'nome',
@@ -76,13 +86,48 @@ export default function AdminUsuariosPage() {
       render: (t) => t ?? '—',
     },
     {
+      title: 'Status',
+      dataIndex: 'ativo',
+      filters: [
+        { text: 'Ativo', value: true },
+        { text: 'Inativo', value: false },
+      ],
+      onFilter: (v, row) => row.ativo === v,
+      render: (ativo: boolean) => (
+        <Tag color={ativo ? 'success' : 'default'}>{ativo ? 'Ativo' : 'Inativo'}</Tag>
+      ),
+    },
+    {
+      title: 'Score máx.',
+      dataIndex: 'scoreMaxProduto',
+      sorter: (a, b) => (a.scoreMaxProduto ?? -1) - (b.scoreMaxProduto ?? -1),
+      render: (v: number | null) => v ?? '—',
+    },
+    {
+      title: 'Top categoria',
+      dataIndex: 'topCategoria',
+      sorter: (a, b) => (a.topCategoria ?? '').localeCompare(b.topCategoria ?? ''),
+      render: (v: string | null) => v ?? '—',
+    },
+    {
+      title: 'Última atividade',
+      dataIndex: 'ultimaAtividade',
+      sorter: (a, b) =>
+        (a.ultimaAtividade ?? '').localeCompare(b.ultimaAtividade ?? ''),
+      render: (d: string | null) => (d ? formatDateTime(d) : '—'),
+    },
+    {
       title: 'Ações',
       key: 'acoes',
       render: (_, row) => (
         <Link href={`/admin/usuarios/${row.id}`}>
-          <Button size="small" id={`admin-user-${row.id}-abrir`}>
-            Abrir
-          </Button>
+          <Button
+            variant="text"
+            size="small"
+            icon={<EyeOutlined />}
+            tooltip="Abrir"
+            id={`admin-user-${row.id}-abrir`}
+          />
         </Link>
       ),
     },
@@ -111,6 +156,14 @@ export default function AdminUsuariosPage() {
             { value: 'PJ', label: 'PJ' },
           ]}
           onChange={(v: string | null) => setTipo(v ?? undefined)}
+        />
+        <Select
+          id="admin-usuarios-categoria"
+          allowClear
+          placeholder="Selecione a categoria"
+          style={{ minWidth: 180 }}
+          options={categorias.map((c) => ({ value: c.nome, label: c.nome }))}
+          onChange={(v: string | null) => setCategoria(v ?? undefined)}
         />
       </Flex>
       <Table

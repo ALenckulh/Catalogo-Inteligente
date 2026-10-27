@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
+  BgColorsOutlined,
   DashboardOutlined,
   SettingOutlined,
   ShoppingOutlined,
@@ -34,6 +35,11 @@ const MENU_ITEMS: MenuProps['items'] = [
     key: '/admin/configuracao',
     icon: <SettingOutlined />,
     label: <Link href="/admin/configuracao">Configuração</Link>,
+  },
+  {
+    key: '/admin/design-system',
+    icon: <BgColorsOutlined />,
+    label: <Link href="/admin/design-system">Design system</Link>,
   },
   {
     key: '/admin/conta',

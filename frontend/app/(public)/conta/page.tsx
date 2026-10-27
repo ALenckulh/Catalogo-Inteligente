@@ -153,7 +153,7 @@ export default function ContaPage() {
             children: (
               <>
                 {error && (
-                  <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+                  <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
                 )}
                 <Paragraph type="secondary">
                   E-mail: <Text strong>{conta.email}</Text>

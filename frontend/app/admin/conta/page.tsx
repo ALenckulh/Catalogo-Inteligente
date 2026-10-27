@@ -16,6 +16,7 @@ import {
   Spin,
   Typography,
 } from '@/components/ui'
+import { SaveOutlined } from '@ant-design/icons'
 
 const { Title, Paragraph } = Typography
 
@@ -61,7 +62,7 @@ export default function AdminContaPage() {
         Minha conta
       </Title>
       <Paragraph type="secondary">Altere e-mail, telefone ou senha (mock).</Paragraph>
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <FormItem
           name="email"
@@ -80,7 +81,13 @@ export default function AdminContaPage() {
         <FormItem name="novaSenha" label="Nova senha" tooltip="Deixe em branco para manter">
           <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" />
         </FormItem>
-        <Button id="admin-conta-salvar" color="primary" htmlType="submit" loading={saving}>
+        <Button
+          id="admin-conta-salvar"
+          color="primary"
+          htmlType="submit"
+          loading={saving}
+          icon={<SaveOutlined />}
+        >
           Salvar
         </Button>
       </Form>

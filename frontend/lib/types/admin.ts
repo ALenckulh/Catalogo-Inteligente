@@ -30,6 +30,14 @@ export interface FaixaPrecoUsuario {
   gapPreco: number
 }
 
+export type AdminUsuarioListItem = import('./index').Usuario & {
+  scoreMaxProduto: number | null
+  topCategoria: string | null
+  ultimaAtividade: string | null
+  /** Conta não soft-deleted (`deleted_at` nulo). */
+  ativo: boolean
+}
+
 export interface AdminUsuarioDetalhe {
   usuario: import('./index').Usuario
   scoresProduto: ScoreProdutoRow[]
@@ -58,4 +66,5 @@ export interface ProdutoInput {
   categoriaId: number
   ativo: boolean
   fichaTecnica?: Record<string, string>
+  imagens?: Array<{ url: string; altText?: string | null; ordem: number }>
 }

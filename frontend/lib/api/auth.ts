@@ -90,7 +90,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
 
 export async function confirmPasswordReset(token: string, novaSenha: string): Promise<void> {
   if (!USE_MOCK) {
-    await apiClient.post('/auth/password-reset/confirm', { token, nova_senha: novaSenha })
+    await apiClient.post('/auth/password-reset/confirm', { token, novaSenha })
     return
   }
   await delay()

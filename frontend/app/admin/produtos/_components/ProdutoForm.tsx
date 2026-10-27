@@ -17,7 +17,16 @@ import {
   InputNumber,
   Select,
   Switch,
+  Typography,
 } from '@/components/ui'
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons'
+
+const { Title } = Typography
 
 interface Props {
   initial?: Produto
@@ -30,6 +39,24 @@ function slugify(nome: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+function fichaToPairs(ficha: Record<string, string> | null | undefined) {
+  if (!ficha) return []
+  return Object.entries(ficha).map(([chave, valor]) => ({ chave, valor }))
+}
+
+function pairsToFicha(
+  pairs: Array<{ chave?: string; valor?: string }> | undefined,
+): Record<string, string> | undefined {
+  if (!pairs?.length) return undefined
+  const out: Record<string, string> = {}
+  for (const row of pairs) {
+    const k = row.chave?.trim()
+    if (!k) continue
+    out[k] = row.valor?.trim() ?? ''
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 export function ProdutoForm({ initial }: Props) {
@@ -57,6 +84,14 @@ export function ProdutoForm({ initial }: Props) {
       preco: initial.preco,
       categoriaId: initial.categoriaId,
       ativo: initial.ativo,
+      fichaPairs: fichaToPairs(initial.fichaTecnica),
+      imagens: [...initial.imagens]
+        .sort((a, b) => a.ordem - b.ordem)
+        .map((img) => ({
+          url: img.url,
+          altText: img.altText ?? '',
+          ordem: img.ordem,
+        })),
     })
   }, [initial, form])
 
@@ -67,9 +102,18 @@ export function ProdutoForm({ initial }: Props) {
     preco: number
     categoriaId: number
     ativo: boolean
+    fichaPairs?: Array<{ chave?: string; valor?: string }>
+    imagens?: Array<{ url?: string; altText?: string; ordem?: number }>
   }) {
     setError(null)
     setSubmitting(true)
+    const imagens = (values.imagens ?? [])
+      .filter((img) => img.url?.trim())
+      .map((img, i) => ({
+        url: String(img.url).trim(),
+        altText: img.altText?.trim() || null,
+        ordem: img.ordem ?? i,
+      }))
     const body: ProdutoInput = {
       nome: values.nome,
       slug: values.slug,
@@ -77,6 +121,8 @@ export function ProdutoForm({ initial }: Props) {
       preco: values.preco,
       categoriaId: values.categoriaId,
       ativo: values.ativo,
+      fichaTecnica: pairsToFicha(values.fichaPairs),
+      imagens,
     }
     try {
       if (initial) {
@@ -95,16 +141,19 @@ export function ProdutoForm({ initial }: Props) {
   }
 
   return (
-    <Flex vertical gap={16} style={{ maxWidth: 560 }}>
+    <Flex vertical gap={16} style={{ maxWidth: 640 }}>
       {contextHolder}
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && <Alert type="error" showIcon title={error} />}
       <Form
         form={form}
         layout="vertical"
         onFinish={onFinish}
-        initialValues={{ ativo: true }}
+        initialValues={{ ativo: true, fichaPairs: [], imagens: [] }}
         requiredMark={false}
       >
+        <Title level={5} style={{ marginTop: 0 }}>
+          Dados
+        </Title>
         <FormItem
           name="nome"
           label="Nome"
@@ -170,16 +219,127 @@ export function ProdutoForm({ initial }: Props) {
         >
           <Switch id="admin-prod-form-ativo" />
         </FormItem>
-        <Flex gap="small">
+
+        <Title level={5}>Ficha técnica</Title>
+        <Form.List name="fichaPairs">
+          {(fields, { add, remove }) => (
+            <Flex vertical gap="small">
+              {fields.map((field) => (
+                <Flex key={field.key} gap="small" align="flex-start">
+                  <FormItem
+                    {...field}
+                    name={[field.name, 'chave']}
+                    style={{ flex: 1, marginBottom: 0 }}
+                    rules={[{ required: true, message: 'Chave' }]}
+                  >
+                    <Input placeholder="Chave" id={`admin-prod-ficha-chave-${field.key}`} />
+                  </FormItem>
+                  <FormItem
+                    {...field}
+                    name={[field.name, 'valor']}
+                    style={{ flex: 1, marginBottom: 0 }}
+                    rules={[{ required: true, message: 'Valor' }]}
+                  >
+                    <Input placeholder="Valor" id={`admin-prod-ficha-valor-${field.key}`} />
+                  </FormItem>
+                  <Button
+                    variant="text"
+                    icon={<DeleteOutlined />}
+                    tooltip="Remover"
+                    onClick={() => remove(field.name)}
+                    id={`admin-prod-ficha-rm-${field.key}`}
+                  />
+                </Flex>
+              ))}
+              <Button
+                variant="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => add()}
+                id="admin-prod-ficha-add"
+                block
+              >
+                Adicionar atributo
+              </Button>
+            </Flex>
+          )}
+        </Form.List>
+
+        <Title level={5} style={{ marginTop: 24 }}>
+          Imagens
+        </Title>
+        <Form.List name="imagens">
+          {(fields, { add, remove }) => (
+            <Flex vertical gap="small">
+              {fields.map((field) => (
+                <Flex key={field.key} vertical gap={4} style={{ marginBottom: 8 }}>
+                  <Flex gap="small" align="flex-start">
+                    <FormItem
+                      {...field}
+                      name={[field.name, 'url']}
+                      style={{ flex: 1, marginBottom: 0 }}
+                      rules={[{ required: true, message: 'URL' }]}
+                    >
+                      <Input placeholder="URL" id={`admin-prod-img-url-${field.key}`} />
+                    </FormItem>
+                    <FormItem
+                      {...field}
+                      name={[field.name, 'ordem']}
+                      style={{ width: 88, marginBottom: 0 }}
+                      rules={[{ required: true, message: 'Ordem' }]}
+                    >
+                      <InputNumber
+                        min={0}
+                        placeholder="Ordem"
+                        style={{ width: '100%' }}
+                        id={`admin-prod-img-ordem-${field.key}`}
+                      />
+                    </FormItem>
+                    <Button
+                      variant="text"
+                      icon={<DeleteOutlined />}
+                      tooltip="Remover"
+                      onClick={() => remove(field.name)}
+                      id={`admin-prod-img-rm-${field.key}`}
+                    />
+                  </Flex>
+                  <FormItem
+                    {...field}
+                    name={[field.name, 'altText']}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Input placeholder="Texto alternativo" id={`admin-prod-img-alt-${field.key}`} />
+                  </FormItem>
+                </Flex>
+              ))}
+              <Button
+                variant="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => add({ ordem: fields.length, url: '', altText: '' })}
+                id="admin-prod-img-add"
+                block
+              >
+                Adicionar imagem
+              </Button>
+            </Flex>
+          )}
+        </Form.List>
+
+        <Flex gap="small" style={{ marginTop: 24 }}>
           <Button
             id="admin-prod-form-salvar"
             color="primary"
             htmlType="submit"
             loading={submitting}
+            icon={<SaveOutlined />}
           >
             Salvar
           </Button>
-          <Button id="admin-prod-form-cancelar" onClick={() => router.push('/admin/produtos')}>
+          <Button
+            variant="outlined"
+            id="admin-prod-form-cancelar"
+            icon={<CloseOutlined />}
+            onClick={() => router.push('/admin/produtos')}
+          >
             Cancelar
           </Button>
         </Flex>

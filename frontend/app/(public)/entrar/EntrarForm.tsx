@@ -54,7 +54,7 @@ export function EntrarForm() {
       <Paragraph type="secondary">Acesse sua conta PF ou PJ.</Paragraph>
 
       {error && (
-        <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+        <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
       )}
 
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>

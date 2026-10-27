@@ -149,9 +149,16 @@ export interface LeadResumo {
   ultimaAtividade: string
 }
 
+export interface DashboardSeries {
+  distribuicaoScores: { faixa: string; quantidade: number }[]
+  contatosPorDia: { data: string; quantidade: number }[]
+  leadsPorCategoria: { categoria: string; quantidade: number }[]
+}
+
 export interface AdminDashboard {
   kpis: DashboardKpis
   leads: LeadResumo[]
+  series: DashboardSeries
 }
 
 export interface ApiErrorBody {
@@ -164,6 +171,7 @@ export type {
   ScoreProdutoRow,
   ScoreCategoriaRow,
   FaixaPrecoUsuario,
+  AdminUsuarioListItem,
   AdminUsuarioDetalhe,
   PesoMetrica,
   ParametroDecay,

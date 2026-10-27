@@ -17,6 +17,7 @@ import {
   message,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
+import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 
 const { Title } = Typography
 
@@ -159,6 +160,7 @@ export default function AdminConfiguracaoPage() {
                   <Button
                     id="admin-pesos-salvar"
                     color="primary"
+                    icon={<SaveOutlined />}
                     onClick={() => {
                       void savePesos(pesos).then(() => message.success('Pesos salvos'))
                     }}
@@ -172,7 +174,13 @@ export default function AdminConfiguracaoPage() {
                     cancelText="Cancelar"
                     onConfirm={() => setPesos(DEFAULT_PESOS)}
                   >
-                    <Button id="admin-pesos-reset">Reset defaults</Button>
+                    <Button
+                      variant="outlined"
+                      id="admin-pesos-reset"
+                      icon={<ReloadOutlined />}
+                    >
+                      Reset defaults
+                    </Button>
                   </Popconfirm>
                 </Flex>
               </Flex>
@@ -193,6 +201,7 @@ export default function AdminConfiguracaoPage() {
                 <Button
                   id="admin-decay-salvar"
                   color="primary"
+                  icon={<SaveOutlined />}
                   onClick={() => {
                     void saveDecay(decay).then(() => message.success('Decaimento salvo'))
                   }}

@@ -233,6 +233,37 @@ export const mockDashboard: AdminDashboard = {
       ultimaAtividade: '2026-03-19T16:00:00.000Z',
     },
   ],
+  series: {
+    distribuicaoScores: [
+      { faixa: '0–20', quantidade: 8 },
+      { faixa: '21–40', quantidade: 12 },
+      { faixa: '41–60', quantidade: 15 },
+      { faixa: '61–80', quantidade: 9 },
+      { faixa: '81–100', quantidade: 5 },
+    ],
+    contatosPorDia: [
+      { data: '2026-03-07', quantidade: 1 },
+      { data: '2026-03-08', quantidade: 0 },
+      { data: '2026-03-09', quantidade: 2 },
+      { data: '2026-03-10', quantidade: 1 },
+      { data: '2026-03-11', quantidade: 3 },
+      { data: '2026-03-12', quantidade: 2 },
+      { data: '2026-03-13', quantidade: 1 },
+      { data: '2026-03-14', quantidade: 0 },
+      { data: '2026-03-15', quantidade: 2 },
+      { data: '2026-03-16', quantidade: 1 },
+      { data: '2026-03-17', quantidade: 3 },
+      { data: '2026-03-18', quantidade: 2 },
+      { data: '2026-03-19', quantidade: 1 },
+      { data: '2026-03-20', quantidade: 2 },
+    ],
+    leadsPorCategoria: [
+      { categoria: 'Malhas', quantidade: 18 },
+      { categoria: 'Aviamentos', quantidade: 12 },
+      { categoria: 'Tecidos', quantidade: 9 },
+      { categoria: 'Linhas', quantidade: 5 },
+    ],
+  },
 }
 
 export function withCategoria(produto: Produto): Produto {

@@ -4,10 +4,29 @@ import { palette, text, surface, border, typography, radius } from './tokens'
 export const antdTheme: ThemeConfig = {
   token: {
     colorPrimary: palette.primary[400],
-    colorSuccess: palette.success[400],
-    colorWarning: palette.warning[400],
-    colorError:   palette.error[400],
-    colorInfo:    palette.primary[400],
+    // Status: texto escuro o bastante p/ AA em Tag/Alert soft (bg pinado abaixo)
+    colorSuccess: palette.success[700],
+    colorWarning: palette.warning[700],
+    colorError:   palette.error[600],
+    colorInfo:    palette.primary[500],
+
+    // Soft primary/info — Menu/Select ativo, Button filled, Alert info, Tag processing
+    colorPrimaryBg:      palette.primary[50],
+    colorPrimaryBgHover: palette.primary[100],
+    colorPrimaryBorder:  palette.primary[200],
+    colorInfoBg:         palette.primary[50],
+    colorInfoBgHover:    palette.primary[100],
+    colorInfoBorder:     palette.primary[200],
+
+    colorSuccessBg:      palette.success[50],
+    colorSuccessBgHover: palette.success[100],
+    colorSuccessBorder:  palette.success[200],
+    colorWarningBg:      palette.warning[50],
+    colorWarningBgHover: palette.warning[100],
+    colorWarningBorder:  palette.warning[200],
+    colorErrorBg:        palette.error[50],
+    colorErrorBgHover:   palette.error[100],
+    colorErrorBorder:    palette.error[200],
 
     colorText:          text.neutralStrong,
     colorTextSecondary: text.neutralDefault,
@@ -19,6 +38,10 @@ export const antdTheme: ThemeConfig = {
     colorBgElevated:  surface.base,
     colorBgLayout:    surface.neutralSubtle,
     colorBgMask:      'rgba(10, 10, 10, 0.45)',
+    // solid default = secondary (~4.9:1 com branco)
+    colorBgSolid:       palette.secondary[400],
+    colorBgSolidHover:  palette.secondary[500],
+    colorBgSolidActive: palette.secondary[600],
 
     colorBorder:          border.neutralDefault,
     colorBorderSecondary: border.neutralSubtle,

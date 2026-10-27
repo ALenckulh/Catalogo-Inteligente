@@ -75,7 +75,7 @@ export function CookieBanner() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Cookies essenciais são sempre ativos (sessão, segurança, preferência de consentimento)."
+          title="Cookies essenciais são sempre ativos (sessão, segurança, preferência de consentimento)."
         />
         <Checkbox
           id="cookie-behavioral"

@@ -18,7 +18,13 @@ import {
   Typography,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
-import { EditOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  StopOutlined,
+} from '@ant-design/icons'
 
 const { Title } = Typography
 
@@ -105,6 +111,7 @@ export default function AdminProdutosPage() {
         <Flex gap={4}>
           <Link href={`/admin/produtos/${row.id}/editar`}>
             <Button
+              variant="text"
               size="small"
               icon={<EditOutlined />}
               tooltip="Editar produto"
@@ -112,7 +119,10 @@ export default function AdminProdutosPage() {
             />
           </Link>
           <Button
+            variant="text"
             size="small"
+            icon={row.ativo ? <StopOutlined /> : <CheckCircleOutlined />}
+            tooltip={row.ativo ? 'Desativar' : 'Ativar'}
             id={`admin-prod-${row.id}-toggle`}
             onClick={() => {
               void updateProduto(row.id, { ativo: !row.ativo }).then(() => {
@@ -120,9 +130,7 @@ export default function AdminProdutosPage() {
                 void reload()
               })
             }}
-          >
-            {row.ativo ? 'Desativar' : 'Ativar'}
-          </Button>
+          />
           <Popconfirm
             title="Remover produto do catálogo?"
             description="Esta ação é permanente e não pode ser desfeita."
@@ -135,9 +143,14 @@ export default function AdminProdutosPage() {
               })
             }}
           >
-            <Button size="small" color="danger" id={`admin-prod-${row.id}-excluir`}>
-              Excluir
-            </Button>
+            <Button
+              variant="text"
+              size="small"
+              color="danger"
+              icon={<DeleteOutlined />}
+              tooltip="Excluir"
+              id={`admin-prod-${row.id}-excluir`}
+            />
           </Popconfirm>
         </Flex>
       ),

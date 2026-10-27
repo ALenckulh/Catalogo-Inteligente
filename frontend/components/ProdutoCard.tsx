@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import type { Produto } from '@/lib/types'
 import { toMoneyBRL } from '@/lib/formatters'
 import { Card, Tag, Typography } from '@/components/ui'
@@ -22,14 +21,21 @@ export function ProdutoCard({ produto }: ProdutoCardProps) {
         hoverable
         cover={
           imagem ? (
-            <div style={{ position: 'relative', width: '100%', aspectRatio: '1', background: 'var(--surface-neutral-subtle)' }}>
-              <Image
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '1',
+                background: 'var(--surface-neutral-subtle)',
+                overflow: 'hidden',
+              }}
+            >
+              {/* img nativo: evita mismatch de attrs do next/image no SSR */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- placehold.co mock; next/image causa hydration mismatch no Card */}
+              <img
                 src={imagem.url}
                 alt={imagem.altText ?? produto.nome}
-                fill
-                sizes="(max-width: 768px) 50vw, 25vw"
-                style={{ objectFit: 'cover' }}
-                unoptimized
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />
             </div>
           ) : undefined

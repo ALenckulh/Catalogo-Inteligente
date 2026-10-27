@@ -142,7 +142,7 @@ PATCH  /api/admin/configuracao/decay       Atualiza λ
 
 ## 5. Decisões arquiteturais relevantes
 
-- **Monorepo com `frontend/` separado** para o Next.js; backend Java fica em `backend/` (diretório irmão). A estrutura concreta — módulos, build Gradle/Maven, perfis — será documentada quando o backend for iniciado.
+- **Monorepo com `frontend/` separado** para o Next.js; backend Java fica em `backend/` (diretório irmão). Estrutura concreta — módulos, Gradle, segurança, mensageria, ADRs — em [12-ARQUITETURA-BACKEND.md](12-ARQUITETURA-BACKEND.md).
 - **Ambiente de banco em `database/`** — Docker Compose com PostgreSQL + Flyway + pgAdmin. Scripts de criação em `database/migrations/`. Ver [`database/README.md`](../../database/README.md).
 - **Sem carrinho/pagamento:** decisão de escopo (ver [01-VISAO-GERAL.md §3](01-VISAO-GERAL.md)).
 - **PostgreSQL único**, com uso de JSONB para `evento.metadados` para flexibilidade na coleta sem migrações frequentes.

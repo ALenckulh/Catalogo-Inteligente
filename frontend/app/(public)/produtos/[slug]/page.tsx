@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { notFound, useParams } from 'next/navigation'
 import { HeartFilled, HeartOutlined, WhatsAppOutlined } from '@ant-design/icons'
 import { addFavorito, listFavoritos, removeFavorito } from '@/lib/api/favoritos'
 import { getProdutoBySlug } from '@/lib/api/produtos'
@@ -30,7 +30,6 @@ const { Title, Paragraph, Text } = Typography
 export default function ProdutoPage() {
   const params = useParams<{ slug: string }>()
   const slug = params.slug
-  const router = useRouter()
   const track = useTrackEvent()
   const { user, isAuthenticated } = useCurrentUser()
 
@@ -51,14 +50,13 @@ export default function ProdutoPage() {
         if (cancelled) return
         setProduto(p)
         setLoading(false)
-        if (!p) router.replace('/produtos')
       })
     }, 0)
     return () => {
       cancelled = true
       window.clearTimeout(t)
     }
-  }, [slug, router])
+  }, [slug])
 
   useEffect(() => {
     if (!produto || !user || !isAuthenticated) return
@@ -163,7 +161,7 @@ export default function ProdutoPage() {
     )
   }
 
-  if (!produto) return null
+  if (!produto) return notFound()
 
   const imagens = [...produto.imagens].sort((a, b) => a.ordem - b.ordem)
   const principal = imagens[0]

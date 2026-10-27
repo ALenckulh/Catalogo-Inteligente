@@ -17,6 +17,7 @@ Documentação do TCC em Engenharia de Software: plataforma de catálogo B2B com
 | 09 | [Normas de Usabilidade](09-NORMAS-DE-USABILIDADE.md) | Regras de UI/UX + checklist de code review |
 | 10 | [Arquitetura — Frontend](10-ARQUITETURA-FRONTEND.md) | Estrutura de pastas, convenções, ADRs do frontend |
 | 11 | [API — Endpoints](11-API-ENDPOINTS.md) | Catálogo REST: método, path, auth, telas, RF, entidades |
+| 12 | [Arquitetura — Backend](12-ARQUITETURA-BACKEND.md) | Estrutura de pacotes, convenções, segurança, mensageria, scoring, ADRs |
 | — | [Padrões — Hooks](padroes/HOOKS.md) | Convenções para hooks custom |
 | — | [Padrões — Contexts](padroes/CONTEXTS.md) | Convenções para React Context |
 
