@@ -38,7 +38,7 @@ O sistema funciona como **vitrine inteligente e catálogo gerenciável**, onde:
 |---|---|---|
 | Frontend | React + Next.js | Renderização híbrida; coleta de eventos no cliente |
 | UI / Design System | Ant Design (antd) | Componentes base; ver filosofia visual em [03-PAGINAS-E-UX.md](03-PAGINAS-E-UX.md) |
-| Backend | Java + Spring Boot | API REST; regras de negócio; produção de eventos |
+| Backend | Java 25 + Spring Boot 4 | API REST; regras de negócio; produção de eventos |
 | Banco de dados | PostgreSQL | Persistência (JSONB para metadados de eventos) |
 | Mensageria | RabbitMQ ou Kafka | Fila de eventos entre API e workers; desacoplamento |
 | Worker | Spring Boot (consumer) | Consome eventos, persiste e aciona recalculos de score |

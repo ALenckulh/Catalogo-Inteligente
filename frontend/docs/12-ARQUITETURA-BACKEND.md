@@ -14,8 +14,8 @@ Links irmãos:
 
 | Camada | Tecnologia | Versão / nota |
 |---|---|---|
-| Linguagem | **Java** | 17 (LTS) |
-| Framework | **Spring Boot** | 3.x |
+| Linguagem | **Java** | 25 (LTS) |
+| Framework | **Spring Boot** | 4.x |
 | Build | **Gradle** (Kotlin DSL) | Wrapper no repo |
 | Segurança | Spring Security + **JWT** (JJWT) | Stateless |
 | Persistência | Spring Data JPA (Hibernate) | PostgreSQL |
@@ -185,15 +185,16 @@ Regras operacionais:
 
 ## 8. Ambientes e build
 
+Scaffold do projeto: diretório [`backend/`](../../backend/) (ver [`backend/README.md`](../../backend/README.md)).
+
 | Perfil | Uso | Config |
 |---|---|---|
 | `dev` | local | `application-dev.yml` — DB/Rabbit locais, JWT secret de dev |
 | `prod` | deploy | env vars (`SPRING_DATASOURCE_*`, `JWT_SECRET`, Rabbit…) — sem secrets no git |
 
 Pré-requisitos locais:
-1. `database/`: `docker compose up -d postgres` + `flyway migrate` ([database/README.md](../../database/README.md)).
-2. RabbitMQ no Compose (serviço a adicionar junto ao stack de DB).
-3. `./gradlew bootRun` com perfil `dev`.
+1. `database/`: `docker compose up -d postgres rabbitmq` + `flyway migrate` ([database/README.md](../../database/README.md)).
+2. `./gradlew bootRun` com perfil `dev` (na pasta `backend/`).
 
 Flyway: **fonte única** de schema em `database/migrations/` — compartilhada com o ambiente de banco; a app Spring **não** duplica DDL.
 
@@ -227,10 +228,10 @@ controller → service → repository → entity (Postgres)
 
 ## 10. ADRs — decisões arquiteturais
 
-### ADR-B01: Spring Boot 3.x + Java 17
-- **Contexto:** API REST, Security, JPA, mensageria no mesmo ecossistema.
-- **Decisão:** Spring Boot 3.x (Jakarta EE), Java 17 LTS.
-- **Trade-off:** curva Spring vs. Node monolítico — alinhado ao TCC e ao stack já declarado em [05](05-ARQUITETURA.md).
+### ADR-B01: Spring Boot 4.x + Java 25
+- **Contexto:** API REST, Security, JPA, mensageria no mesmo ecossistema; Java 25 LTS com suporte first-class.
+- **Decisão:** Spring Boot 4.x (Jakarta EE 11 / Spring Framework 7), Java 25 LTS.
+- **Trade-off:** Boot 4 + Jackson 3 exige migração a partir do 3.x; vale pelo suporte oficial a Java 25 e stack atual.
 
 ### ADR-B02: Pacote por domínio
 - **Contexto:** Risco de pastas `controller/`/`service/` globais inchadas.

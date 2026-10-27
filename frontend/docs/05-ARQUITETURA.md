@@ -15,7 +15,7 @@ Visão arquitetural do sistema: camadas, modelo de dados e esboço da API.
 └──────────────────┬──────────────────────────────────────────┘
                    │ HTTPS / REST
 ┌──────────────────▼──────────────────────────────────────────┐
-│  API Spring Boot (Java)                                     │
+│  API Spring Boot (Java 25)                                  │
 │  • Autenticação (JWT ou sessão)                             │
 │  • CRUD de produtos, usuários, favoritos                    │
 │  • Producer de eventos → mensageria                         │

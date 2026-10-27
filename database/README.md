@@ -24,6 +24,27 @@ docker compose run --rm flyway migrate
 
 Na primeira execução, o Flyway aplica V001 → V011 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
 
+## RabbitMQ (API / eventos)
+
+Necessário para o backend Spring (`spring-boot-starter-amqp`):
+
+```bash
+docker compose up -d rabbitmq
+```
+
+| Campo | Valor |
+|---|---|
+| AMQP | `localhost:5672` |
+| Management UI | <http://localhost:15672> |
+| User / Password | `guest` / `guest` (ou `.env`) |
+
+Subir Postgres + Rabbit juntos:
+
+```bash
+docker compose up -d postgres rabbitmq
+```
+
+
 ### Comandos úteis
 
 ```bash
