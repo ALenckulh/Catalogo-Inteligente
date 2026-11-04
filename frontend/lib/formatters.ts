@@ -7,15 +7,17 @@ export function onlyDigits(value: string): string {
   return value.replace(/\D/g, '')
 }
 
-export function toMoney(value: number): string {
-  return value.toLocaleString('pt-BR', {
+export function toMoney(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return Number(value).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
 }
 
-export function toMoneyBRL(value: number): string {
-  return `R$ ${toMoney(value)}`
+export function toMoneyBRL(value: number | null | undefined): string {
+  const formatted = toMoney(value)
+  return formatted === '—' ? '—' : `R$ ${formatted}`
 }
 
 export function formatCpf(value: string): string {

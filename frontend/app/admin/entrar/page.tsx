@@ -45,7 +45,7 @@ export default function AdminEntrarPage() {
   return (
     <Flex justify="center" align="center" style={{ minHeight: '100vh', padding: 24 }}>
       <Card style={{ width: '100%', maxWidth: 400 }}>
-        <Title level={3} style={{ marginTop: 0 }}>
+        <Title level={2} style={{ marginTop: 0 }}>
           Admin — Entrar
         </Title>
         <Paragraph type="secondary">Acesso restrito ao dono do catálogo.</Paragraph>

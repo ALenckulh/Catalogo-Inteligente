@@ -2,7 +2,7 @@
 
 import { Col, Divider, Layout, Row, Space, Typography } from '@/components/ui'
 
-const { Title, Paragraph, Text, Link } = Typography
+const { Paragraph, Text, Link } = Typography
 const { Footer: AntFooter } = Layout
 
 const REFS = [
@@ -14,11 +14,11 @@ const REFS = [
 
 export function Footer() {
   return (
-    <AntFooter role="contentinfo" style={{ padding: '56px 24px 32px' }}>
-      <Space orientation="vertical" size={40} style={{ maxWidth: 1152, margin: '0 auto', display: 'flex' }}>
+    <AntFooter style={{ paddingInline: 0, paddingBlock: 'var(--space-12) var(--space-8)' }}>
+      <Space orientation="vertical" size={40} className="shell-inner" style={{ display: 'flex' }}>
         <Row gutter={[32, 32]}>
           <Col xs={24} md={10}>
-            <Title level={4} style={{ margin: 0 }}>Catálogo Inteligente</Title>
+            <Text strong>Catálogo Inteligente</Text>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
               Predição de Intenção de Compra em Catálogos B2B
             </Paragraph>
@@ -30,15 +30,15 @@ export function Footer() {
               <Link href="mailto:lenckulh.ola@gmail.com" aria-label="Email da autora">
                 lenckulh.ola@gmail.com
               </Link>
-              <Text type="secondary" style={{ fontSize: 13 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-lg)' }}>
                 Centro Universitário Católica de Santa Catarina — Jaraguá do Sul, SC, Brasil
               </Text>
             </Space>
           </Col>
 
           <Col xs={24} md={6}>
-            <Space orientation="vertical" size={6}>
-              <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 12 }}>
+            <Space orientation="vertical" size={8}>
+              <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 'var(--font-size-base)' }}>
                 Links
               </Text>
               <nav aria-label="Links do projeto">
@@ -57,17 +57,17 @@ export function Footer() {
         <Divider style={{ margin: 0 }} />
 
         <Space orientation="vertical" size={12}>
-          <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 12 }}>
+          <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 'var(--font-size-base)' }}>
             Referências
           </Text>
-          <Space orientation="vertical" size={10} role="list">
+          <Space orientation="vertical" size={8} role="list">
             {REFS.map((ref) => (
-              <Text key={ref.id} role="listitem" type="secondary" style={{ fontSize: 13 }}>
+              <Text key={ref.id} role="listitem" type="secondary" style={{ fontSize: 'var(--font-size-lg)' }}>
                 <Text strong>{ref.authors}</Text>{' '}
                 <Link href={ref.url} target="_blank" rel="noopener noreferrer" italic>
                   {ref.title}
                 </Link>
-                . <Text type="secondary" style={{ opacity: 0.7 }}>{ref.venue}.</Text>
+                . {ref.venue}.
               </Text>
             ))}
           </Space>
@@ -75,7 +75,7 @@ export function Footer() {
 
         <Divider style={{ margin: 0 }} />
 
-        <Text type="secondary" style={{ textAlign: 'center', display: 'block', fontSize: 13 }}>
+        <Text type="secondary" style={{ textAlign: 'center', display: 'block', fontSize: 'var(--font-size-lg)' }}>
           PAC VIII — 2026/1 · SBC Computing Reviews · Licença MIT
         </Text>
       </Space>

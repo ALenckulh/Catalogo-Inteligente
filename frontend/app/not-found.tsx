@@ -1,28 +1,32 @@
 'use client'
 
-import Link from 'next/link'
-import { Button, Flex, Result } from '@/components/ui'
+import { Button, Flex, Result, Typography } from '@/components/ui'
+import { PublicLayoutShell } from '@/components/layout/PublicLayoutShell'
+
+const { Title } = Typography
 
 export default function NotFound() {
   return (
-    <Flex justify="center" align="center" style={{ minHeight: '60vh', padding: 24 }}>
+    <PublicLayoutShell>
       <Result
         status="404"
-        title="Página não encontrada"
+        title={
+          <Title level={1} style={{ margin: 0 }}>
+            Página não encontrada
+          </Title>
+        }
         subTitle="O endereço não existe ou o produto foi removido."
         extra={
           <Flex gap="small" wrap="wrap" justify="center">
-            <Link href="/">
-              <Button color="primary" id="not-found-vitrine">
-                Ir para a vitrine
-              </Button>
-            </Link>
-            <Link href="/produtos">
-              <Button id="not-found-catalogo">Ver catálogo</Button>
-            </Link>
+            <Button color="primary" id="not-found-vitrine" href="/">
+              Ir para a vitrine
+            </Button>
+            <Button id="not-found-catalogo" href="/produtos">
+              Ver catálogo
+            </Button>
           </Flex>
         }
       />
-    </Flex>
+    </PublicLayoutShell>
   )
 }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toApiError } from '@/lib/api/client'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
+import { safeNext } from '@/lib/navigation'
 import {
   Alert,
   Button,
@@ -21,7 +22,7 @@ const { Title, Paragraph, Text } = Typography
 export function EntrarForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') || '/'
+  const next = safeNext(searchParams.get('next'))
   const { login, isAuthenticated, loading: authLoading } = useCurrentUser()
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
@@ -47,14 +48,14 @@ export function EntrarForm() {
   }
 
   return (
-    <Card style={{ width: '100%', maxWidth: 400 }}>
-      <Title level={3} style={{ marginTop: 0 }}>
+    <Card className="auth-card">
+      <Title level={1} style={{ marginTop: 0 }}>
         Entrar
       </Title>
       <Paragraph type="secondary">Acesse sua conta PF ou PJ.</Paragraph>
 
       {error && (
-        <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
+        <Alert type="error" showIcon title={error} style={{ marginBottom: 'var(--space-4)' }} />
       )}
 
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
@@ -92,12 +93,15 @@ export function EntrarForm() {
         </Button>
       </Form>
 
-      <Flex vertical gap={8} style={{ marginTop: 16 }}>
+      <Flex vertical gap="small" style={{ marginTop: 'var(--space-4)' }}>
         <Text>
           <Link href="/recuperar-senha">Esqueci a senha</Link>
         </Text>
         <Text>
-          Não tem conta? <Link href="/cadastro">Criar conta</Link>
+          Não tem conta?{' '}
+          <Link href={next === '/' ? '/cadastro' : `/cadastro?next=${encodeURIComponent(next)}`}>
+            Criar conta
+          </Link>
         </Text>
       </Flex>
     </Card>

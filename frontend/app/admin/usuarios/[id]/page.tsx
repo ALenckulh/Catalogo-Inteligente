@@ -126,7 +126,7 @@ export default function AdminUsuarioDetalhePage() {
       <Flex justify="space-between" align="center" wrap="wrap" gap="middle">
         <div>
           <Link href="/admin/usuarios">← Usuários</Link>
-          <Title level={3} style={{ margin: '8px 0 0' }} id="admin-user-detail-title">
+          <Title level={2} style={{ margin: '8px 0 0' }} id="admin-user-detail-title">
             {nome}
           </Title>
           <Text type="secondary">{usuario.email}</Text>

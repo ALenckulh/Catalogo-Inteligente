@@ -3,24 +3,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { notFound, useParams } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { HeartFilled, HeartOutlined, WhatsAppOutlined } from '@ant-design/icons'
+import { toApiError } from '@/lib/api/client'
 import { addFavorito, listFavoritos, removeFavorito } from '@/lib/api/favoritos'
 import { getProdutoBySlug } from '@/lib/api/produtos'
 import { whatsappUrl } from '@/lib/config'
 import { toMoneyBRL } from '@/lib/formatters'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
+import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
+import { entrarHref } from '@/lib/navigation'
 import type { Produto } from '@/lib/types'
+import { PageError, PageLoading } from '@/components/layout/PageStates'
 import {
   Breadcrumb,
   Button,
   Col,
   Descriptions,
-  Divider,
   Flex,
   Row,
-  Spin,
   Tag,
   Typography,
 } from '@/components/ui'
@@ -29,12 +31,16 @@ const { Title, Paragraph, Text } = Typography
 
 export default function ProdutoPage() {
   const params = useParams<{ slug: string }>()
+  const router = useRouter()
   const slug = params.slug
   const track = useTrackEvent()
   const { user, isAuthenticated } = useCurrentUser()
+  const { api, contextHolder } = useAppNotification()
 
   const [produto, setProduto] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
+  const [falhou, setFalhou] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
   const [favorito, setFavorito] = useState(false)
   const [favLoading, setFavLoading] = useState(false)
   const viewed = useRef(false)
@@ -46,23 +52,29 @@ export default function ProdutoPage() {
     let cancelled = false
     const t = window.setTimeout(() => {
       setLoading(true)
-      void getProdutoBySlug(slug).then((p) => {
-        if (cancelled) return
-        setProduto(p)
-        setLoading(false)
-      })
+      setFalhou(false)
+      getProdutoBySlug(slug)
+        .then((p) => {
+          if (!cancelled) setProduto(p)
+        })
+        .catch(() => {
+          if (!cancelled) setFalhou(true)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
     }, 0)
     return () => {
       cancelled = true
       window.clearTimeout(t)
     }
-  }, [slug])
+  }, [slug, tentativa])
 
   useEffect(() => {
     if (!produto || !user || !isAuthenticated) return
-    void listFavoritos(user.id).then((favs) => {
-      setFavorito(favs.some((f) => f.produtoId === produto.id))
-    })
+    listFavoritos(user.id)
+      .then((favs) => setFavorito(favs.some((f) => f.produtoId === produto.id)))
+      .catch(() => setFavorito(false))
   }, [produto, user, isAuthenticated])
 
   useEffect(() => {
@@ -134,10 +146,14 @@ export default function ProdutoPage() {
         setFavorito(true)
         track({ tipo: 'FAVORITAR', produtoId: produto.id })
       }
+    } catch (e) {
+      const erro = toApiError(e)
+      if (erro.status === 401) router.push(entrarHref(`/produtos/${slug}`))
+      else api.error({ title: erro.message })
     } finally {
       setFavLoading(false)
     }
-  }, [produto, user, favorito, track])
+  }, [produto, user, favorito, track, router, slug, api])
 
   function onContato() {
     if (!produto) return
@@ -153,14 +169,8 @@ export default function ProdutoPage() {
     )
   }
 
-  if (loading) {
-    return (
-      <Flex justify="center" style={{ padding: 64 }}>
-        <Spin size="large" />
-      </Flex>
-    )
-  }
-
+  if (loading) return <PageLoading />
+  if (falhou) return <PageError onRetry={() => setTentativa((n) => n + 1)} />
   if (!produto) return notFound()
 
   const imagens = [...produto.imagens].sort((a, b) => a.ordem - b.ordem)
@@ -174,7 +184,8 @@ export default function ProdutoPage() {
     : []
 
   return (
-    <Flex vertical gap={24} style={{ maxWidth: 1152, margin: '0 auto', padding: '32px 24px 80px' }}>
+    <Flex vertical className="page page--has-fixed-cta" style={{ gap: 'var(--space-6)' }}>
+      {contextHolder}
       <Breadcrumb
         items={[
           { title: <Link href="/">Vitrine</Link> },
@@ -183,15 +194,16 @@ export default function ProdutoPage() {
         ]}
       />
 
-      <Row gutter={[32, 32]}>
-        <Col xs={24} md={12}>
+      <Row gutter={[32, 24]}>
+        <Col xs={24} md={10}>
           <div
             style={{
               position: 'relative',
               width: '100%',
-              aspectRatio: '1',
+              aspectRatio: '4 / 3',
+              maxHeight: 'min(60vh, 480px)',
               background: 'var(--surface-neutral-subtle)',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-default)',
               overflow: 'hidden',
             }}
           >
@@ -200,30 +212,37 @@ export default function ProdutoPage() {
                 src={principal.url}
                 alt={principal.altText ?? produto.nome}
                 fill
-                style={{ objectFit: 'cover' }}
+                style={{ objectFit: 'contain' }}
                 unoptimized
                 priority
               />
             )}
           </div>
         </Col>
-        <Col xs={24} md={12}>
+        <Col xs={24} md={14}>
           <Flex vertical gap="middle">
-            {produto.categoria && <Tag>{produto.categoria.nome}</Tag>}
-            <Title level={2} style={{ margin: 0 }} id={`produto-${produto.slug}-titulo`}>
+            {produto.categoria && (
+              <Tag style={{ alignSelf: 'flex-start' }}>{produto.categoria.nome}</Tag>
+            )}
+            <Title level={1} style={{ margin: 0 }} id={`produto-${produto.slug}-titulo`}>
               {produto.nome}
             </Title>
-            <Text style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-neutral-strong)' }}>
+            <Text
+              style={{
+                fontSize: 'var(--font-size-2xl)',
+                fontWeight: 'var(--font-weight-semibold)',
+              }}
+            >
               {toMoneyBRL(produto.preco)}
             </Text>
-            {produto.descricao && <Paragraph type="secondary">{produto.descricao}</Paragraph>}
 
-            <Flex gap="small" wrap="wrap">
+            <Flex className="sticky-cta" gap="small" wrap="wrap">
               {isAuthenticated ? (
                 <>
                   <Button
                     id={`produto-${produto.slug}-contato`}
                     color="primary"
+                    size="large"
                     icon={<WhatsAppOutlined />}
                     onClick={onContato}
                   >
@@ -231,36 +250,51 @@ export default function ProdutoPage() {
                   </Button>
                   <Button
                     id={`produto-${produto.slug}-favoritar`}
+                    size="large"
                     icon={favorito ? <HeartFilled /> : <HeartOutlined />}
                     loading={favLoading}
+                    aria-pressed={favorito}
                     onClick={() => void toggleFav()}
-                    tooltip={favorito ? 'Remover dos favoritos' : 'Favoritar'}
                   >
                     {favorito ? 'Favoritado' : 'Favoritar'}
                   </Button>
                 </>
               ) : (
-                <Link href={`/entrar?next=/produtos/${produto.slug}`}>
-                  <Button id={`produto-${produto.slug}-entrar`} color="primary">
-                    Entrar para contatar
-                  </Button>
-                </Link>
+                <Button
+                  id={`produto-${produto.slug}-entrar`}
+                  color="primary"
+                  size="large"
+                  href={entrarHref(`/produtos/${produto.slug}`)}
+                >
+                  Entrar para contatar
+                </Button>
               )}
             </Flex>
+
+            {produto.descricao && (
+              <Paragraph
+                type="secondary"
+                style={{ margin: 0 }}
+                ellipsis={{
+                  rows: 4,
+                  expandable: 'collapsible',
+                  symbol: (expanded) => (expanded ? 'Ver menos' : 'Ver mais'),
+                }}
+              >
+                {produto.descricao}
+              </Paragraph>
+            )}
           </Flex>
         </Col>
       </Row>
 
       {ficha.length > 0 && (
-        <>
-          <Divider />
-          <section aria-labelledby="ficha-title">
-            <Title level={3} id="ficha-title">
-              Ficha técnica
-            </Title>
-            <Descriptions bordered size="small" column={1} items={ficha} />
-          </section>
-        </>
+        <section aria-labelledby="ficha-title">
+          <Title level={2} id="ficha-title" style={{ marginTop: 0 }}>
+            Ficha técnica
+          </Title>
+          <Descriptions bordered size="small" column={{ xs: 1, lg: 2 }} items={ficha} />
+        </section>
       )}
     </Flex>
   )

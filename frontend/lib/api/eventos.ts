@@ -2,6 +2,7 @@ import type { EventoPayload } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
 import { apiClient } from './client'
 import { USE_MOCK } from './config'
+import { readSessaoId } from './visitantes'
 
 /**
  * Envia evento comportamental. Caller deve checar CookieConsent antes.
@@ -9,7 +10,14 @@ import { USE_MOCK } from './config'
  */
 export async function trackEvent(payload: EventoPayload): Promise<void> {
   if (!USE_MOCK) {
-    await apiClient.post('/eventos', payload)
+    const sessaoId = readSessaoId()
+    await apiClient.post('/eventos', {
+      tipo: payload.tipo,
+      produtoId: payload.produtoId,
+      conversao: payload.conversao,
+      metadados: payload.metadados,
+      sessaoId,
+    })
     return
   }
 

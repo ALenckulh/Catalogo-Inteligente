@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { confirmPasswordReset, requestPasswordReset } from '@/lib/api/auth'
 import { toApiError } from '@/lib/api/client'
+import { USE_MOCK } from '@/lib/api/config'
 import {
   Alert,
   Button,
@@ -18,6 +19,8 @@ import {
 } from '@/components/ui'
 
 const { Title, Paragraph } = Typography
+
+const TOKEN_MOCK = 'mock-reset'
 
 export default function RecuperarSenhaPage() {
   const [step, setStep] = useState(0)
@@ -57,17 +60,15 @@ export default function RecuperarSenhaPage() {
 
   if (done) {
     return (
-      <Flex justify="center" style={{ padding: '48px 24px' }}>
+      <Flex vertical className="page page--auth">
         <Result
           status="success"
           title="Senha redefinida"
           subTitle="Você já pode entrar com a nova senha."
           extra={
-            <Link href="/entrar">
-              <Button color="primary" id="recuperar-ir-entrar">
-                Ir para entrar
-              </Button>
-            </Link>
+            <Button color="primary" id="recuperar-ir-entrar" href="/entrar">
+              Ir para entrar
+            </Button>
           }
         />
       </Flex>
@@ -75,24 +76,24 @@ export default function RecuperarSenhaPage() {
   }
 
   return (
-    <Flex justify="center" style={{ padding: '48px 24px' }}>
-      <Card style={{ width: '100%', maxWidth: 440 }}>
-        <Title level={3} style={{ marginTop: 0 }}>
+    <Flex vertical className="page page--auth">
+      <Card className="auth-card">
+        <Title level={1} style={{ marginTop: 0 }}>
           Recuperar senha
         </Title>
         <Paragraph type="secondary">
-          Duas etapas: solicitar o e-mail e definir a nova senha.
+          Informe seu e-mail e depois defina uma nova senha.
         </Paragraph>
 
         <Steps
           current={step}
           size="small"
-          style={{ marginBottom: 24 }}
+          style={{ marginBottom: 'var(--space-6)' }}
           items={[{ title: 'Solicitar' }, { title: 'Redefinir' }]}
         />
 
         {error && (
-          <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={error} style={{ marginBottom: 'var(--space-4)' }} />
         )}
 
         {step === 0 && (
@@ -100,13 +101,13 @@ export default function RecuperarSenhaPage() {
             <FormItem
               name="email"
               label="E-mail"
-              tooltip="Enviaremos instruções se a conta existir (sem enumerar usuários)"
+              tooltip="Enviaremos as instruções se a conta existir"
               rules={[
                 { required: true, message: 'Informe o e-mail' },
                 { type: 'email', message: 'E-mail inválido' },
               ]}
             >
-              <Input id="recuperar-email" placeholder="Informe o e-mail" />
+              <Input id="recuperar-email" placeholder="Informe o e-mail" autoComplete="email" />
             </FormItem>
             <Button
               id="recuperar-solicitar"
@@ -125,26 +126,35 @@ export default function RecuperarSenhaPage() {
             <Alert
               type="info"
               showIcon
-              style={{ marginBottom: 16 }}
-              title={`Se existir conta para ${email}, o token de redefinição foi enviado (mock: use token "mock-reset").`}
+              style={{ marginBottom: 'var(--space-4)' }}
+              title={`Se existir conta para ${email}, enviamos o código de redefinição.${
+                USE_MOCK ? ` Ambiente de teste: use "${TOKEN_MOCK}".` : ''
+              }`}
             />
             <Form form={form2} layout="vertical" onFinish={redefinir} requiredMark={false}>
               <FormItem
                 name="token"
-                label="Token"
+                label="Código"
                 tooltip="Código recebido por e-mail"
-                rules={[{ required: true, message: 'Informe o token' }]}
-                initialValue="mock-reset"
+                rules={[{ required: true, message: 'Informe o código' }]}
+                initialValue={USE_MOCK ? TOKEN_MOCK : undefined}
               >
-                <Input id="recuperar-token" placeholder="Informe o token" />
+                <Input id="recuperar-token" placeholder="Informe o código" />
               </FormItem>
               <FormItem
                 name="novaSenha"
                 label="Nova senha"
-                tooltip="Defina a nova senha de acesso"
-                rules={[{ required: true, message: 'Informe a nova senha' }, { min: 6 }]}
+                tooltip="Mínimo 6 caracteres"
+                rules={[
+                  { required: true, message: 'Informe a nova senha' },
+                  { min: 6, message: 'A senha deve ter no mínimo 6 caracteres' },
+                ]}
               >
-                <Input.Password id="recuperar-nova-senha" placeholder="Informe a nova senha" />
+                <Input.Password
+                  id="recuperar-nova-senha"
+                  placeholder="Informe a nova senha"
+                  autoComplete="new-password"
+                />
               </FormItem>
               <FormItem
                 name="confirma"
@@ -163,7 +173,11 @@ export default function RecuperarSenhaPage() {
                   }),
                 ]}
               >
-                <Input.Password id="recuperar-confirma" placeholder="Informe a confirmação" />
+                <Input.Password
+                  id="recuperar-confirma"
+                  placeholder="Informe a confirmação"
+                  autoComplete="new-password"
+                />
               </FormItem>
               <Button
                 id="recuperar-confirmar"
@@ -178,7 +192,7 @@ export default function RecuperarSenhaPage() {
           </>
         )}
 
-        <Paragraph style={{ marginTop: 16, marginBottom: 0 }}>
+        <Paragraph style={{ marginTop: 'var(--space-4)', marginBottom: 0 }}>
           <Link href="/entrar">Voltar ao login</Link>
         </Paragraph>
       </Card>

@@ -18,16 +18,13 @@ export function PublicFooter() {
     <Footer
       role="contentinfo"
       style={{
-        padding: '32px 24px',
+        paddingInline: 0,
+        paddingBlock: 'var(--space-6)',
         background: 'var(--surface-neutral-subtle)',
-        borderTop: '1px solid var(--border-neutral-subtle)',
+        borderTop: 'var(--border-width-default) solid var(--border-neutral-subtle)',
       }}
     >
-      <Flex
-        vertical
-        gap="middle"
-        style={{ maxWidth: 1152, margin: '0 auto' }}
-      >
+      <Flex vertical gap="middle" className="shell-inner">
         <Flex justify="space-between" wrap="wrap" gap="middle">
           <Text strong>Catálogo Inteligente</Text>
           <nav aria-label="Rodapé">
@@ -46,7 +43,7 @@ export function PublicFooter() {
           </nav>
         </Flex>
         <Divider style={{ margin: 0 }} />
-        <Text type="secondary" style={{ fontSize: 13 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>
           © {new Date().getFullYear()} Catálogo Inteligente · Uso acadêmico (TCC)
         </Text>
       </Flex>

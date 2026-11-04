@@ -40,4 +40,12 @@ Gates antes de PR: `test` → `build`.
 
 ## Estrutura
 
-Pacotes por domínio (`auth`, `catalog`, `eventos`, `scoring`, `admin`, `lgpd`, `visitante`) + `config` + `shared`. Endpoints de negócio entram depois do scaffold.
+Pacotes por domínio (`auth`, `catalog`, `eventos`, `scoring`, `admin`, `lgpd`, `visitante`) + `config` + `shared`.
+
+### Phase 1 endpoints
+
+- Auth: `POST /api/auth/signup|login|logout|password-reset|password-reset/confirm`
+- Admin login: `POST /api/admin/auth/login`
+- Catálogo: `GET /api/produtos`, `GET /api/produtos/{slug}`, `GET /api/categorias`
+
+Antes de `bootRun`: Postgres + Rabbit (`database/`) e Flyway migrate.

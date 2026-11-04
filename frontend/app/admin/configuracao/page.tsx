@@ -139,7 +139,7 @@ export default function AdminConfiguracaoPage() {
   return (
     <Flex vertical gap={16}>
       {contextHolder}
-      <Title level={3} style={{ margin: 0 }} id="admin-config-title">
+      <Title level={2} style={{ margin: 0 }} id="admin-config-title">
         Configuração de scoring
       </Title>
       <Tabs

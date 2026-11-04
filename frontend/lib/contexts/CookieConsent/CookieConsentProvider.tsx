@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CookieConsentLevel } from '@/lib/types'
-import { VISITANTE_COOKIE_KEY } from '@/lib/api/config'
+import { abrirSessaoVisitante } from '@/lib/api/visitantes'
 import {
   CookieConsentContext,
   type CookieConsentPreferences,
@@ -22,17 +22,6 @@ interface StoredConsent {
   level: CookieConsentLevel
   behavioral: boolean
   decidedAt: string
-}
-
-function ensureVisitanteId(): void {
-  if (typeof window === 'undefined') return
-  try {
-    if (!window.localStorage.getItem(VISITANTE_COOKIE_KEY)) {
-      window.localStorage.setItem(VISITANTE_COOKIE_KEY, crypto.randomUUID())
-    }
-  } catch {
-    /* ignore */
-  }
 }
 
 function readStored(): CookieConsentPreferences {
@@ -63,15 +52,23 @@ interface Props {
 export function CookieConsentProvider({ children }: Props) {
   const [preferences, setPreferences] = useState<CookieConsentPreferences>(defaultPrefs)
   const [hydrated, setHydrated] = useState(false)
+  const sessaoBootstrapped = useRef(false)
 
   useEffect(() => {
     const t = window.setTimeout(() => {
-      ensureVisitanteId()
       setPreferences(readStored())
       setHydrated(true)
     }, 0)
     return () => window.clearTimeout(t)
   }, [])
+
+  useEffect(() => {
+    if (!hydrated || !preferences.behavioral || sessaoBootstrapped.current) return
+    sessaoBootstrapped.current = true
+    void abrirSessaoVisitante().catch(() => {
+      sessaoBootstrapped.current = false
+    })
+  }, [hydrated, preferences.behavioral])
 
   const persist = useCallback((level: CookieConsentLevel, behavioral: boolean) => {
     const decidedAt = new Date().toISOString()
@@ -82,6 +79,12 @@ export function CookieConsentProvider({ children }: Props) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
     } catch {
       /* ignore */
+    }
+    if (behavioral) {
+      sessaoBootstrapped.current = true
+      void abrirSessaoVisitante().catch(() => {
+        sessaoBootstrapped.current = false
+      })
     }
   }, [])
 

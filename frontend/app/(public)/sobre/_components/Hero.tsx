@@ -1,6 +1,6 @@
 'use client'
 
-import { Badge, Button, Card, Flex, List, Space, Statistic, Tag, Typography } from '@/components/ui'
+import { Badge, Button, Card, Flex, Space, Statistic, Tag, Typography } from '@/components/ui'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -20,35 +20,42 @@ const SCORE_METRICS = [
   { label: 'Tempo',     value: '4.2h', weight: '0.4' },
 ]
 
+const EYEBROW = { textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 'var(--font-size-base)' } as const
+
 export function Hero() {
   return (
     <section id="hero" aria-labelledby="hero-title">
       <Flex
+        className="shell-inner"
         gap={48}
         wrap="wrap"
         align="center"
         justify="space-between"
-        style={{ minHeight: '100vh', padding: '96px 24px' }}
+        style={{ paddingBlock: 'var(--space-12)' }}
       >
-        <Flex vertical gap={24} style={{ maxWidth: 600, flex: '1 1 420px' }}>
+        <Flex vertical gap="large" style={{ maxWidth: 600, flex: '1 1 420px' }}>
           <Space size={8}>
             <Badge status="processing" />
-            <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <Text type="secondary" style={EYEBROW}>
               PAC VIII — 2026/1 · Centro Universitário Católica de SC
             </Text>
           </Space>
 
-          <Title id="hero-title" level={1} style={{ margin: 0, fontSize: 56, lineHeight: 1.1 }}>
-            Catálogo B2B <Text style={{ color: 'var(--primary)', fontSize: 'inherit' }}>Inteligente</Text>
+          <Title
+            id="hero-title"
+            level={1}
+            style={{ margin: 0, fontSize: 'var(--font-size-4xl)', lineHeight: 'var(--line-height-tight)' }}
+          >
+            Catálogo B2B <Text style={{ color: 'var(--secondary)', fontSize: 'inherit' }}>Inteligente</Text>
           </Title>
 
-          <Paragraph type="secondary" style={{ fontSize: 18, margin: 0 }}>
+          <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-xl)', margin: 0 }}>
             Sistema de recomendação baseado em scoring com decaimento temporal
             exponencial — predizendo intenção de compra a partir de{' '}
             <Text strong>uma única interação</Text>, sem depender de volume de dados.
           </Paragraph>
 
-          <Flex gap={8} wrap="wrap" role="list" aria-label="Tecnologias utilizadas">
+          <Flex gap="small" wrap="wrap" role="list" aria-label="Tecnologias utilizadas">
             {TECH_BADGES.map((b) => (
               <Tag key={b.label} color={b.color} role="listitem">
                 {b.label}
@@ -56,12 +63,11 @@ export function Hero() {
             ))}
           </Flex>
 
-          <Flex gap={12} wrap="wrap">
-            <Button variant="solid" color="primary" href="#scoring">
+          <Flex gap="small" wrap="wrap">
+            <Button color="primary" href="#scoring">
               Ver o Motor de Scoring
             </Button>
             <Button
-              variant="outlined"
               href="https://github.com/ALenckulh/Catalogo-Inteligente"
               target="_blank"
               rel="noopener noreferrer"
@@ -71,51 +77,49 @@ export function Hero() {
           </Flex>
         </Flex>
 
-        <Card
-          shadow="lg"
-          style={{ width: 360, flex: '0 0 auto' }}
-          aria-hidden
-        >
-          <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-            <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 12 }}>
+        <Card shadow="lg" style={{ flex: '0 1 360px', maxWidth: '100%' }} aria-hidden>
+          <Flex justify="space-between" align="center" style={{ marginBottom: 'var(--space-3)' }}>
+            <Text type="secondary" style={EYEBROW}>
               Score de Intenção
             </Text>
-            <Space size={6}>
+            <Space size={8}>
               <Badge status="success" />
-              <Text type="success" style={{ fontSize: 12 }}>Negociação ativa</Text>
+              <Text type="success" style={{ fontSize: 'var(--font-size-base)' }}>Negociação ativa</Text>
             </Space>
           </Flex>
 
           <Statistic
             value={87.4}
             precision={1}
-            styles={{ content: { color: 'var(--primary)', fontSize: 56, fontWeight: 700 } }}
+            styles={{
+              content: {
+                color: 'var(--text-neutral-strong)',
+                fontSize: 'var(--font-size-4xl)',
+                fontWeight: 'var(--font-weight-bold)',
+              },
+            }}
           />
 
-          <Paragraph type="secondary" italic style={{ marginBottom: 16, fontSize: 13 }}>
+          <Paragraph type="secondary" italic style={{ marginBottom: 'var(--space-4)' }}>
             Σ peso × evento × e<Text style={{ fontSize: 'smaller' }}>⁻λt</Text>
           </Paragraph>
 
-          <List
-            dataSource={SCORE_METRICS}
-            rowKey="label"
-            split={false}
-            renderItem={(m: (typeof SCORE_METRICS)[number]) => (
-              <List.Item style={{ padding: '6px 0', border: 'none' }}>
-                <Flex
-                  justify="space-between"
-                  align="center"
-                  style={{ width: '100%' }}
-                >
-                  <Text type="secondary">{m.label}</Text>
-                  <Space size={8}>
-                    <Text strong>{m.value}</Text>
-                    <Text style={{ color: 'var(--secondary)', fontSize: 12 }}>×{m.weight}</Text>
-                  </Space>
-                </Flex>
-              </List.Item>
-            )}
-          />
+          <Flex vertical gap={0}>
+            {SCORE_METRICS.map((m) => (
+              <Flex
+                key={m.label}
+                justify="space-between"
+                align="center"
+                style={{ padding: 'var(--space-2) 0', width: '100%' }}
+              >
+                <Text type="secondary">{m.label}</Text>
+                <Space size={8}>
+                  <Text strong>{m.value}</Text>
+                  <Text style={{ color: 'var(--secondary)', fontSize: 'var(--font-size-base)' }}>×{m.weight}</Text>
+                </Space>
+              </Flex>
+            ))}
+          </Flex>
         </Card>
       </Flex>
     </section>

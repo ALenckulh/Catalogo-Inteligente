@@ -51,11 +51,11 @@ const columns: TableProps<ModelRow>['columns'] = [
 
 export function ModelsTable() {
   return (
-    <section id="models" aria-labelledby="models-title" style={{ padding: '96px 24px' }}>
-      <Space orientation="vertical" size={32} style={{ maxWidth: 1152, margin: '0 auto', display: 'flex' }}>
+    <section id="models" aria-labelledby="models-title" style={{ paddingBlock: 'var(--space-16)' }}>
+      <Space orientation="vertical" size={32} className="shell-inner" style={{ display: 'flex' }}>
         <Space orientation="vertical" size={8} align="center" style={{ width: '100%', textAlign: 'center' }}>
           <Title id="models-title" level={2} style={{ margin: 0 }}>Comparação de Modelos</Title>
-          <Paragraph type="secondary" style={{ fontSize: 17, maxWidth: 672, margin: 0 }}>
+          <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-xl)', maxWidth: 672, margin: 0 }}>
             Por que regras ponderadas com decaimento temporal foram escolhidas como
             núcleo — e as demais técnicas adiadas para quando houver dados reais.
           </Paragraph>
@@ -66,8 +66,7 @@ export function ModelsTable() {
           dataSource={MODELS}
           columns={columns}
           pagination={false}
-          scroll={{ x: true }}
-          rowClassName={(row) => (row.status === 'implemented' ? 'models-table-highlight' : '')}
+          scroll={{ x: 'max-content' }}
         />
       </Space>
     </section>

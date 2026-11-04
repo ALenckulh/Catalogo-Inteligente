@@ -1,4 +1,2 @@
-/**
- * Consumers RabbitMQ que persistem eventos e disparam recálculo.
- */
+/** Workers AMQP (persistência / scoring). */
 package com.catalogo.scoring.worker;

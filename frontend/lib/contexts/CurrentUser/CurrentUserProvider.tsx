@@ -11,6 +11,7 @@ import {
   readStoredUser,
   signup as apiSignup,
 } from '@/lib/api/auth'
+import { SESSION_CLEARED_EVENT } from '@/lib/api/client'
 import { CurrentUserContext, type CurrentUserValue } from './CurrentUserContext'
 
 interface Props {
@@ -26,12 +27,26 @@ export function CurrentUserProvider({ children }: Props) {
       setUser(readStoredUser())
       setLoading(false)
     }, 0)
-    return () => window.clearTimeout(t)
+    function onSessionCleared() {
+      setUser(null)
+    }
+    window.addEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
+    }
   }, [])
 
   const applySession = useCallback((session: AuthSession) => {
     persistSession(session)
     setUser(session.usuario)
+    try {
+      if (session.usuario.tipo !== 'ADMIN') {
+        window.sessionStorage.setItem('ci_migrar_pending', '1')
+      }
+    } catch {
+      /* ignore */
+    }
     return session
   }, [])
 

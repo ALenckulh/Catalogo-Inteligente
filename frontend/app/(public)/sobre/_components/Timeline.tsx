@@ -52,12 +52,12 @@ export function Timeline() {
     <section
       id="timeline"
       aria-labelledby="timeline-title"
-      style={{ padding: '96px 24px', background: 'var(--surface-neutral-subtle)' }}
+      style={{ paddingBlock: 'var(--space-16)', background: 'var(--surface-base)' }}
     >
-      <Space orientation="vertical" size={32} style={{ maxWidth: 1152, margin: '0 auto', display: 'flex' }}>
+      <Space orientation="vertical" size={32} className="shell-inner" style={{ display: 'flex' }}>
         <Space orientation="vertical" size={8} align="center" style={{ width: '100%', textAlign: 'center' }}>
           <Title id="timeline-title" level={2} style={{ margin: 0 }}>Cronograma</Title>
-          <Paragraph type="secondary" style={{ fontSize: 17, maxWidth: 672, margin: 0 }}>
+          <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-xl)', maxWidth: 672, margin: 0 }}>
             16 semanas de desenvolvimento a partir da apresentação do PAC VIII.
           </Paragraph>
         </Space>
@@ -67,8 +67,8 @@ export function Timeline() {
           items={PHASES.map((phase) => ({
             title: <Text type="secondary">Semanas {phase.weeks}</Text>,
             content: (
-              <Space orientation="vertical" size={6}>
-                <Title level={4} style={{ margin: 0 }}>{phase.title}</Title>
+              <Space orientation="vertical" size={8}>
+                <Title level={3} style={{ margin: 0 }}>{phase.title}</Title>
                 <Space orientation="vertical" size={4} role="list" aria-label={`Entregas: ${phase.title}`}>
                   {phase.items.map((item) => (
                     <Text key={item} role="listitem" type="secondary">→ {item}</Text>

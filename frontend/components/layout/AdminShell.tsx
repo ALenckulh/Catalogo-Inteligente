@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   BgColorsOutlined,
   DashboardOutlined,
@@ -9,7 +9,6 @@ import {
   ShoppingOutlined,
   TeamOutlined,
   UserOutlined,
-  LogoutOutlined,
   LoginOutlined,
 } from '@ant-design/icons'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
@@ -54,8 +53,7 @@ interface Props {
 
 export function AdminShell({ children }: Props) {
   const pathname = usePathname()
-  const router = useRouter()
-  const { user, isAdmin, logout, loading } = useCurrentUser()
+  const { user, isAdmin, loading } = useCurrentUser()
 
   const isLoginPage = pathname === '/admin/entrar'
 
@@ -106,18 +104,7 @@ export function AdminShell({ children }: Props) {
           <Flex justify="flex-end" align="center" style={{ height: '100%' }}>
             {!loading &&
               (isAdmin && user ? (
-                <Flex gap="small" align="center">
-                  <Text type="secondary">{user.email}</Text>
-                  <Button
-                    id="admin-logout"
-                    variant="text"
-                    icon={<LogoutOutlined />}
-                    tooltip="Sair"
-                    onClick={() => {
-                      void logout().then(() => router.push('/admin/entrar'))
-                    }}
-                  />
-                </Flex>
+                <Text type="secondary">{user.email}</Text>
               ) : (
                 <Link href="/admin/entrar">
                   <Button id="admin-login-link" icon={<LoginOutlined />}>

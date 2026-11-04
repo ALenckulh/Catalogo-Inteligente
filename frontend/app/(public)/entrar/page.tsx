@@ -1,11 +1,12 @@
 import { Suspense } from 'react'
-import { Flex, Spin } from '@/components/ui'
+import { PageLoading } from '@/components/layout/PageStates'
+import { Flex } from '@/components/ui'
 import { EntrarForm } from './EntrarForm'
 
 export default function EntrarPage() {
   return (
-    <Flex justify="center" style={{ padding: '48px 24px' }}>
-      <Suspense fallback={<Spin />}>
+    <Flex vertical className="page page--auth">
+      <Suspense fallback={<PageLoading />}>
         <EntrarForm />
       </Suspense>
     </Flex>

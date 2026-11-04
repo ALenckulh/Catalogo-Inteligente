@@ -41,9 +41,9 @@ function slugify(nome: string): string {
     .replace(/^-|-$/g, '')
 }
 
-function fichaToPairs(ficha: Record<string, string> | null | undefined) {
+function fichaToPairs(ficha: Record<string, string | number | boolean> | null | undefined) {
   if (!ficha) return []
-  return Object.entries(ficha).map(([chave, valor]) => ({ chave, valor }))
+  return Object.entries(ficha).map(([chave, valor]) => ({ chave, valor: String(valor) }))
 }
 
 function pairsToFicha(

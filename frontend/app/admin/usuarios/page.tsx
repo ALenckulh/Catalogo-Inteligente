@@ -135,7 +135,7 @@ export default function AdminUsuariosPage() {
 
   return (
     <Flex vertical gap={16}>
-      <Title level={3} style={{ margin: 0 }} id="admin-usuarios-title">
+      <Title level={2} style={{ margin: 0 }} id="admin-usuarios-title">
         Usuários
       </Title>
       <Flex gap="middle" wrap="wrap">

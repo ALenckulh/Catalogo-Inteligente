@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
 import { Button as AntButton, Tooltip } from 'antd'
 import type { ButtonProps as AntButtonProps } from 'antd'
 
@@ -14,14 +15,32 @@ export interface ButtonProps extends Omit<AntButtonProps, 'variant' | 'color' | 
   tooltip?: React.ReactNode
 }
 
+/**
+ * Sólido só no CTA (`color="primary"`); o resto nasce `outlined` (normas §1.2).
+ * `href` interno renderiza `<a>` real e navega pelo router, sem recarregar a página.
+ */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'solid', color = 'default', width, tooltip, style, children, ...rest }, ref) => {
+  (
+    { variant, color = variant === 'link' ? 'primary' : 'default', width, tooltip, style, children, href, onClick, ...rest },
+    ref,
+  ) => {
+    const router = useRouter()
+
+    function navigate(e: React.MouseEvent<HTMLElement>) {
+      onClick?.(e as React.MouseEvent<HTMLButtonElement & HTMLAnchorElement>)
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      e.preventDefault()
+      router.push(href!)
+    }
+
     const btn = (
       <AntButton
         ref={ref}
-        variant={variant}
+        variant={variant ?? (color === 'primary' ? 'solid' : 'outlined')}
         color={color}
         style={width !== undefined ? { width, ...style } : style}
+        href={href}
+        onClick={href?.startsWith('/') && !rest.target ? navigate : onClick}
         {...rest}
       >
         {children}

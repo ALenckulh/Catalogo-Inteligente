@@ -6,8 +6,15 @@ import { USE_MOCK } from './config'
 
 export async function listFavoritos(usuarioId: number): Promise<Favorito[]> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Favorito[]>('/favoritos')
-    return data
+    const { data } = await apiClient.get<
+      Array<{ produtoId: number; createdAt: string; produto?: Favorito['produto'] }>
+    >('/favoritos')
+    return data.map((f) => ({
+      usuarioId,
+      produtoId: f.produtoId,
+      createdAt: f.createdAt,
+      produto: f.produto,
+    }))
   }
 
   await delay()

@@ -107,7 +107,7 @@ export default function AdminDesignSystemPage() {
 
   return (
     <>
-      <Title level={3} style={{ marginTop: 0 }}>
+      <Title level={2} style={{ marginTop: 0 }}>
         Design system
       </Title>
       <Paragraph type="secondary">

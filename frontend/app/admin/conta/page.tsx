@@ -9,6 +9,7 @@ import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import {
   Alert,
   Button,
+  Divider,
   Flex,
   Form,
   FormItem,
@@ -16,13 +17,13 @@ import {
   Spin,
   Typography,
 } from '@/components/ui'
-import { SaveOutlined } from '@ant-design/icons'
+import { LogoutOutlined, SaveOutlined } from '@ant-design/icons'
 
 const { Title, Paragraph } = Typography
 
 export default function AdminContaPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { user } = useCurrentUser()
+  const { user, logout } = useCurrentUser()
   const { api, contextHolder } = useAppNotification()
   const [form] = Form.useForm()
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +47,15 @@ export default function AdminContaPage() {
     }
   }
 
+  /** useRequireAdmin leva para /admin/entrar assim que a sessão acaba. */
+  async function sair() {
+    try {
+      await logout()
+    } catch (e) {
+      api.error({ title: toApiError(e).message })
+    }
+  }
+
   if (authLoading || !isAdmin) {
     return (
       <Flex justify="center" style={{ padding: 48 }}>
@@ -58,7 +68,7 @@ export default function AdminContaPage() {
   return (
     <Flex vertical gap={16} style={{ maxWidth: 480 }}>
       {contextHolder}
-      <Title level={3} style={{ margin: 0 }} id="admin-conta-title">
+      <Title level={2} style={{ margin: 0 }} id="admin-conta-title">
         Minha conta
       </Title>
       <Paragraph type="secondary">Altere e-mail, telefone ou senha (mock).</Paragraph>
@@ -91,6 +101,17 @@ export default function AdminContaPage() {
           Salvar
         </Button>
       </Form>
+
+      <Divider style={{ margin: 0 }} />
+      <Button
+        id="admin-conta-sair"
+        variant="text"
+        icon={<LogoutOutlined />}
+        style={{ alignSelf: 'flex-start' }}
+        onClick={() => void sair()}
+      >
+        Sair da conta
+      </Button>
     </Flex>
   )
 }

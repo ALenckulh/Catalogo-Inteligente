@@ -53,48 +53,48 @@ export function ScoringEngine() {
     <section
       id="scoring"
       aria-labelledby="scoring-title"
-      style={{ padding: '96px 24px', background: 'var(--surface-neutral-subtle)' }}
+      style={{ paddingBlock: 'var(--space-16)', background: 'var(--surface-base)' }}
     >
-      <Space orientation="vertical" size={48} style={{ maxWidth: 1152, margin: '0 auto', display: 'flex' }}>
+      <Space orientation="vertical" size={48} className="shell-inner" style={{ display: 'flex' }}>
         <Space orientation="vertical" size={8} align="center" style={{ width: '100%', textAlign: 'center' }}>
           <Title id="scoring-title" level={2} style={{ margin: 0 }}>Motor de Scoring</Title>
-          <Paragraph type="secondary" style={{ fontSize: 17, maxWidth: 672, margin: 0 }}>
+          <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-xl)', maxWidth: 672, margin: 0 }}>
             Arquitetura em camadas — do cold start ao score pessoal calibrado para B2B.
           </Paragraph>
         </Space>
 
         <Card aria-label="Fórmula do Score de Produto">
           <Space orientation="vertical" size={8} align="center" style={{ width: '100%', textAlign: 'center' }}>
-            <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: 12 }}>
+            <Text type="secondary" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 'var(--font-size-base)' }}>
               Score de Produto
             </Text>
             <Title level={3} style={{ margin: 0 }}>
               Score ={' '}
-              <Text style={{ fontSize: '2em', color: 'var(--primary)' }}>Σ</Text>
+              <Text style={{ fontSize: '2em', color: 'var(--secondary)' }}>Σ</Text>
               {' '}peso<Text style={{ fontSize: 'smaller' }}>i</Text> × evento<Text style={{ fontSize: 'smaller' }}>i</Text> × e<Text style={{ fontSize: 'smaller' }}>⁻λ × tᵢ</Text>
             </Title>
-            <Text type="secondary" style={{ fontSize: 13 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-lg)' }}>
               λ calibrado por perfil: menor para B2B de ciclo longo · maior para reposição frequente
             </Text>
           </Space>
         </Card>
 
-        <Row gutter={[12, 12]} role="list" aria-label="Métricas comportamentais e seus pesos">
+        <Row gutter={[16, 16]} role="list" aria-label="Métricas comportamentais e seus pesos">
           {METRICS.map((metric) => (
             <Col key={metric.label} xs={12} md={8} role="listitem">
               <Card size="small">
-                <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                   <Space size={8}>
-                    <Text style={{ fontSize: 18 }} aria-hidden>{metric.icon}</Text>
+                    <Text style={{ fontSize: 'var(--font-size-xl)' }} aria-hidden>{metric.icon}</Text>
                     <Text strong>{metric.label}</Text>
                   </Space>
                   <Progress
                     percent={metric.weight * 100}
                     showInfo={false}
-                    strokeColor="var(--primary)"
+                    strokeColor="var(--secondary)"
                     aria-label={`Peso: ${metric.weight}`}
                   />
-                  <Text type="secondary" style={{ fontSize: 12 }}>peso {metric.weight}</Text>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>peso {metric.weight}</Text>
                 </Space>
               </Card>
             </Col>
@@ -109,7 +109,7 @@ export function ScoringEngine() {
             status: layer.status === 'implemented' ? 'finish' : 'wait',
             title: (
               <Space wrap>
-                <Text type="secondary" style={{ textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.06em' }}>
+                <Text type="secondary" style={{ textTransform: 'uppercase', fontSize: 'var(--font-size-base)', letterSpacing: '0.06em' }}>
                   {layer.label}
                 </Text>
                 <Text strong>{layer.title}</Text>

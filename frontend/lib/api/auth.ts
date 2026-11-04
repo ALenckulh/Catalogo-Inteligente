@@ -99,6 +99,16 @@ export async function confirmPasswordReset(token: string, novaSenha: string): Pr
   }
 }
 
+/** Associa histórico anônimo (cookie) ao usuário autenticado. */
+export async function migrarHistorico(aceitar: boolean): Promise<void> {
+  if (!USE_MOCK) {
+    await apiClient.post('/auth/migrar-historico', { aceitar })
+    return
+  }
+  await delay(100)
+  void aceitar
+}
+
 export function persistSession(session: AuthSession): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(AUTH_TOKEN_KEY, session.token)
@@ -111,13 +121,35 @@ export function clearSession(): void {
   window.localStorage.removeItem('ci_auth_user')
 }
 
+export function readStoredToken(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Live API rejects mock tokens left after flipping USE_MOCK=false. */
+export function isUsableAuthToken(token: string | null): boolean {
+  if (!token) return false
+  if (token.startsWith('mock-')) return false
+  if (!USE_MOCK) return token.split('.').length === 3
+  return true
+}
+
 export function readStoredUser(): Usuario | null {
   if (typeof window === 'undefined') return null
   try {
+    if (!isUsableAuthToken(readStoredToken())) {
+      clearSession()
+      return null
+    }
     const raw = window.localStorage.getItem('ci_auth_user')
     if (!raw) return null
     return JSON.parse(raw) as Usuario
   } catch {
+    clearSession()
     return null
   }
 }

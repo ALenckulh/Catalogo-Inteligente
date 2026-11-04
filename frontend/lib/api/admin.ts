@@ -23,6 +23,7 @@ import {
 } from '@/lib/mocks/data'
 import { ApiError, apiClient } from './client'
 import { USE_MOCK } from './config'
+import { fromBackendPage, toBackendPage } from './pagination'
 
 export async function getDashboard(): Promise<AdminDashboard> {
   if (!USE_MOCK) {
@@ -42,9 +43,9 @@ export async function listAdminUsuarios(params?: {
 }): Promise<Page<AdminUsuarioListItem>> {
   if (!USE_MOCK) {
     const { data } = await apiClient.get<Page<AdminUsuarioListItem>>('/admin/usuarios', {
-      params,
+      params: { ...params, page: toBackendPage(params?.page) },
     })
-    return data
+    return fromBackendPage(data)
   }
   await delay()
   let items = mockUsuarios.filter((u) => u.tipo !== 'ADMIN')
@@ -139,8 +140,10 @@ export async function listAdminProdutos(params?: {
   limit?: number
 }): Promise<Page<Produto>> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Page<Produto>>('/admin/produtos', { params })
-    return data
+    const { data } = await apiClient.get<Page<Produto>>('/admin/produtos', {
+      params: { ...params, page: toBackendPage(params?.page) },
+    })
+    return fromBackendPage(data)
   }
   await delay()
   let items = mockProdutos.map(withCategoria)

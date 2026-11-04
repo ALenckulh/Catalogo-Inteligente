@@ -8,6 +8,7 @@ import { listProdutos } from '@/lib/api/produtos'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
 import type { Categoria, Produto } from '@/lib/types'
 import { ProdutoCard } from '@/components/ProdutoCard'
+import { PageError } from '@/components/layout/PageStates'
 import {
   Button,
   Col,
@@ -23,7 +24,10 @@ import {
   Typography,
 } from '@/components/ui'
 
-const { Title, Paragraph, Text } = Typography
+const { Title, Text } = Typography
+
+const PAGE_SIZE = 12
+const PRECO_DEBOUNCE_MS = 400
 
 function buildCategoriaTree(categorias: Categoria[]) {
   const byParent = new Map<number | null, Categoria[]>()
@@ -52,58 +56,81 @@ function parseNum(v: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-type FiltrosPanelProps = {
-  treeData: ReturnType<typeof buildCategoriaTree>
-  categoriaId: number | undefined
+type Filtros = {
+  q: string
+  categoria: number | undefined
   precoMin: number | undefined
   precoMax: number | undefined
+  page: number
+}
+
+type FaixaPreco = { min: number | undefined; max: number | undefined }
+
+const faixaKey = ({ min, max }: FaixaPreco) => `${min ?? ''}|${max ?? ''}`
+
+type FiltrosPanelProps = {
+  idPrefix: string
+  treeData: ReturnType<typeof buildCategoriaTree>
+  categoriaId: number | undefined
+  preco: FaixaPreco
+  precoInvalido: boolean
   onCategoria: (v: number | undefined) => void
-  onPrecoMin: (v: number | undefined) => void
-  onPrecoMax: (v: number | undefined) => void
+  onPreco: (v: FaixaPreco) => void
 }
 
 function FiltrosPanel({
+  idPrefix,
   treeData,
   categoriaId,
-  precoMin,
-  precoMax,
+  preco,
+  precoInvalido,
   onCategoria,
-  onPrecoMin,
-  onPrecoMax,
+  onPreco,
 }: FiltrosPanelProps) {
+  const status = precoInvalido ? 'error' : undefined
   return (
     <Flex vertical gap="middle">
-      <Text strong>Categoria</Text>
-      <TreeSelect
-        id="produtos-categoria"
-        allowClear
-        treeDefaultExpandAll
-        placeholder="Selecione a categoria"
-        style={{ width: '100%' }}
-        value={categoriaId}
-        treeData={treeData}
-        onChange={(v: number | null) => onCategoria(v ?? undefined)}
-      />
-      <Text strong>Faixa de preço</Text>
-      <Flex gap="small">
-        <InputNumber
-          id="produtos-preco-min"
-          min={0}
-          step={0.5}
-          placeholder="Mín."
+      <Flex vertical gap="small">
+        <Text strong>Categoria</Text>
+        <TreeSelect
+          id={`${idPrefix}-categoria`}
+          aria-label="Categoria"
+          allowClear
+          treeDefaultExpandAll
+          placeholder="Selecione a categoria"
           style={{ width: '100%' }}
-          value={precoMin}
-          onChange={(v) => onPrecoMin(v === null ? undefined : Number(v))}
+          value={treeData.length ? categoriaId : undefined}
+          treeData={treeData}
+          onChange={(v: number | null) => onCategoria(v ?? undefined)}
         />
-        <InputNumber
-          id="produtos-preco-max"
-          min={0}
-          step={0.5}
-          placeholder="Máx."
-          style={{ width: '100%' }}
-          value={precoMax}
-          onChange={(v) => onPrecoMax(v === null ? undefined : Number(v))}
-        />
+      </Flex>
+      <Flex vertical gap="small">
+        <Text strong>Faixa de preço</Text>
+        <Flex gap="small">
+          <InputNumber
+            id={`${idPrefix}-preco-min`}
+            aria-label="Preço mínimo"
+            min={0}
+            step={1}
+            placeholder="Mín."
+            status={status}
+            style={{ width: '100%' }}
+            value={preco.min}
+            onChange={(v) => onPreco({ ...preco, min: v === null ? undefined : Number(v) })}
+          />
+          <InputNumber
+            id={`${idPrefix}-preco-max`}
+            aria-label="Preço máximo"
+            min={0}
+            step={1}
+            placeholder="Máx."
+            status={status}
+            style={{ width: '100%' }}
+            value={preco.max}
+            onChange={(v) => onPreco({ ...preco, max: v === null ? undefined : Number(v) })}
+          />
+        </Flex>
+        {precoInvalido && <Text type="danger">O mínimo não pode ser maior que o máximo</Text>}
       </Flex>
     </Flex>
   )
@@ -114,55 +141,71 @@ export function ProdutosCatalogo() {
   const searchParams = useSearchParams()
   const track = useTrackEvent()
 
-  const qParam = searchParams.get('q') ?? ''
-  const catParam = searchParams.get('categoria')
-  const pageParam = Number(searchParams.get('page') ?? '1')
-  const precoMinParam = parseNum(searchParams.get('precoMin'))
-  const precoMaxParam = parseNum(searchParams.get('precoMax'))
+  // A URL é a única fonte de verdade dos filtros (normas §20).
+  const q = searchParams.get('q') ?? ''
+  const categoriaId = parseNum(searchParams.get('categoria'))
+  const precoMin = parseNum(searchParams.get('precoMin'))
+  const precoMax = parseNum(searchParams.get('precoMax'))
+  const page = Math.max(1, parseNum(searchParams.get('page')) ?? 1)
 
-  const [q, setQ] = useState(qParam)
-  const [categoriaId, setCategoriaId] = useState<number | undefined>(
-    catParam ? Number(catParam) : undefined,
-  )
-  const [precoMin, setPrecoMin] = useState<number | undefined>(precoMinParam)
-  const [precoMax, setPrecoMax] = useState<number | undefined>(precoMaxParam)
-  const [page, setPage] = useState(pageParam)
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [items, setItems] = useState<Produto[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [falhou, setFalhou] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Rascunho do preço: o usuário digita livre e a URL só muda após o debounce.
+  const urlFaixa = faixaKey({ min: precoMin, max: precoMax })
+  const [preco, setPreco] = useState<FaixaPreco>({ min: precoMin, max: precoMax })
+  const [faixaAplicada, setFaixaAplicada] = useState(urlFaixa)
+  if (urlFaixa !== faixaAplicada) {
+    // A URL mudou por fora (Limpar filtros, link do header): descarta o rascunho.
+    setFaixaAplicada(urlFaixa)
+    setPreco({ min: precoMin, max: precoMax })
+  }
+  const precoInvalido =
+    preco.min !== undefined && preco.max !== undefined && preco.min > preco.max
 
   const treeData = useMemo(() => buildCategoriaTree(categorias), [categorias])
 
   useEffect(() => {
-    void listCategorias().then(setCategorias)
+    void listCategorias()
+      .then(setCategorias)
+      .catch(() => setCategorias([]))
   }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await listProdutos({
+  useEffect(() => {
+    let cancelled = false
+    const t = window.setTimeout(() => {
+      setLoading(true)
+      setFalhou(false)
+      listProdutos({
         q: q || undefined,
         categoria: categoriaId,
         precoMin,
         precoMax,
         page,
-        limit: 12,
+        limit: PAGE_SIZE,
       })
-      setItems(res.items)
-      setTotal(res.total)
-    } finally {
-      setLoading(false)
-    }
-  }, [q, categoriaId, precoMin, precoMax, page])
-
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      void load()
+        .then((res) => {
+          if (cancelled) return
+          setItems(res.items)
+          setTotal(res.total)
+        })
+        .catch(() => {
+          if (!cancelled) setFalhou(true)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
     }, 0)
-    return () => window.clearTimeout(t)
-  }, [load])
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [q, categoriaId, precoMin, precoMax, page, tentativa])
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -188,142 +231,139 @@ export function ProdutosCatalogo() {
     return () => window.clearTimeout(t)
   }, [categoriaId, q, precoMin, precoMax, track])
 
-  function syncUrl(next: {
-    q?: string
-    categoria?: number | null
-    precoMin?: number | null
-    precoMax?: number | null
-    page?: number
-  }) {
-    const params = new URLSearchParams()
-    const qq = next.q !== undefined ? next.q : q
-    const cc = next.categoria !== undefined ? next.categoria : categoriaId
-    const pMin = next.precoMin !== undefined ? next.precoMin : precoMin
-    const pMax = next.precoMax !== undefined ? next.precoMax : precoMax
-    const pp = next.page ?? page
-    if (qq) params.set('q', qq)
-    if (cc) params.set('categoria', String(cc))
-    if (pMin !== undefined && pMin !== null) params.set('precoMin', String(pMin))
-    if (pMax !== undefined && pMax !== null) params.set('precoMax', String(pMax))
-    if (pp > 1) params.set('page', String(pp))
-    const qs = params.toString()
-    router.replace(qs ? `/produtos?${qs}` : '/produtos')
-  }
+  const aplicar = useCallback(
+    (next: Partial<Filtros>) => {
+      const f: Filtros = { q, categoria: categoriaId, precoMin, precoMax, page: 1, ...next }
+      const params = new URLSearchParams()
+      if (f.q) params.set('q', f.q)
+      if (f.categoria !== undefined) params.set('categoria', String(f.categoria))
+      if (f.precoMin !== undefined) params.set('precoMin', String(f.precoMin))
+      if (f.precoMax !== undefined) params.set('precoMax', String(f.precoMax))
+      if (f.page > 1) params.set('page', String(f.page))
+      const qs = params.toString()
+      router.replace(qs ? `/produtos?${qs}` : '/produtos', { scroll: false })
+    },
+    [router, q, categoriaId, precoMin, precoMax],
+  )
+
+  useEffect(() => {
+    const key = faixaKey(preco)
+    if (precoInvalido || key === urlFaixa) return
+    const t = window.setTimeout(() => {
+      setFaixaAplicada(key)
+      aplicar({ precoMin: preco.min, precoMax: preco.max })
+    }, PRECO_DEBOUNCE_MS)
+    return () => window.clearTimeout(t)
+  }, [preco, precoInvalido, urlFaixa, aplicar])
 
   function onSearch(value: string) {
-    setQ(value)
-    setPage(1)
-    syncUrl({ q: value, page: 1 })
-    if (value.trim()) {
-      track({ tipo: 'PESQUISA', metadados: { termo: value.trim() } })
-    }
-  }
-
-  function onCategoria(next: number | undefined) {
-    setCategoriaId(next)
-    setPage(1)
-    syncUrl({ categoria: next ?? null, page: 1 })
-  }
-
-  function onPrecoMin(next: number | undefined) {
-    setPrecoMin(next)
-    setPage(1)
-    syncUrl({ precoMin: next ?? null, page: 1 })
-  }
-
-  function onPrecoMax(next: number | undefined) {
-    setPrecoMax(next)
-    setPage(1)
-    syncUrl({ precoMax: next ?? null, page: 1 })
+    const termo = value.trim()
+    aplicar({ q: termo })
+    if (termo) track({ tipo: 'PESQUISA', metadados: { termo } })
   }
 
   function limparFiltros() {
-    setQ('')
-    setCategoriaId(undefined)
-    setPrecoMin(undefined)
-    setPrecoMax(undefined)
-    setPage(1)
-    router.replace('/produtos')
+    router.replace('/produtos', { scroll: false })
   }
 
-  const filtrosProps: FiltrosPanelProps = {
+  const temFiltro = Boolean(q) || categoriaId !== undefined || urlFaixa !== '|'
+
+  const filtrosProps: Omit<FiltrosPanelProps, 'idPrefix'> = {
     treeData,
     categoriaId,
-    precoMin,
-    precoMax,
-    onCategoria,
-    onPrecoMin,
-    onPrecoMax,
+    preco,
+    precoInvalido,
+    onCategoria: (categoria) => aplicar({ categoria }),
+    onPreco: setPreco,
   }
 
   return (
-    <Flex vertical gap={24} style={{ maxWidth: 1152, margin: '0 auto', padding: '32px 24px 64px' }}>
-      <div>
-        <Title level={2} style={{ marginBottom: 8 }} id="produtos-title">
-          Catálogo
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Busque e filtre produtos. Ordenação por relevância mock (popularidade / score).
-        </Paragraph>
-      </div>
+    <Flex vertical className="page" style={{ gap: 'var(--space-4)' }}>
+      <Flex align="center" justify="space-between" wrap="wrap" gap="middle">
+        <Flex align="baseline" wrap="wrap" gap="small">
+          <Title level={1} style={{ margin: 0 }} id="produtos-title">
+            Catálogo
+          </Title>
+          {!falhou && (
+            <Text type="secondary" aria-live="polite">
+              {total} {total === 1 ? 'produto' : 'produtos'}
+            </Text>
+          )}
+          {temFiltro && (loading || items.length > 0) && (
+            <Button id="produtos-limpar-filtros" variant="link" size="small" onClick={limparFiltros}>
+              Limpar filtros
+            </Button>
+          )}
+        </Flex>
+        <Flex gap="small" flex="1 1 280px" justify="flex-end">
+          <Button
+            id="produtos-abrir-filtros"
+            className="hide-from-lg"
+            icon={<FilterOutlined />}
+            onClick={() => setDrawerOpen(true)}
+          >
+            Filtros
+          </Button>
+          <Input.Search
+            key={q}
+            id="produtos-busca"
+            aria-label="Buscar produtos"
+            placeholder="Buscar produtos"
+            allowClear
+            style={{ maxWidth: 360 }}
+            defaultValue={q}
+            onSearch={onSearch}
+          />
+        </Flex>
+      </Flex>
 
       <Row gutter={[24, 24]}>
         <Col xs={0} lg={6}>
-          <FiltrosPanel {...filtrosProps} />
+          <div className="sticky-side">
+            <FiltrosPanel idPrefix="produtos" {...filtrosProps} />
+          </div>
         </Col>
 
         <Col xs={24} lg={18}>
-          <Flex vertical gap={24}>
-            <Flex gap="middle" wrap="wrap" align="center">
-              <Button
-                id="produtos-abrir-filtros"
-                icon={<FilterOutlined />}
-                onClick={() => setDrawerOpen(true)}
-                className="produtos-filtros-btn"
-              >
-                Filtros
-              </Button>
-              <Input.Search
-                id="produtos-busca"
-                placeholder="Informe o termo de busca"
-                allowClear
-                style={{ maxWidth: 360, flex: 1 }}
-                defaultValue={qParam}
-                onSearch={onSearch}
-              />
-            </Flex>
+          {falhou ? (
+            <PageError onRetry={() => setTentativa((n) => n + 1)} />
+          ) : (
+            <Flex vertical gap="large">
+              <Spin spinning={loading}>
+                {items.length === 0 && !loading ? (
+                  <Empty description="Nenhum produto encontrado">
+                    {temFiltro && (
+                      <Button id="produtos-limpar-vazio" onClick={limparFiltros}>
+                        Limpar filtros
+                      </Button>
+                    )}
+                  </Empty>
+                ) : (
+                  <Row gutter={[16, 16]} role="list">
+                    {items.map((p) => (
+                      <Col key={p.id} xs={24} sm={12} md={8} role="listitem">
+                        <ProdutoCard produto={p} />
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+              </Spin>
 
-            <Spin spinning={loading}>
-              {items.length === 0 && !loading ? (
-                <Empty description="Nenhum produto encontrado">
-                  <Button id="produtos-limpar-filtros" onClick={limparFiltros}>
-                    Limpar filtros
-                  </Button>
-                </Empty>
-              ) : (
-                <Row gutter={[24, 24]} role="list">
-                  {items.map((p) => (
-                    <Col key={p.id} xs={24} sm={12} md={8} role="listitem">
-                      <ProdutoCard produto={p} />
-                    </Col>
-                  ))}
-                </Row>
+              {total > PAGE_SIZE && (
+                <Pagination
+                  current={page}
+                  pageSize={PAGE_SIZE}
+                  total={total}
+                  showSizeChanger={false}
+                  onChange={(p) => {
+                    aplicar({ page: p })
+                    window.scrollTo({ top: 0 })
+                  }}
+                  style={{ alignSelf: 'center' }}
+                />
               )}
-            </Spin>
-
-            {total > 12 && (
-              <Pagination
-                current={page}
-                pageSize={12}
-                total={total}
-                onChange={(p) => {
-                  setPage(p)
-                  syncUrl({ page: p })
-                }}
-                style={{ alignSelf: 'center' }}
-              />
-            )}
-          </Flex>
+            </Flex>
+          )}
         </Col>
       </Row>
 
@@ -332,17 +372,15 @@ export function ProdutosCatalogo() {
         placement="left"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={300}
-      >
-        <FiltrosPanel {...filtrosProps} />
-      </Drawer>
-
-      {/* Sidebar cobre filtros no desktop; botão só no mobile */}
-      <style>{`
-        @media (min-width: 992px) {
-          .produtos-filtros-btn { display: none !important; }
+        size={300}
+        footer={
+          <Button id="produtos-ver-resultados" color="primary" block onClick={() => setDrawerOpen(false)}>
+            Ver {total} {total === 1 ? 'produto' : 'produtos'}
+          </Button>
         }
-      `}</style>
+      >
+        <FiltrosPanel idPrefix="produtos-drawer" {...filtrosProps} />
+      </Drawer>
     </Flex>
   )
 }

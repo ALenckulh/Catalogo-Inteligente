@@ -33,7 +33,7 @@ Idade (opcional)
 Número de telefone (opcional)
 E-mail alternativo para contato (opcional)
 Aceite dos Termos de Uso e Política de Privacidade (checkbox obrigatório — LGPD)
-Consentimento para cookies de rastreamento comportamental (checkbox separado, opcional mas recomendado)
+Consentimento para cookies de rastreamento comportamental: não faz parte do formulário; segue a escolha do banner de cookies e é revogável em Conta
 
 Funcionalidades disponíveis:
 Score de Produto
@@ -52,7 +52,7 @@ E-mail corporativo
 Número de telefone (opcional)
 E-mail alternativo para contato (opcional)
 Aceite dos Termos de Uso e Política de Privacidade (checkbox obrigatório — LGPD)
-Consentimento para cookies de rastreamento comportamental (checkbox separado, opcional mas recomendado)
+Consentimento para cookies de rastreamento comportamental: não faz parte do formulário; segue a escolha do banner de cookies e é revogável em Conta
 
 Funcionalidades disponíveis:
 Score de Produto
@@ -350,8 +350,8 @@ Categorias com compras recorrentes recebem bônus de recorrência no score
 Por se tratar de sistema que coleta dados comportamentais de usuários brasileiros, a conformidade com a Lei Geral de Proteção de Dados (Lei 13.709/2018) é obrigatória.
 10.1 No Cadastro de Usuário Autenticado
 Checkbox obrigatório: aceite dos Termos de Uso e Política de Privacidade — sem aceite, o cadastro não é concluído
-Checkbox separado e opcional: consentimento para coleta de dados comportamentais (cliques, tempo em página, navegação) para fins de personalização
-Checkbox separado e opcional: consentimento para receber contato proativo do dono do catálogo com base no perfil de interesse
+Consentimento separado e opcional, no banner de cookies e em Conta: coleta de dados comportamentais (cliques, tempo em página, navegação) para fins de personalização
+Consentimento separado e opcional, em Conta (inicia desligado): receber contato proativo do dono do catálogo com base no perfil de interesse
 Data e versão dos termos aceitos devem ser registradas no banco de dados
 Usuário pode revogar consentimentos a qualquer momento nas configurações do perfil
 

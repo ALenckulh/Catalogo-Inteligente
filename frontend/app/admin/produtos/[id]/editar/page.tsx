@@ -34,7 +34,7 @@ export default function AdminProdutoEditarPage() {
 
   return (
     <Flex vertical gap={16}>
-      <Title level={3} style={{ margin: 0 }} id="admin-prod-editar-title">
+      <Title level={2} style={{ margin: 0 }} id="admin-prod-editar-title">
         Editar produto
       </Title>
       <ProdutoForm initial={produto} />

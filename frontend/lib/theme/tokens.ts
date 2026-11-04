@@ -140,7 +140,7 @@ export const controlHeight = { sm: 24, md: 32, lg: 40 } as const
 export const iconSize = { sm: 14, md: 16, lg: 20 } as const
 
 export const breakpoints = {
-  xs: 350, sm: 400, md: 600, lg: 900, xl: 1200, xxl: 1800,
+  sm: 576, md: 768, lg: 992, xl: 1200, xxl: 1600,
 } as const
 
 export const zIndex = {

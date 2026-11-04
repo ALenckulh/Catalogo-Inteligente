@@ -17,7 +17,7 @@ export default function AdminProdutoNovoPage() {
   }
   return (
     <Flex vertical gap={16}>
-      <Title level={3} style={{ margin: 0 }} id="admin-prod-novo-title">
+      <Title level={2} style={{ margin: 0 }} id="admin-prod-novo-title">
         Novo produto
       </Title>
       <ProdutoForm />

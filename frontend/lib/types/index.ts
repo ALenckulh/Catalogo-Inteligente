@@ -56,7 +56,7 @@ export interface Produto {
   nome: string
   slug: string
   descricao: string | null
-  fichaTecnica: Record<string, string> | null
+  fichaTecnica: Record<string, string | number | boolean> | null
   preco: number
   categoriaId: number
   categoria?: Categoria

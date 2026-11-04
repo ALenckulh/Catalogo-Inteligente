@@ -67,7 +67,7 @@ export default function AdminDashboardPage() {
 
   return (
     <Flex vertical gap={24}>
-      <Title level={3} id="admin-dash-title" style={{ margin: 0 }}>
+      <Title level={2} id="admin-dash-title" style={{ margin: 0 }}>
         Dashboard
       </Title>
       <Row gutter={[16, 16]}>

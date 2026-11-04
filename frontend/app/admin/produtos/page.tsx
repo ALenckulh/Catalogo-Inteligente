@@ -161,7 +161,7 @@ export default function AdminProdutosPage() {
     <Flex vertical gap={16}>
       {contextHolder}
       <Flex justify="space-between" align="center" wrap="wrap" gap="middle">
-        <Title level={3} style={{ margin: 0 }} id="admin-produtos-title">
+        <Title level={2} style={{ margin: 0 }} id="admin-produtos-title">
           Produtos
         </Title>
         <Link href="/admin/produtos/novo">

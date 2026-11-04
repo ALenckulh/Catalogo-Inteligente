@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { Alert, Button, Checkbox, Flex, Modal, Space, Typography } from '@/components/ui'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 export function CookieBanner() {
   const { needsDecision, acceptAll, acceptEssential, acceptCustom } = useCookieConsent()
@@ -15,44 +16,32 @@ export function CookieBanner() {
 
   return (
     <>
+      {/* sticky como último filho do body: acompanha a tela sem cobrir o footer */}
       <aside
         aria-label="Consentimento de cookies"
         style={{
-          position: 'fixed',
+          position: 'sticky',
           bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1100,
-          padding: 16,
+          zIndex: 'var(--z-overlay)',
+          paddingBlock: 'var(--space-3)',
           background: 'var(--surface-base)',
-          borderTop: '1px solid var(--border-neutral-subtle)',
-          boxShadow: '0 -4px 16px color-mix(in srgb, var(--neutral-900) 8%, transparent)',
+          borderTop: 'var(--border-width-default) solid var(--border-neutral-subtle)',
+          boxShadow: 'var(--shadow-drop-neutral-md)',
         }}
       >
-        <Flex
-          vertical
-          gap="middle"
-          style={{ maxWidth: 960, margin: '0 auto' }}
-        >
-          <div>
-            <Text strong>Cookies e privacidade</Text>
-            <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              Usamos cookies essenciais para o funcionamento do site. Cookies comportamentais
-              ajudam a personalizar recomendações — só com o seu consentimento.
-            </Paragraph>
-          </div>
+        <Flex className="shell-inner" wrap="wrap" align="center" justify="space-between" gap="middle">
+          <Text type="secondary" style={{ flex: '1 1 320px' }}>
+            Usamos cookies essenciais e, com o seu consentimento, comportamentais para
+            personalizar recomendações. <Link href="/privacidade">Privacidade</Link>
+          </Text>
           <Space wrap>
             <Button id="cookie-accept-all" color="primary" onClick={acceptAll}>
               Aceitar todos
             </Button>
-            <Button id="cookie-essential" variant="outlined" onClick={acceptEssential}>
+            <Button id="cookie-essential" onClick={acceptEssential}>
               Apenas essenciais
             </Button>
-            <Button
-              id="cookie-customize"
-              variant="text"
-              onClick={() => setCustomOpen(true)}
-            >
+            <Button id="cookie-customize" variant="text" onClick={() => setCustomOpen(true)}>
               Personalizar
             </Button>
           </Space>
@@ -74,7 +63,7 @@ export function CookieBanner() {
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 'var(--space-4)' }}
           title="Cookies essenciais são sempre ativos (sessão, segurança, preferência de consentimento)."
         />
         <Checkbox

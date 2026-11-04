@@ -1,8 +1,9 @@
 import type { Page, Produto, ProdutosQuery } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
 import { mockCategorias, mockProdutos, withCategoria } from '@/lib/mocks/data'
-import { apiClient } from './client'
+import { apiClient, toApiError } from './client'
 import { USE_MOCK } from './config'
+import { fromBackendPage, toBackendPage } from './pagination'
 
 function categoriaIdsComDescendentes(categoriaId: number): Set<number> {
   const ids = new Set<number>([categoriaId])
@@ -21,8 +22,10 @@ function categoriaIdsComDescendentes(categoriaId: number): Set<number> {
 
 export async function listProdutos(query: ProdutosQuery = {}): Promise<Page<Produto>> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Page<Produto>>('/produtos', { params: query })
-    return data
+    const { data } = await apiClient.get<Page<Produto>>('/produtos', {
+      params: { ...query, page: toBackendPage(query.page) },
+    })
+    return fromBackendPage(data)
   }
 
   await delay()
@@ -60,8 +63,13 @@ export async function listProdutos(query: ProdutosQuery = {}): Promise<Page<Prod
 
 export async function getProdutoBySlug(slug: string): Promise<Produto | null> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.get<Produto>(`/produtos/${slug}`)
-    return data
+    try {
+      const { data } = await apiClient.get<Produto>(`/produtos/${slug}`)
+      return data
+    } catch (e) {
+      if (toApiError(e).status === 404) return null
+      throw e
+    }
   }
 
   await delay()

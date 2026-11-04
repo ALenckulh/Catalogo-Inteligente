@@ -11,7 +11,7 @@ Requisitos funcionais e não-funcionais do sistema. A rastreabilidade entre pág
 | RF01 | O sistema deve permitir cadastro de usuário Pessoa Física (CPF com validação de dígito, nome completo, e-mail, idade opcional, telefone opcional, e-mail alternativo opcional). |
 | RF02 | O sistema deve permitir cadastro de usuário Pessoa Jurídica (CNPJ com validação de dígito, razão social, e-mail corporativo, telefone opcional, e-mail alternativo opcional). |
 | RF03 | O cadastro deve obrigar aceite dos Termos de Uso e Política de Privacidade (LGPD). |
-| RF04 | O cadastro deve oferecer consentimento separado e opcional para rastreamento comportamental. |
+| RF04 | O consentimento para rastreamento comportamental deve ser separado do aceite do cadastro e opcional, oferecido no banner de cookies e revogável em Conta. |
 | RF05 | O sistema deve permitir login de usuários cadastrados (PF, PJ, Admin). |
 | RF06 | O sistema deve oferecer fluxo de recuperação de senha por e-mail. |
 | RF07 | O cadastro de administradores é feito exclusivamente pela equipe de TI (sem auto-signup). |

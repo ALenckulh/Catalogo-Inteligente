@@ -17,6 +17,7 @@ export { Select, PageableSelect, usePageableSelect } from './Select'
 export type { SelectProps, PageableSelectProps, PageableSelectPage } from './Select'
 
 import {
+  App,
   Badge,
   Breadcrumb,
   Checkbox,
@@ -30,7 +31,6 @@ import {
   Flex,
   InputNumber,
   Layout as AntLayout,
-  List as AntList,
   Menu,
   Modal,
   Pagination,
@@ -57,9 +57,9 @@ import {
 
 /** Re-export com estáticos (Header/Content/…) — `export { Layout } from 'antd'` quebra no Turbopack. */
 export const Layout = AntLayout
-export const List = AntList
 
 export {
+  App,
   Badge,
   Breadcrumb,
   Checkbox,
