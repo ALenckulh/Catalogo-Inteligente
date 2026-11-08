@@ -125,8 +125,8 @@ Mapa das métricas de interesse ([04 §3](04-ESPECIFICACAO-TECNICA.md)) para enu
 | Favoritar produto | `FAVORITAR` / `DESFAVORITAR` | 6, 7 | Clique favoritar na ficha; remover em favoritos (1 clique); Desfazer em favoritos emite `FAVORITAR` | `produto_id` |
 | Contato sobre produto | `CONTATO_WHATSAPP` + `conversao=LEVE` | 6 | Clique CTA “Entrar em contato” (só auth) | `produto_id`; pausa decay 60d ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)) |
 | Contato sobre lista de favoritos | `CONTATO_WHATSAPP` + `conversao=FORTE` | 7 | Clique CTA “Entrar em contato” em item de `/favoritos` (favoritos = proxy do antigo "carrinho") | `produto_id` |
-| Pesquisas | `PESQUISA` | 5, header | Submit / Enter ou botão busca em `/produtos` ou no header (termo não vazio; debounce se digitação contínua) | `metadados.termo` |
-| Filtros aplicados | `FILTRO_APLICADO` | 5 | Aplicar/alterar categoria, termo `q` ou faixa de preço (debounce ~300ms após mudança estável) | `metadados.filtros` (`categoria_id`, `q`; spec também `precoMin`, `precoMax`) |
+| Pesquisas | `PESQUISA` | 5, header | Submit / Enter ou botão busca em `/produtos` ou no header (termo não vazio; debounce se digitação contínua). **E** clique num produto do resultado com termo ativo | `metadados.termo`; no clique também `produtoId` e `metadados.origem = "resultado_pesquisa"` (soma no produto — [13 M1](13-MUDANCAS-DE-ESCOPO.md)) |
+| Filtros aplicados | `FILTRO_APLICADO` | 5 | Aplicar/alterar categoria, termo `q` ou faixa de preço (debounce ~300ms após mudança estável) | `metadados.filtros` (`categoria_id`, `q`, `precoMin`, `precoMax`); com categoria, também `categoriaId` (soma na nota da categoria — [13 M2](13-MUDANCAS-DE-ESCOPO.md)) |
 | Tempo ativo na página | `TEMPO_PAGINA` | 6 | Heartbeat enquanto aba visível (`visibilitychange`); flush no unmount | `metadados.segundos_ativos`, `produto_id` |
 | Scroll depth | `SCROLL_DEPTH` | 6 | Cruzar marcos 25/50/75/100% do documento (uma vez por marco por visita à página) | `metadados.pct`, `produto_id` |
 | Retorno multi-sessão | *derivado* (N× `VISUALIZACAO_PRODUTO` em sessões distintas) | 6 | Sem evento extra no cliente | Worker/scoring conta revisitas |
@@ -279,7 +279,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Objetivo** | Visão rápida de saúde do catálogo (KPIs + gráficos). |
 | **Rota / auth** | Admin. |
 | **Layout** | Faixa de `Statistic` (KPIs com help) + 3 gráficos (`series`). |
-| **Conteúdo e campos** | KPIs (tooltip de definição): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); link Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; link Ver → `/admin/produtos`. **Contatos (7d)** — eventos `CONTATO_WHATSAPP` (sem link Ver). **Leads score alto** — `score_produto` máx. **≥ 70** (sem link Ver). Gráficos: distribuição de scores (faixas 0–20…81–100), contatos WhatsApp (14d), interesse por categoria. |
+| **Conteúdo e campos** | KPIs num card **Indicadores** (tooltip ⓘ em linguagem simples; link **Ver** ao lado do número): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; Ver → `/admin/produtos`. **Contatos (7 dias)** — eventos `CONTATO_WHATSAPP`. **Clientes com alto interesse** — clientes ativos com `score_produto` máx. **≥ 70** (= faixa Quente); Ver → `/admin/usuarios?nivel=QUENTE&status=ativo`. Gráficos (cada um com título, ícone de ajuda em linguagem simples (o que é, como ler, por que importa), títulos de eixo, tooltip em pt-BR e estado vazio): **Nível de interesse dos clientes** — barras horizontais com usuários ativos pelo score máx. de produto: Quente (≥ 70, = KPI Clientes com alto interesse), Morno (40–69), Frio (< 40), Sem interação (sem score); rótulo "n · %"; soma = Usuários ativos; **Contatos pelo WhatsApp — últimos 14 dias** — contatos por dia, dias sem contato = 0; **Categoria favorita dos clientes** — usuários cuja categoria de maior score é a categoria (top 10; empates contam nas duas). |
 | **Componentes** | `Statistic`, `Tooltip` + `InfoCircleOutlined`, `Button`/`Link` (Eye), `Row`/`Col`, `Card`, `@ant-design/charts` (`Column`, `Line`, `Bar`), `Spin`. |
 | **APIs** | `GET /api/admin/dashboard`. |
 | **Eventos / triggers** | Sem métrica de interesse (somente leitura de agregados já calculados). |
@@ -292,8 +292,8 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Explorar clientes com sinais de intenção. |
 | **Rota / auth** | Admin. |
-| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Table` paginada (`pageSize` 20). (Spec também prevê faixa score.) |
-| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ), e-mail (sortable), telefone, status `ativo` (filtro Ativo/Inativo), score máx. (sortable), top categoria (sortable), última atividade (sortable), ações. |
+| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Select` **nível de interesse** (Quente/Morno/Frio/Sem interação → `nivel`) + `Table` paginada (`pageSize` 20). Filtros `nivel` e `status` (`ativo`/`inativo`) vêm da URL e são mantidos nela (link compartilhável; o KPI “Clientes com alto interesse” abre `?nivel=QUENTE&status=ativo`). Página envolve a lista em `Suspense` (`useSearchParams`). |
+| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ), e-mail (sortable), telefone, status `ativo` (filtro Ativo/Inativo), score máx. (sortable, com ícone do nível de interesse + tooltip: Quente `FireFilled`, Morno `FireOutlined`, Frio `CloudOutlined`, Sem interação `MinusCircleOutlined`), top categoria (sortable), última atividade (sortable), ações. |
 | **Componentes** | `Table`, `Select`, `Input.Search`, `Tag`, `Button` icon-only `EyeOutlined` + tooltip (abrir detalhe). |
 | **APIs** | `GET /api/admin/usuarios?…`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
@@ -360,14 +360,16 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 | Item | Spec |
 |---|---|
-| **Objetivo** | Ajustar pesos, λ e boost pós-conversão sem redeploy ([RNF13](02-REQUISITOS.md)). |
+| **Objetivo** | Ajustar pesos, λ e boost sem redeploy ([RNF13](02-REQUISITOS.md)) de forma intuitiva para o dono do catálogo, vendo **antes de salvar** o impacto nos clientes reais e a precisão das previsões. |
 | **Rota / auth** | Admin (dono do catálogo). |
-| **Layout** | `Tabs`: Pesos de métricas · Decaimento (λ e boost). **Salvar independente por aba.** |
-| **Conteúdo e campos** | **Pesos:** tabela editável `tipo_evento` + `peso` (`InputNumber`); **Reset defaults** (`Popconfirm`) só nesta aba — defaults dos 8 `tipo_evento` (VISUALIZACAO…TEMPO_PAGINA). **Decay:** colunas Escopo (Global vs `categoriaNome`), λ, Boost conversão; linhas vindas da API/mock (sem UI para adicionar categoria no mock). |
-| **Componentes** | `Tabs`, `Table` editável, `InputNumber`, `Button`, `Popconfirm` (reset pesos), `message`. |
-| **APIs** | `GET/PATCH /api/admin/configuracao/pesos`; `GET/PATCH /api/admin/configuracao/decay` ([11 §3.8](11-API-ENDPOINTS.md)). |
+| **Layout** | Título “Como o sistema mede o interesse” + ações (Desfazer · Restaurar padrão (`Popconfirm`) · Salvar (N alterações)). Duas colunas (`xl` 14/10): à esquerda um `Card` com **abas** (Ações do cliente · Duração do interesse · Categorias), cada uma com seus controles e o visual que só ela altera; à direita a **Prévia com seus dados reais** (sticky), cujo corpo acompanha a aba aberta. Um ponto no rótulo da aba indica alteração não salva nela. Um único Salvar grava pesos e decaimento. |
+| **Ajustes** | **Ações do cliente:** barra com a fatia de cada ação no peso total + uma linha por ação de produto (cor, nome com tooltip, `Slider` 0–3 com o peso no tooltip, “+N pts” = `peso ÷ soma dos pesos de produto × 100`; Remover dos favoritos “−N pts”; Tempo/Rolagem “até +N pts”). “Pesquisar e abrir” soma no produto. **Duração do interesse:** frase “perde metade do valor em N dias” com λ discreto no canto, `Slider` 7–180 dias (λ = ln2/dias, 5 casas) e curva “quanto uma ação ainda vale” (hoje tracejado × novo), alternando sem/com contato ou compra. **Categorias:** peso de “Filtrar por categoria” (“+N pts” na categoria), bônus com contato ou compra recente (+0%–+100%) e ajustes por categoria (meia-vida e bônus próprios, remover, “Adicionar ajuste para uma categoria”; [13 — M13](13-MUDANCAS-DE-ESCOPO.md)). Explicações longas ficam nos ⓘ. |
+| **Prévia** | Simulação com debounce de 500 ms (`POST /api/admin/configuracao/simular`). **Linha-resumo sempre visível:** “N clientes mudam de nível · M mudam de categoria favorita” (ou “Nenhum cliente muda”). **Abas Ações e Duração:** `Segmented` Nível dos clientes | Precisão das previsões. Nível: barras 100% Hoje × Com os ajustes por nível, nota média e, recolhidos, os clientes que mais mudam. Precisão: 4 linhas “métrica — hoje → novo” com seta (explicação e frase no tooltip), aviso curto de confiança e ⓘ do método. **Aba Categorias:** barras agrupadas “categoria favorita dos clientes” Hoje × Com os ajustes (até 6 categorias) e, recolhidos, os clientes que mudam de categoria favorita. |
+| **Componentes** | `Card`, `Slider`, `InputNumber`, `Segmented`, `Collapse`, abas do `Card` (`tabList`) com `Badge` de ponto, `Table`, `Alert`, `Line`/`Bar` (`@ant-design/charts`), `Popconfirm`, `modal.confirm` de `App.useApp()` (ajustes em linguagem de negócio “de → para” + checkbox “Recalcular agora as notas de todos”, marcado), `message`. |
+| **APIs** | `GET/PATCH /api/admin/configuracao/pesos`; `GET/PATCH /api/admin/configuracao/decay`; `POST …/simular`; `POST …/recalcular` ([11 §3.8](11-API-ENDPOINTS.md)). |
 | **Eventos / triggers** | Sem métrica de interesse (configura pesos das métricas da §4.0.1; não as dispara). |
-| **Estados** | Validação pesos ≥ 0; `message.success` “Pesos salvos” / “Decaimento salvo”. Loading: Spin. |
+| **Estados** | Loading: Spin; prévia “atualizando…”; erro de prévia em `Alert`; precisão sem histórico → `Empty`; sucesso: “Ajustes salvos. Notas de N clientes e visitantes recalculadas.” |
+| **Mudanças de escopo** | Justificadas em [13 — Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) (M1–M15). |
 | **Rastreabilidade** | RF25, RNF13 |
 
 #### A10 — Design system (`/admin/design-system`)

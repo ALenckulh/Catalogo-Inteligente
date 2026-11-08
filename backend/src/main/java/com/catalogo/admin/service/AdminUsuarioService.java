@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.AdminUsuarioDetalhe;
 import com.catalogo.admin.dto.AdminUsuarioListItem;
 import com.catalogo.admin.dto.CompraResponse;
@@ -81,6 +82,7 @@ public class AdminUsuarioService {
             TipoUsuario tipo,
             String categoria,
             BigDecimal scoreMin,
+            NivelInteresse nivel,
             String q,
             Integer page,
             Integer limit
@@ -122,6 +124,9 @@ public class AdminUsuarioService {
             OffsetDateTime ultima = row != null ? toOdt(row[2]) : null;
 
             if (scoreMin != null && (scoreMax == null || scoreMax.compareTo(scoreMin) < 0)) {
+                continue;
+            }
+            if (nivel != null && NivelInteresse.of(scoreMax) != nivel) {
                 continue;
             }
             if (categoria != null && !categoria.isBlank()) {

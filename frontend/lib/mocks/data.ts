@@ -235,11 +235,10 @@ export const mockDashboard: AdminDashboard = {
   ],
   series: {
     distribuicaoScores: [
-      { faixa: '0–20', quantidade: 8 },
-      { faixa: '21–40', quantidade: 12 },
-      { faixa: '41–60', quantidade: 15 },
-      { faixa: '61–80', quantidade: 9 },
-      { faixa: '81–100', quantidade: 5 },
+      { faixa: 'QUENTE', quantidade: 9 },
+      { faixa: 'MORNO', quantidade: 15 },
+      { faixa: 'FRIO', quantidade: 20 },
+      { faixa: 'SEM_SCORE', quantidade: 6 },
     ],
     contatosPorDia: [
       { data: '2026-03-07', quantidade: 1 },

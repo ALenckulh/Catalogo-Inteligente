@@ -127,6 +127,8 @@ export interface Page<T> {
 export interface EventoPayload {
   tipo: TipoEvento
   produtoId?: number
+  /** Categoria do evento (ex.: FILTRO_APLICADO por categoria soma na nota da categoria). */
+  categoriaId?: number
   conversao?: TipoConversao
   metadados?: Record<string, string | number | boolean | object>
 }
@@ -176,4 +178,12 @@ export type {
   PesoMetrica,
   ParametroDecay,
   ProdutoInput,
+  NivelInteresseApi,
+  SimulacaoMudancaCliente,
+  SimulacaoCategoriaContagem,
+  SimulacaoMudancaCategoria,
+  SimulacaoImpacto,
+  SimulacaoMetricas,
+  SimulacaoPrecisao,
+  SimulacaoResponse,
 } from './admin'

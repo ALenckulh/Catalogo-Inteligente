@@ -68,7 +68,7 @@ IDs de tela conforme [03](03-PAGINAS-E-UX.md).
 | A6 | `/admin/produtos/novo` | `POST /api/admin/produtos` |
 | A7 | `/admin/produtos/[id]/editar` | `GET /api/admin/produtos/{id}`, `PATCH /api/admin/produtos/{id}` |
 | A8 | `/admin/conta` | `GET/PATCH /api/admin/conta` |
-| A9 | `/admin/configuracao` | `GET/PATCH …/pesos`, `GET/PATCH …/decay` |
+| A9 | `/admin/configuracao` | `GET/PATCH …/pesos`, `GET/PATCH …/decay`, `DELETE …/decay/{categoriaId}` |
 
 † Front mock ainda não consome (doc-only / prioridade futura). S0–S3 e A10 (design-system): sem API de negócio.
 
@@ -249,7 +249,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Headers** | `X-Visitante-Cookie-Id: <uuid>` quando não autenticado |
 | **Body** | `tipo` (`TipoEvento`), `produtoId?`, `categoriaId?`, `conversao?` (`LEVE`\|`FORTE`\|`CONFIRMADA`), `metadados?` (objeto), `sessaoId?` |
 | **Resposta** | `202 Accepted` com body `{ "aceito": true }` — não espera persistência completa |
-| **Notas** | Sem consentimento → `403`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front atual envia `{ tipo, produtoId?, conversao?, metadados? }`. Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
+| **Notas** | Sem consentimento → `403`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front atual envia `{ tipo, produtoId?, categoriaId?, conversao?, metadados? }`. `PESQUISA` com `produtoId` = cliente abriu um resultado da busca (soma no produto); `FILTRO_APLICADO` com `categoriaId` = filtro por categoria (soma na nota da categoria) — ver [13 — M1/M2](13-MUDANCAS-DE-ESCOPO.md). Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
 
 Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_WHATSAPP`, `PESQUISA`, `FILTRO_APLICADO`, `SCROLL_DEPTH`, `TEMPO_PAGINA`.
 
@@ -331,7 +331,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Resposta** | `AdminDashboard`: |
 | | `kpis`: `{ usuariosAtivos, produtosAtivos, contatos7d, leadsScoreAlto }` |
 | | `leads[]`: `{ usuarioId, nome, tipo, email, telefone, scoreMaxProduto, topCategoria, ultimaAtividade }` |
-| | `series`: `{ distribuicaoScores[{ faixa, quantidade }], contatosPorDia[{ data, quantidade }], leadsPorCategoria[{ categoria, quantidade }] }` |
+| | `series`: `{ distribuicaoScores[{ faixa, quantidade }], contatosPorDia[{ data, quantidade }], leadsPorCategoria[{ categoria, quantidade }] }` — `distribuicaoScores`: sempre 4 níveis, nesta ordem, em `faixa`: `QUENTE` (score máx. de produto ≥ 70), `MORNO` (≥ 40), `FRIO` (< 40), `SEM_SCORE` (sem score); `quantidade` = usuários ativos (não ADMIN); a soma = `kpis.usuariosAtivos`. `contatosPorDia`: 14 dias corridos até hoje, com `quantidade = 0` nos dias sem contato. `leadsPorCategoria`: top 10, `quantidade` = usuários ativos cuja categoria de maior score é a categoria. |
 
 #### `GET /api/admin/usuarios`
 
@@ -340,7 +340,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A3 |
 | **RF** | RF21 |
-| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `q?`, `page?`, `limit?` |
+| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?`, `page?`, `limit?` |
 | **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`) |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria` |
 
@@ -455,7 +455,35 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **RF** | RF25, RNF13 |
 | **Entidades** | `parametro_decay` |
 | **GET** | `ParametroDecay[]` — `{ categoriaId, categoriaNome?, lambda, boostConversao }` (`categoriaId` null = global) |
-| **Body (PATCH)** | `{ "items": [{ "categoriaId", "lambda", "boostConversao" }] }` (bulk) |
+| **Body (PATCH)** | `{ "items": [{ "categoriaId", "lambda", "boostConversao" }] }` (bulk; upsert — cria o ajuste da categoria se não existir) |
+
+#### `DELETE /api/admin/configuracao/decay/{categoriaId}`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A9 |
+| **RF** | RF25 |
+| **Entidades** | `parametro_decay` |
+| **Resposta** | `ParametroDecay[]` atualizado. Remove o ajuste próprio da categoria, que volta a usar os valores globais. A linha global não tem rota de remoção. Ver [13 — M13](13-MUDANCAS-DE-ESCOPO.md). |
+
+#### `POST /api/admin/configuracao/simular`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A9 (prévia) |
+| **Body** | `{ "pesos": [{ tipoEvento, peso }], "decay": [{ categoriaId, lambda, boostConversao }] }` — valores **propostos** (não grava nada). |
+| **Resposta** | `{ impacto, precisao }`. **impacto:** recalcula agora, a partir dos eventos (365 dias) e compras, a nota máx. de cada cliente ativo (não ADMIN) com os parâmetros salvos e com os propostos → `clientesAnalisados`, `atual[]`/`proposta[]` (`{ nivel, quantidade }` para QUENTE/MORNO/FRIO/SEM_SCORE), `notaMediaAtual/Proposta`, `mudamDeNivel`, `mudancas[]` (top 10: `{ usuarioId, nome, nivelAtual, nivelProposto, notaAtual, notaProposta }`); categoria favorita (maior nota de categoria) de cada cliente nos dois cenários → `mudamDeCategoria`, `categoriasAtual[]`/`categoriasProposta[]` (`{ categoriaId, nome, quantidade }`, as mesmas até 6 categorias nos dois), `mudancasCategoria[]` (top 10: `{ usuarioId, nome, categoriaAtual, categoriaProposta }`, null = nenhuma). **precisao (backtest):** corte = percentil 70 dos horários dos eventos; notas com o histórico anterior ao corte; acerto pelas conversões (contato WhatsApp, evento com `conversao`, compra) a partir do corte, clientes e visitantes → `corte` (null se histórico insuficiente), `amostras`, `conversoes`, `confianca` (BAIXA < 10 conversões ≤ MEDIA < 30 ≤ ALTA), `atual`/`proposta`: `{ precisaoQuentes, recallQuentes, auc, acertoTop3, quentes }` (frações 0–1; null = indefinido). |
+| **Cálculo** | Mesmo `ScoreCalculator` do motor (a prévia bate com o que será gravado). |
+
+#### `POST /api/admin/configuracao/recalcular`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A9 (após salvar, opcional) |
+| **Resposta** | `{ "recalculados": number }` — recalcula e grava `score_produto`/`score_categoria`/`faixa_preco_usuario` de todo usuário com eventos e de visitantes sem usuário, com os parâmetros salvos. Síncrono (volume atual). |
 
 ---
 
@@ -496,7 +524,7 @@ Itens neste doc que não estavam no esboço de arquitetura:
 | `POST /api/visitantes/sessao` | RF18 cookie/sessão |
 | `POST /api/conta/solicitacoes-lgpd` | RF29–30 + tabela `solicitacao_lgpd` |
 | `GET/PATCH /api/admin/conta` | RF26 / A8 |
-| `GET/PATCH /api/admin/configuracao/decay` | RF25 λ / A9 |
+| `GET/PATCH /api/admin/configuracao/decay`, `DELETE …/decay/{categoriaId}` | RF25 λ / A9 |
 | `GET /api/admin/produtos/{id}` | A7 pré-preenche formulário |
 
 O esboço em 05 permanece como índice curto; **este arquivo é a fonte de verdade** para implementação.

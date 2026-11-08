@@ -26,4 +26,7 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
             GROUP BY c.produto.id
             """)
     List<Object[]> countByProdutoSince(@Param("desde") LocalDate desde);
+
+    @Query("SELECT c FROM Compra c JOIN FETCH c.produto WHERE c.deletedAt IS NULL")
+    List<Compra> findAtivasComProduto();
 }

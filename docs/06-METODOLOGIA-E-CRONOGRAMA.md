@@ -72,3 +72,5 @@ A tabela abaixo é um esqueleto. A aluna deve preencher as datas conforme o cale
 ### 4.3 Fora de escopo do TCC (trabalhos futuros)
 
 Ver [04-ESPECIFICACAO-TECNICA.md §13](04-ESPECIFICACAO-TECNICA.md). Resumo: Camadas 3 (Grafo/PPR) e 4 (Collaborative Filtering), heatmap, A/B testing de pesos, integração com CRM externo, modelo ML em produção substituindo regras.
+
+> A prévia de precisão da tela de configuração (backtest offline sobre o histórico, somente leitura) **não** é o A/B testing de pesos: não divide usuários reais entre configurações. Ver [13 — M5](13-MUDANCAS-DE-ESCOPO.md). Ela usa um único corte temporal; validação com vários cortes (walk-forward) ou com um período reservado à avaliação final é trabalho futuro ([13 — M14](13-MUDANCAS-DE-ESCOPO.md)).

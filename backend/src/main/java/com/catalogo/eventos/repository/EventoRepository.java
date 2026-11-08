@@ -1,5 +1,6 @@
 package com.catalogo.eventos.repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -58,4 +59,24 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
             GROUP BY produto_id, tipo
             """, nativeQuery = true)
     List<Object[]> countSignalsByProdutoSince(@Param("desde") java.time.OffsetDateTime desde);
+
+    /** Eventos ativos desde uma data, com produto e categoria (simulação de parâmetros de score). */
+    @Query("""
+            SELECT e FROM Evento e
+            LEFT JOIN FETCH e.produto p
+            LEFT JOIN FETCH p.categoria
+            LEFT JOIN FETCH e.categoria
+            WHERE e.deletedAt IS NULL AND e.ocorridoEm >= :desde
+            """)
+    List<Evento> findAtivosDesde(@Param("desde") OffsetDateTime desde);
+
+    @Query("SELECT DISTINCT e.usuario.id FROM Evento e WHERE e.usuario IS NOT NULL AND e.deletedAt IS NULL")
+    List<Long> findUsuarioIdsComEventos();
+
+    /** Visitantes com eventos ainda não ligados a um usuário. */
+    @Query("""
+            SELECT DISTINCT e.visitante.id FROM Evento e
+            WHERE e.usuario IS NULL AND e.visitante IS NOT NULL AND e.deletedAt IS NULL
+            """)
+    List<Long> findVisitanteIdsSemUsuario();
 }

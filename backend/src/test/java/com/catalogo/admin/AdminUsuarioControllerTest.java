@@ -2,6 +2,7 @@ package com.catalogo.admin;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.catalogo.admin.controller.AdminUsuarioController;
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.CompraResponse;
 import com.catalogo.admin.service.AdminUsuarioService;
 import com.catalogo.auth.domain.TipoUsuario;
@@ -49,12 +51,23 @@ class AdminUsuarioControllerTest {
 
     @Test
     void listOkWithAdminPrincipal() throws Exception {
-        when(usuarioService.listar(any(), any(), any(), any(), any(), any()))
+        when(usuarioService.listar(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/admin/usuarios").principal(adminAuth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(0));
+    }
+
+    @Test
+    void listRepassaFiltroDeNivel() throws Exception {
+        when(usuarioService.listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any()))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/admin/usuarios").param("nivel", "QUENTE").principal(adminAuth()))
+                .andExpect(status().isOk());
+
+        verify(usuarioService).listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any());
     }
 
     @Test

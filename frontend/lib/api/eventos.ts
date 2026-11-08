@@ -14,6 +14,7 @@ export async function trackEvent(payload: EventoPayload): Promise<void> {
     await apiClient.post('/eventos', {
       tipo: payload.tipo,
       produtoId: payload.produtoId,
+      categoriaId: payload.categoriaId,
       conversao: payload.conversao,
       metadados: payload.metadados,
       sessaoId,

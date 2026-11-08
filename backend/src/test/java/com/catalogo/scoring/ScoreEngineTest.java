@@ -120,7 +120,7 @@ class ScoreEngineTest {
         ParametroDecay global = new ParametroDecay();
         global.setLambda(BigDecimal.valueOf(0.01));
         global.setBoostConversao(BigDecimal.valueOf(1.5));
-        when(parametroDecayRepository.findGlobal()).thenReturn(Optional.of(global));
+        when(parametroDecayRepository.findAll()).thenReturn(List.of(global));
 
         Categoria cat = cat(1L);
         Produto produto = produto(10L, cat, "80.00");
@@ -153,8 +153,7 @@ class ScoreEngineTest {
         ParametroDecay global = new ParametroDecay();
         global.setLambda(BigDecimal.valueOf(0.01));
         global.setBoostConversao(BigDecimal.ONE);
-        when(parametroDecayRepository.findGlobal()).thenReturn(Optional.of(global));
-        when(parametroDecayRepository.findByCategoriaId(any())).thenReturn(Optional.empty());
+        when(parametroDecayRepository.findAll()).thenReturn(List.of(global));
     }
 
     private static PesoMetrica peso(TipoEvento tipo, String valor) {

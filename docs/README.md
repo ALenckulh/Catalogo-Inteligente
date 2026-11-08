@@ -18,6 +18,7 @@ Documentação do TCC em Engenharia de Software: plataforma de catálogo B2B com
 | 10 | [Arquitetura — Frontend](10-ARQUITETURA-FRONTEND.md) | Estrutura de pastas, convenções, ADRs do frontend |
 | 11 | [API — Endpoints](11-API-ENDPOINTS.md) | Catálogo REST: método, path, auth, telas, RF, entidades |
 | 12 | [Arquitetura — Backend](12-ARQUITETURA-BACKEND.md) | Estrutura de pacotes, convenções, segurança, mensageria, scoring, ADRs |
+| 13 | [Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) | Mudanças feitas após a spec original, com justificativa e rastreabilidade |
 | — | [Padrões — Hooks](padroes/HOOKS.md) | Convenções para hooks custom |
 | — | [Padrões — Contexts](padroes/CONTEXTS.md) | Convenções para React Context |
 

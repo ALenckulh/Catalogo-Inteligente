@@ -95,10 +95,10 @@ Contato sobre lista de favoritos
 Alta intenção de compra — múltiplos produtos acumulados (CTA "Entrar em contato" em /favoritos; proxy do antigo "carrinho")
 Alto
 Pesquisas do usuário
-Termos buscados indicam interesse por categoria/produto
+Termos buscados indicam interesse por categoria/produto — conta no produto quando o cliente abre um resultado da busca ([13 — M1](13-MUDANCAS-DE-ESCOPO.md))
 Médio
 Filtros aplicados
-Refinamento de busca indica preferência específica
+Refinamento de busca indica preferência específica — filtro por categoria soma na nota da categoria ([13 — M2](13-MUDANCAS-DE-ESCOPO.md))
 Médio
 Tempo ativo na página do produto
 Engajamento prolongado indica interesse qualificado
@@ -145,7 +145,7 @@ Calculado pela Camada 2. Cada produto recebe um score individual por usuário, c
 
 Fórmula geral:
 Score(produto) = Σ [ peso(métrica_i) × valor(métrica_i) × fator_decay(métrica_i) ]  ÷  Score_máximo  × 100
-O fator_decay é calculado conforme descrito na seção 5. O Score_máximo é o valor teórico obtido se todas as métricas atingissem seu valor máximo sem decaimento, utilizado apenas para normalização.
+O fator_decay é calculado conforme descrito na seção 5. O Score_máximo é o valor teórico obtido se todas as métricas atingissem seu valor máximo sem decaimento, utilizado apenas para normalização. Na implementação, Score_máximo = soma dos pesos positivos das **métricas de produto**. `PESQUISA` conta no produto quando o cliente abre um resultado da busca (evento com `produtoId`); `FILTRO_APLICADO` por categoria soma na **nota da categoria** (`peso × decaimento ÷ Score_máximo × 100`, com o λ da categoria) e por isso fica fora do divisor de produto. Como a nota é dividida pela soma dos pesos, os pesos são relativos: uma ocorrência vale `peso ÷ Score_máximo × 100` pontos. Justificativas em [13 — M1 a M3](13-MUDANCAS-DE-ESCOPO.md).
 
 4.3 Score de Categoria
 Calculado como média ponderada logarítmica dos scores dos produtos pertencentes à categoria. A ponderação logarítmica reduz a distorção causada por um único produto com número muito alto de interações, mantendo ainda assim a proporcionalidade:

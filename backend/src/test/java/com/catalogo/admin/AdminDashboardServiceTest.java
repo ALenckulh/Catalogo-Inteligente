@@ -4,13 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -44,7 +49,7 @@ class AdminDashboardServiceTest {
         when(analyticsRepository.countContatosSince(any())).thenReturn(3L);
         when(analyticsRepository.countLeadsScoreAlto(anyDouble())).thenReturn(2L);
         when(analyticsRepository.topLeads(anyInt())).thenReturn(List.of());
-        when(analyticsRepository.scoreDistribution()).thenReturn(List.<Object[]>of(new Object[]{"0-20", 1L}));
+        when(analyticsRepository.scoreDistribution(anyDouble(), anyDouble())).thenReturn(List.<Object[]>of(new Object[]{"QUENTE", 1L}));
         when(analyticsRepository.contatosPorDia(any())).thenReturn(List.of());
         when(analyticsRepository.leadsPorCategoria()).thenReturn(List.of());
 
@@ -67,7 +72,7 @@ class AdminDashboardServiceTest {
                 7L, "a@x.c", "PF", "Ana", null, new java.math.BigDecimal("88.5"), "Cat",
                 java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z")
         }));
-        when(analyticsRepository.scoreDistribution()).thenReturn(List.of());
+        when(analyticsRepository.scoreDistribution(anyDouble(), anyDouble())).thenReturn(List.of());
         when(analyticsRepository.contatosPorDia(any())).thenReturn(List.<Object[]>of(
                 new Object[]{java.time.LocalDate.of(2026, 1, 2), 4L}
         ));
@@ -81,5 +86,20 @@ class AdminDashboardServiceTest {
         assertEquals(TipoUsuario.PF, dash.leads().getFirst().tipo());
         assertEquals(1, dash.series().contatosPorDia().size());
         assertEquals(1, dash.series().leadsPorCategoria().size());
+    }
+
+    @Test
+    void contatosPorDiaCobreUltimos14DiasDesdeInicioDoDia() {
+        when(analyticsRepository.topLeads(anyInt())).thenReturn(List.of());
+        when(analyticsRepository.scoreDistribution(anyDouble(), anyDouble())).thenReturn(List.of());
+        when(analyticsRepository.contatosPorDia(any())).thenReturn(List.of());
+        when(analyticsRepository.leadsPorCategoria()).thenReturn(List.of());
+
+        service.dashboard();
+
+        ArgumentCaptor<OffsetDateTime> since = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(analyticsRepository).contatosPorDia(since.capture());
+        assertEquals(LocalDate.now().minusDays(13), since.getValue().toLocalDate());
+        assertEquals(LocalTime.MIDNIGHT, since.getValue().toLocalTime());
     }
 }
