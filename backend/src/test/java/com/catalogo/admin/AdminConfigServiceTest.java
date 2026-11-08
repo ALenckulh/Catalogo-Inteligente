@@ -57,4 +57,20 @@ class AdminConfigServiceTest {
         assertEquals(0, new BigDecimal("0.7000").compareTo(cap.getValue().getPeso()));
         assertEquals(1L, cap.getValue().getAtualizadoPor());
     }
+
+    @Test
+    void listAndPatchDecayGlobal() {
+        when(parametroDecayRepository.findAll()).thenReturn(List.of());
+        when(parametroDecayRepository.findGlobal()).thenReturn(Optional.empty());
+        when(parametroDecayRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.patchDecay(1L, new com.catalogo.admin.dto.DecayPatchRequest(List.of(
+                new com.catalogo.admin.dto.DecayPatchRequest.Item(
+                        null, new BigDecimal("0.02"), new BigDecimal("1.20")
+                )
+        )));
+
+        verify(parametroDecayRepository).save(any());
+        assertEquals(0, service.listPesos().size());
+    }
 }

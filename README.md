@@ -3,9 +3,12 @@
 > **Predição de Intenção de Compra em Catálogos B2B com Sistema de Recomendação Baseado em Scoring**
 
 [![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)](.)
+[![CI](https://github.com/ALenckulh/Catalogo-Inteligente/actions/workflows/ci.yml/badge.svg)](https://github.com/ALenckulh/Catalogo-Inteligente/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
-[![Python](https://img.shields.io/badge/Python-3.x-3776AB?logo=python)](https://python.org/)
+[![Java](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4-6DB33F?logo=springboot)](https://spring.io/projects/spring-boot)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://typescriptlang.org/)
 [![Licença](https://img.shields.io/badge/licença-MIT-green)](./LICENSE)
 
@@ -13,9 +16,15 @@
 
 ## Sobre o Projeto
 
-O **Catálogo Inteligente** é um sistema de catálogo online B2B com motor de recomendação inteligente, desenvolvido como Trabalho de Conclusão de Curso (PAC VIII — 2026/1) no Centro Universitário Católica de Santa Catarina.
+O **Catálogo Inteligente** é um sistema de catálogo online B2B com motor de recomendação, desenvolvido como Trabalho de Conclusão de Curso (Portfólio / PAC — Católica SC) no Centro Universitário Católica de Santa Catarina.
 
-O sistema atribui um **score de intenção de compra** a produtos e categorias com base em dados comportamentais — cliques, pesquisas, favoritos, tempo de navegação e contatos iniciados — utilizando um **motor de scoring por regras ponderadas com decaimento temporal exponencial** calibrado especificamente para os ciclos de compra longos típicos do ambiente B2B.
+Não é uma loja virtual genérica com carrinho e pagamento. É uma **vitrine B2B** que coleta comportamento, calcula **score de intenção de compra** e entrega **leads priorizados** ao dono do catálogo — a negociação fecha fora da plataforma (ex.: WhatsApp).
+
+O score usa um **motor por regras ponderadas com decaimento temporal exponencial**, calibrado para ciclos de compra longos típicos do B2B.
+
+### Linha de Portfólio
+
+**Web Apps** — ver [docs/PORTFOLIO.md](./docs/PORTFOLIO.md). Diferenciais: mensageria (RabbitMQ), dashboard admin, JWT, LGPD.
 
 ### Problema de Pesquisa
 
@@ -33,48 +42,54 @@ Empresas B2B frequentemente enfrentam dificuldades para identificar leads qualif
 
 ## Arquitetura
 
-O sistema é estruturado em **frontend e backend desacoplados**, seguindo o pipeline:
+Frontend e backend desacoplados:
 
 ```
-Captura de evento → Registro com timestamp → Cálculo de score (Camadas 1 e 2) → API → Frontend
+Captura de evento → API → RabbitMQ → Worker → Score (Camadas 1 e 2) → PostgreSQL → API → Frontend
 ```
 
-### Frontend (React / Next.js)
-- Exibição do catálogo de produtos e categorias
-- Captura de interações comportamentais (cliques, scroll, tempo em página, favoritos, pesquisas e filtros)
-- Página inicial personalizada conforme o score do usuário
-- Banner de consentimento de cookies (conformidade LGPD)
+### Frontend (Next.js / React)
 
-### Backend (Python)
-- Coleta e processamento das métricas comportamentais
-- Cálculo do **Score de Produto** e **Score de Categoria**
-- Aplicação do decaimento temporal exponencial por perfil de produto
-- Geração de dataset sintético de interações para testes e calibração
+- Catálogo de produtos e categorias
+- Captura de interações (cliques, scroll, tempo, favoritos, pesquisas, filtros)
+- Ordenação / vitrine conforme score
+- Banner de consentimento (LGPD)
+
+### Backend (Spring Boot / Java 25)
+
+- API REST, autenticação JWT, rate limit
+- Publicação de eventos comportamentais no RabbitMQ
+- Workers: persistência de eventos e recálculo de score
+- Score de Produto / Categoria (regras + decay)
+- Área admin (dashboard, leads, CRUD produtos, pesos/λ)
+- Conta do titular: consentimentos, exportação e exclusão (LGPD)
+- Migração de histórico visitante → usuário autenticado
+
+Documentação técnica: [frontend/docs/](./frontend/docs/).
 
 ---
 
 ## Motor de Scoring
 
 ### Camada 1 — Popularidade Global (Cold Start)
-Mecanismo de fallback para usuários novos e anônimos, com **transição gradual** para o score pessoal à medida que interações são acumuladas.
+
+Fallback para usuários novos e anônimos, com transição gradual para o score pessoal.
 
 ### Camada 2 — Regras Ponderadas + Decaimento Exponencial (Core)
-
-O Score de Produto é calculado como:
 
 ```
 Score = Σ (peso_i × evento_i × e^(−λ × dias_desde_interação))
 ```
 
-Onde:
-- **peso_i** — peso configurável por tipo de interação (clique, favorito, contato, pesquisa, tempo, retorno)
-- **λ** — taxa de decaimento calibrada por perfil de produto (λ menor para B2B de ciclo longo; λ maior para reposição frequente)
-- **Pausa do decaimento** — qualquer evento de contato com o vendedor congela o decaimento enquanto a negociação permanecer ativa
+- **peso_i** — peso configurável por tipo de interação
+- **λ** — taxa de decaimento (menor em B2B de ciclo longo)
+- **Pausa do decaimento** — contato com vendedor congela o decay enquanto a negociação está ativa
 
-O **Score de Categoria** é obtido por média ponderada logarítmica dos scores de produto, com boost fixo aplicável a conversões recentes.
+Score de Categoria: média ponderada logarítmica dos scores de produto, com boost pós-conversão.
 
 ### Faixa de Preço de Interesse
-O sistema distingue produtos que geraram **conversão** (contato ou compra) de produtos apenas visualizados, sinalizando possível sensibilidade a preço ao vendedor.
+
+Distingue produtos com conversão (contato/compra) de apenas visualizados.
 
 ---
 
@@ -96,55 +111,62 @@ O sistema distingue produtos que geraram **conversão** (contato ou compra) de p
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
-| Backend | Python 3.x |
-| Banco de dados | A definir |
-| Conformidade | LGPD — consentimento explícito de cookies |
+| Frontend | Next.js 16, React 19, TypeScript, Ant Design, Tailwind CSS 4 |
+| Backend | Java 25, Spring Boot 4 |
+| Banco de dados | PostgreSQL (Flyway em `database/`) |
+| Mensageria | RabbitMQ |
+| Auth | JWT |
+| Conformidade | LGPD — consentimento, exportação, exclusão |
 
 ---
 
 ## Como Rodar Localmente
 
 ### Pré-requisitos
+
 - Node.js 18+
-- npm ou yarn
+- JDK 25+
+- Docker Desktop (Postgres + RabbitMQ)
+
+### Infra (banco + fila)
+
+```bash
+cd database
+cp .env.example .env
+docker compose up -d postgres rabbitmq
+docker compose run --rm flyway migrate
+```
+
+Detalhes: [database/README.md](./database/README.md).
+
+### Backend
+
+```bash
+cd backend
+./gradlew bootRun
+```
+
+API em [http://localhost:8080](http://localhost:8080). Ver [backend/README.md](./backend/README.md).
 
 ### Frontend
 
 ```bash
-# Entrar na pasta do frontend
 cd frontend
-
-# Instalar dependências
 npm install
-
-# Iniciar servidor de desenvolvimento
 npm run dev
 ```
 
-Acesse [http://localhost:3000](http://localhost:3000) no navegador.
-
----
-
-## Cronograma
-
-| Semanas | Entregas |
-|---|---|
-| 1–4 | Modelagem de dados; implementação da Camada 1 (Popularidade Global); estrutura base de coleta de métricas; geração do dataset sintético |
-| 5–8 | Implementação completa da Camada 2: Score de Produto, decaimento exponencial por λ, pausa por evento de contato, transição gradual fallback → score pessoal |
-| 9–12 | Score de Categoria (média log-ponderada + boost), Faixa de Preço, histórico de compras com threshold mínimo, consentimento de cookies |
-| 13–16 | Testes de calibração de λ com dados sintéticos, validação de edge cases, redação final do TCC e preparação de defesa |
+App em [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ## Trabalhos Futuros
 
-- **Camada 3** — Regras Sequenciais + Grafo/PPR (condicionado a base real de usuários)
+- **Camada 3** — Regras Sequenciais + Grafo/PPR
 - **Camada 4** — Collaborative Filtering / Matrix Factorization
-- Painel administrativo para ajuste fino de pesos e histórico de compras
-- Migração de histórico de visitante para conta autenticada
-- Implementação completa dos direitos do titular (LGPD)
-- Integração com WhatsApp e sistemas de CRM
+- PoC de ML (ex. RNN) em dados históricos — fora do escopo entregue
+- Integração WhatsApp Business / CRM
+- Hospedagem pública em cloud (AWS/GCP/Azure) — pendente para Demo Day
 
 ---
 
@@ -152,7 +174,3 @@ Acesse [http://localhost:3000](http://localhost:3000) no navegador.
 
 **Ana Paula Lenckulh** — [lenckulh.ola@gmail.com](mailto:lenckulh.ola@gmail.com)  
 Centro Universitário Católica de Santa Catarina, Jaraguá do Sul, SC, Brasil.
-
----
-
-*Apresentação do PAC VIII — 2026/1 | SBC Computing Reviews*

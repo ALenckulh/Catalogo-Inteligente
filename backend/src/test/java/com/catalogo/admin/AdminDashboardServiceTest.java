@@ -56,4 +56,30 @@ class AdminDashboardServiceTest {
         assertEquals(2L, dash.kpis().leadsScoreAlto());
         assertEquals(1, dash.series().distribuicaoScores().size());
     }
+
+    @Test
+    void dashboardMapsLeadsAndSeriesRows() {
+        when(usuarioRepository.countByTipoNotAndDeletedAtIsNull(TipoUsuario.ADMIN)).thenReturn(1L);
+        when(produtoRepository.countByAtivoTrue()).thenReturn(1L);
+        when(analyticsRepository.countContatosSince(any())).thenReturn(0L);
+        when(analyticsRepository.countLeadsScoreAlto(anyDouble())).thenReturn(0L);
+        when(analyticsRepository.topLeads(anyInt())).thenReturn(List.<Object[]>of(new Object[]{
+                7L, "a@x.c", "PF", "Ana", null, new java.math.BigDecimal("88.5"), "Cat",
+                java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z")
+        }));
+        when(analyticsRepository.scoreDistribution()).thenReturn(List.of());
+        when(analyticsRepository.contatosPorDia(any())).thenReturn(List.<Object[]>of(
+                new Object[]{java.time.LocalDate.of(2026, 1, 2), 4L}
+        ));
+        when(analyticsRepository.leadsPorCategoria()).thenReturn(List.<Object[]>of(
+                new Object[]{"Cat", 2L}
+        ));
+
+        var dash = service.dashboard();
+        assertEquals(1, dash.leads().size());
+        assertEquals(7L, dash.leads().getFirst().usuarioId());
+        assertEquals(TipoUsuario.PF, dash.leads().getFirst().tipo());
+        assertEquals(1, dash.series().contatosPorDia().size());
+        assertEquals(1, dash.series().leadsPorCategoria().size());
+    }
 }

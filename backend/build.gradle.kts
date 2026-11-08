@@ -1,5 +1,6 @@
 plugins {
     java
+    jacoco
     id("org.springframework.boot") version "4.1.2"
     id("io.spring.dependency-management") version "1.1.7"
 }
@@ -44,4 +45,53 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        files(classDirectories.files.map {
+            fileTree(it) {
+                exclude(
+                    "**/CatalogoApplication.class",
+                    "**/dto/**",
+                    "**/entity/**",
+                    "**/mapper/**",
+                    "**/repository/**",
+                    "**/config/SecurityConfig.class",
+                    "**/config/RabbitConfig.class",
+                    "**/config/CorsConfig.class",
+                    "**/config/JacksonConfig.class",
+                    "**/config/JpaAuditingConfig.class",
+                )
+            }
+        })
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.75".toBigDecimal()
+            }
+        }
+    }
+    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }
