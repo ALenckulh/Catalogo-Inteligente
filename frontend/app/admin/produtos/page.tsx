@@ -126,7 +126,7 @@ export default function AdminProdutosPage() {
             id={`admin-prod-${row.id}-toggle`}
             onClick={() => {
               void updateProduto(row.id, { ativo: !row.ativo }).then(() => {
-                api.success({ message: row.ativo ? 'Produto desativado' : 'Produto ativado' })
+                api.success({ title: row.ativo ? 'Produto desativado' : 'Produto ativado' })
                 void reload()
               })
             }}
@@ -138,7 +138,7 @@ export default function AdminProdutosPage() {
             cancelText="Cancelar"
             onConfirm={() => {
               void deleteProduto(row.id).then(() => {
-                api.success({ message: 'Produto removido' })
+                api.success({ title: 'Produto removido' })
                 void reload()
               })
             }}

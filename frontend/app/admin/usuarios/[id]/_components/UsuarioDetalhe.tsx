@@ -79,7 +79,7 @@ export function UsuarioDetalhe() {
     try {
       setData(await getAdminUsuario(id))
     } catch {
-      api.error({ message: 'Não foi possível atualizar os dados do cliente' })
+      api.error({ title: 'Não foi possível atualizar os dados do cliente' })
     }
   }
 
@@ -92,10 +92,10 @@ export function UsuarioDetalhe() {
   async function excluir(compra: Compra) {
     try {
       await deleteCompra(id, compra.id)
-      api.success({ message: 'Compra excluída' })
+      api.success({ title: 'Compra excluída' })
       await recarregar()
     } catch (e) {
-      api.error({ message: 'Não foi possível excluir a compra', description: toApiError(e).message })
+      api.error({ title: 'Não foi possível excluir a compra', description: toApiError(e).message })
     }
   }
 
@@ -386,7 +386,7 @@ export function UsuarioDetalhe() {
         onClose={() => setModal((m) => ({ ...m, open: false }))}
         onSaved={(mensagem) => {
           setModal((m) => ({ ...m, open: false }))
-          api.success({ message: mensagem })
+          api.success({ title: mensagem })
           void recarregar()
         }}
       />
