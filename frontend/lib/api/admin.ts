@@ -3,6 +3,7 @@ import type {
   AdminUsuarioDetalhe,
   AdminUsuarioListItem,
   Compra,
+  CompraInput,
   Page,
   ParametroDecay,
   PesoMetrica,
@@ -121,10 +122,7 @@ export async function getAdminUsuario(id: number): Promise<AdminUsuarioDetalhe> 
   }
 }
 
-export async function createCompra(
-  usuarioId: number,
-  body: Omit<Compra, 'id' | 'usuarioId' | 'produtoNome'>,
-): Promise<Compra> {
+export async function createCompra(usuarioId: number, body: CompraInput): Promise<Compra> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<Compra>(`/admin/usuarios/${usuarioId}/compras`, body)
     return data
@@ -132,13 +130,43 @@ export async function createCompra(
   await delay()
   const produto = mockProdutos.find((p) => p.id === body.produtoId)
   const compra: Compra = {
-    id: mockCompras.length + 1,
+    id: Math.max(0, ...mockCompras.map((c) => c.id)) + 1,
     usuarioId,
     produtoNome: produto?.nome,
     ...body,
   }
   mockCompras.push(compra)
   return compra
+}
+
+export async function updateCompra(
+  usuarioId: number,
+  compraId: number,
+  body: CompraInput,
+): Promise<Compra> {
+  if (!USE_MOCK) {
+    const { data } = await apiClient.put<Compra>(
+      `/admin/usuarios/${usuarioId}/compras/${compraId}`,
+      body,
+    )
+    return data
+  }
+  await delay()
+  const compra = mockCompras.find((c) => c.id === compraId && c.usuarioId === usuarioId)
+  if (!compra) throw new ApiError('NOT_FOUND', 'Compra não encontrada', 404)
+  const produto = mockProdutos.find((p) => p.id === body.produtoId)
+  Object.assign(compra, body, { produtoNome: produto?.nome })
+  return { ...compra }
+}
+
+export async function deleteCompra(usuarioId: number, compraId: number): Promise<void> {
+  if (!USE_MOCK) {
+    await apiClient.delete(`/admin/usuarios/${usuarioId}/compras/${compraId}`)
+    return
+  }
+  await delay()
+  const i = mockCompras.findIndex((c) => c.id === compraId && c.usuarioId === usuarioId)
+  if (i >= 0) mockCompras.splice(i, 1)
 }
 
 export async function listAdminProdutos(params?: {

@@ -12,6 +12,8 @@ export interface Compra {
   observacoes: string | null
 }
 
+export type CompraInput = Omit<Compra, 'id' | 'usuarioId' | 'produtoNome'>
+
 export interface ScoreProdutoRow {
   produtoId: number
   produtoNome: string

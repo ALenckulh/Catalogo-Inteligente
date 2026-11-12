@@ -63,7 +63,7 @@ IDs de tela conforme [03](03-PAGINAS-E-UX.md).
 | A1 | `/admin/entrar` | `POST /api/admin/auth/login` |
 | A2 | `/admin` | `GET /api/admin/dashboard` |
 | A3 | `/admin/usuarios` | `GET /api/admin/usuarios` |
-| A4 | `/admin/usuarios/[id]` | `GET …/usuarios/{id}`, `POST …/compras` |
+| A4 | `/admin/usuarios/[id]` | `GET …/usuarios/{id}`, `POST/PUT/DELETE …/compras` |
 | A5 | `/admin/produtos` | `GET/DELETE/PATCH /api/admin/produtos…` |
 | A6 | `/admin/produtos/novo` | `POST /api/admin/produtos` |
 | A7 | `/admin/produtos/[id]/editar` | `GET /api/admin/produtos/{id}`, `PATCH /api/admin/produtos/{id}` |
@@ -367,6 +367,29 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Body** | `produtoId`, `precoUnitario`, `quantidade`, `valorTotal`, `data` (ISO date `YYYY-MM-DD`), `observacoes?` |
 | **Notas** | `registradoPor` = admin logado. Se &lt; 3 compras do cliente, peso histórico = 0 no score ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). |
 
+#### `PUT /api/admin/usuarios/{id}/compras/{compraId}`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A4 |
+| **RF** | RF24 |
+| **Entidades** | `compra` |
+| **Body** | Mesmo do `POST`. |
+| **Resposta** | `CompraResponse` atualizada. |
+| **Notas** | `404` se a compra não for do usuário ou já estiver excluída. Mantém `registradoPor`; recalcula o score do cliente. |
+
+#### `DELETE /api/admin/usuarios/{id}/compras/{compraId}`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A4 |
+| **RF** | RF24 |
+| **Entidades** | `compra` |
+| **Resposta** | `204 No Content` |
+| **Notas** | Soft delete (`deleted_at = now()`); a compra sai de todas as leituras. `404` nas mesmas condições do `PUT`. Recalcula o score do cliente. |
+
 ---
 
 ### 3.7 Admin — produtos
@@ -557,7 +580,7 @@ O esboço em 05 permanece como índice curto; **este arquivo é a fonte de verda
 | RF20 | `GET /api/admin/dashboard` |
 | RF21–22 | `GET /api/admin/usuarios…` |
 | RF23 | admin produtos CRUD (`GET/POST/PATCH/DELETE`, incl. `GET …/{id}`) |
-| RF24 | `POST /api/admin/usuarios/{id}/compras` |
+| RF24 | `POST/PUT/DELETE /api/admin/usuarios/{id}/compras…` |
 | RF25 | `configuracao/pesos`, `configuracao/decay` |
 | RF26 | `GET/PATCH /api/admin/conta` |
 | RF28–30 | consentimentos, exportar, solicitacoes-lgpd (consumidor + admin), `DELETE /api/conta` |

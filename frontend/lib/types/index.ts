@@ -170,6 +170,7 @@ export interface ApiErrorBody {
 
 export type {
   Compra,
+  CompraInput,
   ScoreProdutoRow,
   ScoreCategoriaRow,
   FaixaPrecoUsuario,
