@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -14,12 +17,17 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.catalogo.admin.domain.NivelInteresse;
+import com.catalogo.admin.dto.DecayPatchRequest;
+import com.catalogo.admin.dto.PesosPatchRequest;
 import com.catalogo.admin.dto.SimulacaoResponse;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.catalog.entity.Categoria;
 import com.catalogo.catalog.entity.Produto;
+import com.catalogo.catalog.repository.CompraRepository;
 import com.catalogo.eventos.domain.TipoEvento;
 import com.catalogo.eventos.entity.Evento;
+import com.catalogo.eventos.repository.EventoRepository;
+import com.catalogo.scoring.engine.ScoreEngine;
 import com.catalogo.scoring.engine.ScoringParams;
 
 class AdminScoringServiceTest {
@@ -116,6 +124,42 @@ class AdminScoringServiceTest {
         List<Evento> eventos = List.of(evento(1L, TipoEvento.VISUALIZACAO_PRODUTO, P10, T0), evento(2L, TipoEvento.CONTATO_WHATSAPP, P10, T0));
         var precisao = AdminScoringService.calcularPrecisao(eventos, List.of(), BOM, RUIM);
         assertNull(precisao.corte());
+    }
+
+    @Test
+    void toParamsSeparaDecayGlobalDoPorCategoria() {
+        var params = AdminScoringService.toParams(
+                List.of(new PesosPatchRequest.Item(TipoEvento.FAVORITAR, new BigDecimal("0.7"))),
+                List.of(
+                        new DecayPatchRequest.Item(null, new BigDecimal("0.02"), new BigDecimal("1.5")),
+                        new DecayPatchRequest.Item(7L, new BigDecimal("0.05"), new BigDecimal("2.0"))
+                ));
+
+        assertEquals(0.7, params.pesos().get(TipoEvento.FAVORITAR), 1e-9);
+        assertEquals(0.02, params.lambdaGlobal(), 1e-9);
+        assertEquals(1.5, params.boostGlobal(), 1e-9);
+        assertEquals(Map.of(7L, 0.05), params.lambdaPorCategoria());
+        assertEquals(Map.of(7L, 2.0), params.boostPorCategoria());
+
+        var padrao = AdminScoringService.toParams(List.of(), List.of());
+        assertEquals(ScoringParams.LAMBDA_PADRAO, padrao.lambdaGlobal(), 1e-9);
+        assertEquals(ScoringParams.BOOST_PADRAO, padrao.boostGlobal(), 1e-9);
+    }
+
+    @Test
+    void recalcularTodosRecalculaUsuariosEVisitantes() {
+        EventoRepository eventos = mock(EventoRepository.class);
+        ScoreEngine engine = mock(ScoreEngine.class);
+        when(engine.carregarParams()).thenReturn(BOM);
+        when(eventos.findUsuarioIdsComEventos()).thenReturn(List.of(1L, 2L));
+        when(eventos.findVisitanteIdsSemUsuario()).thenReturn(List.of(9L));
+
+        int total = new AdminScoringService(eventos, mock(CompraRepository.class), engine).recalcularTodos();
+
+        assertEquals(3, total);
+        verify(engine).recalc(1L, null, BOM);
+        verify(engine).recalc(2L, null, BOM);
+        verify(engine).recalc(null, 9L, BOM);
     }
 
     /**

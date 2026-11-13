@@ -16,6 +16,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
+      // Mantenha em sincronia com sonar.coverage.exclusions (sonar-project.properties).
       include: ['lib/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}'],
       exclude: [
         'lib/mocks/**',
