@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -43,6 +45,8 @@ import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.dto.UsuarioResponse;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.security.UsuarioPrincipal;
+import com.catalogo.catalog.dto.ImagemUploadResponse;
+import com.catalogo.catalog.service.ImagemArquivoService;
 import com.catalogo.lgpd.domain.StatusSolicitacaoLgpd;
 import com.catalogo.shared.GlobalExceptionHandler;
 import com.catalogo.shared.PageResponse;
@@ -62,6 +66,8 @@ class AdminControllersSmokeTest {
     AdminContaService contaService;
     @Mock
     AdminSolicitacaoLgpdService lgpdService;
+    @Mock
+    ImagemArquivoService imagemArquivoService;
 
     MockMvc mockMvc;
 
@@ -71,12 +77,21 @@ class AdminControllersSmokeTest {
                 .standaloneSetup(
                         new AdminDashboardController(dashboardService),
                         new AdminConfigController(configService, scoringService),
-                        new AdminProdutoController(produtoService),
+                        new AdminProdutoController(produtoService, imagemArquivoService),
                         new AdminContaController(contaService),
                         new AdminSolicitacaoLgpdController(lgpdService)
                 )
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+    }
+
+    @Test
+    void uploadImagemCreated() throws Exception {
+        when(imagemArquivoService.salvar(any())).thenReturn(new ImagemUploadResponse(7L, "produtos/imagens/7"));
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "a.png", "image/png", new byte[] {1});
+        mockMvc.perform(multipart("/api/admin/produtos/imagens").file(arquivo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.url").value("produtos/imagens/7"));
     }
 
     @Test

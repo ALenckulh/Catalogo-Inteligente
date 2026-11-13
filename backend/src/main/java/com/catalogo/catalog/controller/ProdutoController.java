@@ -1,7 +1,11 @@
 package com.catalogo.catalog.controller;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,7 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.catalogo.auth.security.UsuarioPrincipal;
 import com.catalogo.catalog.dto.ProdutoResponse;
+import com.catalogo.catalog.entity.ImagemArquivo;
 import com.catalogo.catalog.service.CatalogService;
+import com.catalogo.catalog.service.ImagemArquivoService;
 import com.catalogo.eventos.service.EventoService;
 import com.catalogo.shared.PageResponse;
 import com.catalogo.visitante.repository.VisitanteRepository;
@@ -23,10 +29,16 @@ public class ProdutoController {
 
     private final CatalogService catalogService;
     private final VisitanteRepository visitanteRepository;
+    private final ImagemArquivoService imagemArquivoService;
 
-    public ProdutoController(CatalogService catalogService, VisitanteRepository visitanteRepository) {
+    public ProdutoController(
+            CatalogService catalogService,
+            VisitanteRepository visitanteRepository,
+            ImagemArquivoService imagemArquivoService
+    ) {
         this.catalogService = catalogService;
         this.visitanteRepository = visitanteRepository;
+        this.imagemArquivoService = imagemArquivoService;
     }
 
     @GetMapping
@@ -59,6 +71,17 @@ public class ProdutoController {
         return catalogService.listProdutos(
                 q, categoria, precoMin, precoMax, page, limit, destaque, usuarioId, visitanteId
         );
+    }
+
+    /** Id imutável → cache eterno no browser; cada foto sai do banco ~1× por navegador. */
+    @GetMapping("/imagens/{id}")
+    public ResponseEntity<byte[]> imagem(@PathVariable Long id) {
+        ImagemArquivo img = imagemArquivoService.buscar(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(img.getContentType()))
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(img.getConteudo());
     }
 
     @GetMapping("/{slug}")

@@ -115,7 +115,8 @@ database/
     ├── V010__seed_config.sql               # pesos padrão + λ global
     ├── V011__seed_demo_data.sql            # admin + categorias + produtos
     ├── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
-    └── V013__compra_editavel.sql           # compra.updated_at + trigger, índice de compras ativas
+    ├── V013__compra_editavel.sql           # compra.updated_at + trigger, índice de compras ativas
+    └── V014__imagem_arquivo.sql            # imagens de produto enviadas pelo admin (BYTEA)
 ```
 
 Após puxar o repositório com V012 (ou qualquer migração nova):
@@ -140,7 +141,7 @@ Após `flyway migrate`, conecte via psql e cheque:
 -- 7 enums
 \dT+
 
--- 18 tabelas (incl. password_reset_token a partir de V012)
+-- 19 tabelas (incl. password_reset_token a partir de V012, imagem_arquivo a partir de V014)
 \dt
 
 -- Pesos de métrica populados

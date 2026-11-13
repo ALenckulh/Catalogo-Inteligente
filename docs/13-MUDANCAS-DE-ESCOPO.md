@@ -166,3 +166,18 @@ Cada item traz:
 - **Justificativa:** reduzir a carga visual para o dono do catálogo, público do RF25 (RNF13 e normas de usabilidade, [09](09-NORMAS-DE-USABILIDADE.md)), e dar retorno a todos os parâmetros configuráveis. A categoria favorita já é exibida no dashboard ("Categoria favorita dos clientes") e na coluna Top categoria; a prévia só mostra o efeito antes de salvar. Não há tabela, endpoint ou parâmetro novo.
 - **Rastreabilidade:** RF25, RNF13; [03 §A9](03-PAGINAS-E-UX.md); [11](11-API-ENDPOINTS.md).
 - **Código:** `frontend/app/admin/configuracao/page.tsx`, `_components/Previa.tsx`, `PreviaCategorias.tsx`; `AdminScoringService.calcularImpacto` (`favorita`, `topCategorias`); `AdminScoringServiceTest.bonusMudaCategoriaFavoritaSemMudarNivel`.
+
+### M16 — Upload de imagens de produto guardadas como BLOB no Postgres
+
+- **Contexto:** no MVP o admin digitava URLs externas para as imagens ([11](11-API-ENDPOINTS.md), "URLs externas apenas no MVP"). Isso exige que o dono do catálogo hospede as fotos em outro lugar, e URLs quebradas somem da vitrine sem aviso.
+- **Decisão:** o admin envia o arquivo, que é guardado como `BYTEA` na tabela `imagem_arquivo` (V014). `produto_imagem.url` passa a guardar a referência `produtos/imagens/{id}`. URLs externas continuam aceitas, como as do seed.
+  - **BLOB × object storage (S3/GCS/Azure Blob):**
+    - BLOB não exige infra nova (bucket, credenciais, MinIO no dev).
+    - Arquivo e produto ficam na mesma transação e no mesmo backup.
+    - O volume estimado do TCC, de 30MB a 1GB após a compressão, é pequeno para o Postgres.
+    - O custo de servir as imagens pelo backend é mitigado com cache `immutable`: cada foto sai do banco cerca de uma vez por navegador.
+  - **Peso:** os bytes ficam numa tabela sem FK e nunca entram nos `JOIN FETCH` de produto, então o JSON das listagens não muda. O front comprime para WebP (até 1MB, 1600px) com `browser-image-compression`, e o backend limita a 5MB e valida o tipo real com Apache Tika `tika-core`.
+- **Quando migrar para object storage:** quando as imagens passarem de alguns GB, quando o tráfego de imagens pesar no pool de conexões ou quando for preciso uma CDN. A troca se limita ao `ImagemArquivoService` (put/get no bucket) e a um `302` no `GET /api/produtos/imagens/{id}`; produto, DTO e telas não mudam.
+- **Arquivos órfãos:** sobram arquivos quando o admin envia uma foto e não salva o produto, troca ou remove a foto, ou quando o produto é apagado. Um job diário (`ImagemArquivoService.limparOrfas`, às 3h) apaga os arquivos com mais de 24h que nenhum `produto_imagem.url` referencia. As 24h protegem o upload de um formulário ainda aberto. Produto inativo continua referenciando as fotos, então elas ficam.
+- **Rastreabilidade:** RF23; [08 §4.6, §4.19](08-MODELO-DE-DADOS.md); [11](11-API-ENDPOINTS.md).
+- **Código:** `database/migrations/V014__imagem_arquivo.sql`; `ImagemArquivoService`, `ProdutoController.imagem`, `AdminProdutoController.uploadImagem`; `ImagemArquivoServiceTest`; `frontend/app/admin/produtos/_components/ImagemUploadField.tsx`, `lib/api/config.ts` (`imagemSrc`).

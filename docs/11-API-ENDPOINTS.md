@@ -192,6 +192,16 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Resposta** | `Produto` (ficha + `imagens` ordenadas por `ordem` + `categoria?`); se auth: `favoritado?` |
 | **Notas** | **`404`** se inexistente ou inativo. |
 
+#### `GET /api/produtos/imagens/{id}`
+
+| | |
+|---|---|
+| **Auth** | público |
+| **Telas** | 2, 6 (card e galeria) |
+| **Entidades** | `imagem_arquivo` |
+| **Resposta** | Bytes da imagem com o `Content-Type` salvo, `Cache-Control: public, max-age=31536000, immutable` e `X-Content-Type-Options: nosniff` |
+| **Notas** | `404` se inexistente. O front resolve `produto_imagem.url` relativa contra a base da API (`imagemSrc`). Ver [M16](13-MUDANCAS-DE-ESCOPO.md). |
+
 #### `GET /api/categorias`
 
 | | |
@@ -424,7 +434,19 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **RF** | RF23 |
 | **Entidades** | `produto`, `produto_imagem` |
 | **Body** | `nome`, `slug`, `descricao?`, `preco`, `categoriaId`, `ativo`, `fichaTecnica?` (`Record<string,string>`), `imagens?[]` (`url`, `altText?`, `ordem`) |
-| **Notas** | **Imagens: URLs externas apenas no MVP** (CDN/S3/host do cliente). Upload direto fora do escopo — ver [05 §5](05-ARQUITETURA.md) e [04 §13](04-ESPECIFICACAO-TECNICA.md). |
+| **Notas** | `imagens[].url` aceita URL externa ou a referência devolvida pelo upload (`produtos/imagens/{id}`). Ver [M16](13-MUDANCAS-DE-ESCOPO.md). |
+
+#### `POST /api/admin/produtos/imagens`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | A6, A7 |
+| **RF** | RF23 |
+| **Entidades** | `imagem_arquivo` |
+| **Body** | `multipart/form-data`, campo `arquivo` |
+| **Resposta** | `201` `{ id, url }`, sendo `url = "produtos/imagens/{id}"` o valor a enviar em `imagens[].url` |
+| **Notas** | O tipo é detectado pelos magic bytes (Apache Tika), e só JPEG, PNG e WebP passam. Os erros são `400 INVALID_IMAGE` (formato inválido ou arquivo vazio) e `413 FILE_TOO_LARGE` (acima de 5MB). O front comprime para WebP de até 1MB e 1600px antes de enviar. |
 
 #### `PATCH /api/admin/produtos/{id}`
 

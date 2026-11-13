@@ -219,6 +219,21 @@ function mapImagens(
   }))
 }
 
+/** Envia o arquivo (BLOB no backend) e devolve a referência para `imagens[].url`. */
+export async function uploadImagem(file: File): Promise<{ id: number; url: string }> {
+  if (!USE_MOCK) {
+    const form = new FormData()
+    form.append('arquivo', file)
+    // Header explícito: o client usa JSON por padrão e o axios serializaria o FormData como JSON.
+    const { data } = await apiClient.post<{ id: number; url: string }>('/admin/produtos/imagens', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  }
+  await delay()
+  return { id: Date.now(), url: URL.createObjectURL(file) }
+}
+
 export async function createProduto(body: ProdutoInput): Promise<Produto> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<Produto>('/admin/produtos', body)

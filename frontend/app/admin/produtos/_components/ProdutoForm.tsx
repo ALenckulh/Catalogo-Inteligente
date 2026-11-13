@@ -25,6 +25,7 @@ import {
   PlusOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
+import { ImagemUploadField } from './ImagemUploadField'
 
 const { Title } = Typography
 
@@ -277,9 +278,12 @@ export function ProdutoForm({ initial }: Props) {
                       {...field}
                       name={[field.name, 'url']}
                       style={{ flex: 1, marginBottom: 0 }}
-                      rules={[{ required: true, message: 'URL' }]}
+                      rules={[{ required: true, message: 'Envie a foto' }]}
                     >
-                      <Input placeholder="URL" id={`admin-prod-img-url-${key}`} />
+                      <ImagemUploadField
+                        id={`admin-prod-img-upload-${key}`}
+                        onError={(m) => api.error({ title: m })}
+                      />
                     </FormItem>
                     <FormItem
                       {...field}
