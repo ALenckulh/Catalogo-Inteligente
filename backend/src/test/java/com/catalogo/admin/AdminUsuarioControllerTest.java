@@ -2,9 +2,12 @@ package com.catalogo.admin;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.catalogo.admin.controller.AdminUsuarioController;
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.CompraResponse;
 import com.catalogo.admin.service.AdminUsuarioService;
 import com.catalogo.auth.domain.TipoUsuario;
@@ -49,12 +53,23 @@ class AdminUsuarioControllerTest {
 
     @Test
     void listOkWithAdminPrincipal() throws Exception {
-        when(usuarioService.listar(any(), any(), any(), any(), any(), any()))
+        when(usuarioService.listar(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/admin/usuarios").principal(adminAuth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(0));
+    }
+
+    @Test
+    void listRepassaFiltroDeNivel() throws Exception {
+        when(usuarioService.listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any()))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/admin/usuarios").param("nivel", "QUENTE").principal(adminAuth()))
+                .andExpect(status().isOk());
+
+        verify(usuarioService).listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any());
     }
 
     @Test
@@ -78,6 +93,37 @@ class AdminUsuarioControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.usuarioId").value(5));
+    }
+
+    @Test
+    void atualizarCompraRetorna200() throws Exception {
+        when(usuarioService.atualizarCompra(eq(5L), eq(1L), any()))
+                .thenReturn(new CompraResponse(
+                        1L, 5L, 2L, "P", BigDecimal.TEN, 2, new BigDecimal("20"), LocalDate.now(), null
+                ));
+
+        mockMvc.perform(put("/api/admin/usuarios/5/compras/1")
+                        .principal(adminAuth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "produtoId":2,
+                                  "precoUnitario":10,
+                                  "quantidade":2,
+                                  "valorTotal":20,
+                                  "data":"2026-01-15"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantidade").value(2));
+    }
+
+    @Test
+    void excluirCompraRetorna204() throws Exception {
+        mockMvc.perform(delete("/api/admin/usuarios/5/compras/1").principal(adminAuth()))
+                .andExpect(status().isNoContent());
+
+        verify(usuarioService).excluirCompra(5L, 1L);
     }
 
     private static UsernamePasswordAuthenticationToken adminAuth() {

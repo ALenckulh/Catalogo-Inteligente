@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.catalogo.admin.controller.AdminConfigController;
+import com.catalogo.admin.dto.SimulacaoResponse;
 import com.catalogo.admin.controller.AdminContaController;
 import com.catalogo.admin.controller.AdminDashboardController;
 import com.catalogo.admin.controller.AdminProdutoController;
@@ -32,6 +34,7 @@ import com.catalogo.admin.dto.AdminDashboardSeries;
 import com.catalogo.admin.dto.AdminKpis;
 import com.catalogo.admin.dto.AdminSolicitacaoLgpdItem;
 import com.catalogo.admin.service.AdminConfigService;
+import com.catalogo.admin.service.AdminScoringService;
 import com.catalogo.admin.service.AdminContaService;
 import com.catalogo.admin.service.AdminDashboardService;
 import com.catalogo.admin.service.AdminProdutoService;
@@ -52,6 +55,8 @@ class AdminControllersSmokeTest {
     @Mock
     AdminConfigService configService;
     @Mock
+    AdminScoringService scoringService;
+    @Mock
     AdminProdutoService produtoService;
     @Mock
     AdminContaService contaService;
@@ -65,7 +70,7 @@ class AdminControllersSmokeTest {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(
                         new AdminDashboardController(dashboardService),
-                        new AdminConfigController(configService),
+                        new AdminConfigController(configService, scoringService),
                         new AdminProdutoController(produtoService),
                         new AdminContaController(contaService),
                         new AdminSolicitacaoLgpdController(lgpdService)
@@ -118,6 +123,37 @@ class AdminControllersSmokeTest {
                                 {"items":[{"categoriaId":null,"lambda":0.01,"boostConversao":1.1}]}
                                 """))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void configDecayRemoverAjusteDeCategoria() throws Exception {
+        when(configService.removerDecay(7L)).thenReturn(List.of());
+
+        mockMvc.perform(delete("/api/admin/configuracao/decay/7").principal(adminAuth()))
+                .andExpect(status().isOk());
+        verify(configService).removerDecay(7L);
+    }
+
+    @Test
+    void configSimularERecalcular() throws Exception {
+        when(scoringService.simular(any())).thenReturn(new SimulacaoResponse(
+                new SimulacaoResponse.Impacto(0, List.of(), List.of(), null, null, 0, List.of(), 0, List.of(), List.of(), List.of()),
+                new SimulacaoResponse.Precisao(null, 0, 0, SimulacaoResponse.Confianca.BAIXA, null, null)
+        ));
+        when(scoringService.recalcularTodos()).thenReturn(4);
+
+        mockMvc.perform(post("/api/admin/configuracao/simular")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"pesos":[{"tipoEvento":"FAVORITAR","peso":0.5}],
+                                 "decay":[{"categoriaId":null,"lambda":0.01,"boostConversao":1.0}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.precisao.confianca").value("BAIXA"));
+
+        mockMvc.perform(post("/api/admin/configuracao/recalcular").principal(adminAuth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recalculados").value(4));
     }
 
     @Test

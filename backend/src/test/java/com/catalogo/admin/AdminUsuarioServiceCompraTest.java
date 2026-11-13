@@ -1,7 +1,10 @@
 package com.catalogo.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
@@ -30,6 +34,7 @@ import com.catalogo.scoring.engine.ScoreEngine;
 import com.catalogo.scoring.repository.FaixaPrecoUsuarioRepository;
 import com.catalogo.scoring.repository.ScoreCategoriaRepository;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
+import com.catalogo.shared.ApiException;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUsuarioServiceCompraTest {
@@ -92,5 +97,60 @@ class AdminUsuarioServiceCompraTest {
         verify(compraRepository).save(cap.capture());
         assertEquals(99L, cap.getValue().getRegistradoPor());
         verify(scoreEngine).recalc(5L, null);
+    }
+
+    @Test
+    void atualizarCompraAlteraCamposERecalcula() {
+        Compra c = compra(1L, 5L);
+        Produto novo = new Produto();
+        novo.setId(3L);
+        novo.setNome("Novo");
+        when(compraRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(produtoRepository.findById(3L)).thenReturn(Optional.of(novo));
+        when(compraRepository.save(any(Compra.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var res = service.atualizarCompra(5L, 1L, new RegistrarCompraRequest(
+                3L, BigDecimal.ONE, 4, new BigDecimal("4"), LocalDate.of(2026, 2, 1), "obs"
+        ));
+
+        assertEquals(3L, res.produtoId());
+        assertEquals(4, res.quantidade());
+        assertEquals("obs", res.observacoes());
+        assertEquals(99L, c.getRegistradoPor());
+        verify(scoreEngine).recalc(5L, null);
+    }
+
+    @Test
+    void excluirCompraFazSoftDeleteERecalcula() {
+        Compra c = compra(1L, 5L);
+        when(compraRepository.findById(1L)).thenReturn(Optional.of(c));
+
+        service.excluirCompra(5L, 1L);
+
+        assertNotNull(c.getDeletedAt());
+        verify(compraRepository).save(c);
+        verify(scoreEngine).recalc(5L, null);
+    }
+
+    @Test
+    void compraDeOutroUsuarioRetorna404() {
+        when(compraRepository.findById(1L)).thenReturn(Optional.of(compra(1L, 7L)));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.excluirCompra(5L, 1L));
+
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+        verify(scoreEngine, never()).recalc(any(), any());
+    }
+
+    private static Compra compra(Long id, Long usuarioId) {
+        Produto p = new Produto();
+        p.setId(2L);
+        p.setNome("P");
+        Compra c = new Compra();
+        c.setId(id);
+        c.setUsuarioId(usuarioId);
+        c.setProduto(p);
+        c.setRegistradoPor(99L);
+        return c;
     }
 }

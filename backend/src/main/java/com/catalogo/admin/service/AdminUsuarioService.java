@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.AdminUsuarioDetalhe;
 import com.catalogo.admin.dto.AdminUsuarioListItem;
 import com.catalogo.admin.dto.CompraResponse;
@@ -81,6 +82,7 @@ public class AdminUsuarioService {
             TipoUsuario tipo,
             String categoria,
             BigDecimal scoreMin,
+            NivelInteresse nivel,
             String q,
             Integer page,
             Integer limit
@@ -122,6 +124,9 @@ public class AdminUsuarioService {
             OffsetDateTime ultima = row != null ? toOdt(row[2]) : null;
 
             if (scoreMin != null && (scoreMax == null || scoreMax.compareTo(scoreMin) < 0)) {
+                continue;
+            }
+            if (nivel != null && NivelInteresse.of(scoreMax) != nivel) {
                 continue;
             }
             if (categoria != null && !categoria.isBlank()) {
@@ -191,6 +196,39 @@ public class AdminUsuarioService {
 
         scoreEngine.recalc(usuarioId, null);
         return CompraResponse.from(compra);
+    }
+
+    @Transactional
+    public CompraResponse atualizarCompra(Long usuarioId, Long compraId, RegistrarCompraRequest request) {
+        Compra compra = compraDoUsuario(usuarioId, compraId);
+        Produto produto = produtoRepository.findById(request.produtoId())
+                .orElseThrow(() -> new ApiException("NOT_FOUND", "Produto não encontrado", HttpStatus.NOT_FOUND));
+
+        compra.setProduto(produto);
+        compra.setPrecoUnitario(request.precoUnitario());
+        compra.setQuantidade(request.quantidade());
+        compra.setValorTotal(request.valorTotal());
+        compra.setDataCompra(request.data());
+        compra.setObservacoes(request.observacoes());
+        compra = compraRepository.save(compra);
+
+        scoreEngine.recalc(usuarioId, null);
+        return CompraResponse.from(compra);
+    }
+
+    /** Soft delete: todas as leituras de compra já filtram {@code deleted_at}. */
+    @Transactional
+    public void excluirCompra(Long usuarioId, Long compraId) {
+        Compra compra = compraDoUsuario(usuarioId, compraId);
+        compra.setDeletedAt(OffsetDateTime.now());
+        compraRepository.save(compra);
+        scoreEngine.recalc(usuarioId, null);
+    }
+
+    private Compra compraDoUsuario(Long usuarioId, Long compraId) {
+        return compraRepository.findById(compraId)
+                .filter(c -> c.getUsuarioId().equals(usuarioId) && c.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException("NOT_FOUND", "Compra não encontrada", HttpStatus.NOT_FOUND));
     }
 
     private static BigDecimal toBd(Object o) {

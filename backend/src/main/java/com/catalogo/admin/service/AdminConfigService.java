@@ -93,4 +93,11 @@ public class AdminConfigService {
         }
         return listDecay();
     }
+
+    /** Remove o ajuste próprio da categoria; ela volta a usar os valores globais. */
+    @Transactional
+    public List<ParametroDecayResponse> removerDecay(Long categoriaId) {
+        parametroDecayRepository.findByCategoriaId(categoriaId).ifPresent(parametroDecayRepository::delete);
+        return listDecay();
+    }
 }

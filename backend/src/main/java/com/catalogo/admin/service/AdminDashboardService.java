@@ -5,6 +5,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.AdminDashboardResponse;
 import com.catalogo.admin.dto.AdminDashboardSeries;
 import com.catalogo.admin.dto.AdminKpis;
@@ -27,8 +29,8 @@ import com.catalogo.catalog.repository.ProdutoRepository;
 @Service
 public class AdminDashboardService {
 
-    private static final double SCORE_ALTO = 70.0;
     private static final int LEADS_LIMIT = 10;
+    private static final int CONTATOS_SERIE_DIAS = 14;
 
     private final UsuarioRepository usuarioRepository;
     private final ProdutoRepository produtoRepository;
@@ -47,12 +49,16 @@ public class AdminDashboardService {
     @Transactional(readOnly = true)
     public AdminDashboardResponse dashboard() {
         OffsetDateTime since7 = OffsetDateTime.now().minusDays(7);
+        OffsetDateTime since14Dias = LocalDate.now()
+                .minusDays(CONTATOS_SERIE_DIAS - 1L)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toOffsetDateTime();
 
         AdminKpis kpis = new AdminKpis(
                 usuarioRepository.countByTipoNotAndDeletedAtIsNull(TipoUsuario.ADMIN),
                 produtoRepository.countByAtivoTrue(),
                 analyticsRepository.countContatosSince(since7),
-                analyticsRepository.countLeadsScoreAlto(SCORE_ALTO)
+                analyticsRepository.countLeadsScoreAlto(NivelInteresse.ALTO)
         );
 
         List<AdminLeadItem> leads = new ArrayList<>();
@@ -69,10 +75,10 @@ public class AdminDashboardService {
             ));
         }
 
-        List<ScoreFaixaItem> dist = analyticsRepository.scoreDistribution().stream()
+        List<ScoreFaixaItem> dist = analyticsRepository.scoreDistribution(NivelInteresse.ALTO, NivelInteresse.MORNO_MIN).stream()
                 .map(r -> new ScoreFaixaItem(String.valueOf(r[0]), ((Number) r[1]).longValue()))
                 .toList();
-        List<ContatoPorDiaItem> porDia = analyticsRepository.contatosPorDia(since7).stream()
+        List<ContatoPorDiaItem> porDia = analyticsRepository.contatosPorDia(since14Dias).stream()
                 .map(r -> new ContatoPorDiaItem(toLocalDate(r[0]), ((Number) r[1]).longValue()))
                 .toList();
         List<LeadsPorCategoriaItem> porCat = analyticsRepository.leadsPorCategoria().stream()

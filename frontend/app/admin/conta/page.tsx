@@ -39,7 +39,7 @@ export default function AdminContaPage() {
     setSaving(true)
     try {
       await updateAdminConta({ email: values.email, telefone: values.telefone || null })
-      api.success({ message: 'Conta atualizada' })
+      api.success({ title: 'Conta atualizada' })
     } catch (e) {
       setError(toApiError(e).message)
     } finally {

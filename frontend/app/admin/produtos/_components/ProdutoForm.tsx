@@ -127,10 +127,10 @@ export function ProdutoForm({ initial }: Props) {
     try {
       if (initial) {
         await updateProduto(initial.id, body)
-        api.success({ message: 'Produto atualizado' })
+        api.success({ title: 'Produto atualizado' })
       } else {
         await createProduto(body)
-        api.success({ message: 'Produto criado' })
+        api.success({ title: 'Produto criado' })
       }
       router.push('/admin/produtos')
     } catch (e) {
@@ -224,15 +224,15 @@ export function ProdutoForm({ initial }: Props) {
         <Form.List name="fichaPairs">
           {(fields, { add, remove }) => (
             <Flex vertical gap="small">
-              {fields.map((field) => (
-                <Flex key={field.key} gap="small" align="flex-start">
+              {fields.map(({ key, ...field }) => (
+                <Flex key={key} gap="small" align="flex-start">
                   <FormItem
                     {...field}
                     name={[field.name, 'chave']}
                     style={{ flex: 1, marginBottom: 0 }}
                     rules={[{ required: true, message: 'Chave' }]}
                   >
-                    <Input placeholder="Chave" id={`admin-prod-ficha-chave-${field.key}`} />
+                    <Input placeholder="Chave" id={`admin-prod-ficha-chave-${key}`} />
                   </FormItem>
                   <FormItem
                     {...field}
@@ -240,14 +240,14 @@ export function ProdutoForm({ initial }: Props) {
                     style={{ flex: 1, marginBottom: 0 }}
                     rules={[{ required: true, message: 'Valor' }]}
                   >
-                    <Input placeholder="Valor" id={`admin-prod-ficha-valor-${field.key}`} />
+                    <Input placeholder="Valor" id={`admin-prod-ficha-valor-${key}`} />
                   </FormItem>
                   <Button
                     variant="text"
                     icon={<DeleteOutlined />}
                     tooltip="Remover"
                     onClick={() => remove(field.name)}
-                    id={`admin-prod-ficha-rm-${field.key}`}
+                    id={`admin-prod-ficha-rm-${key}`}
                   />
                 </Flex>
               ))}
@@ -270,8 +270,8 @@ export function ProdutoForm({ initial }: Props) {
         <Form.List name="imagens">
           {(fields, { add, remove }) => (
             <Flex vertical gap="small">
-              {fields.map((field) => (
-                <Flex key={field.key} vertical gap={4} style={{ marginBottom: 8 }}>
+              {fields.map(({ key, ...field }) => (
+                <Flex key={key} vertical gap={4} style={{ marginBottom: 8 }}>
                   <Flex gap="small" align="flex-start">
                     <FormItem
                       {...field}
@@ -279,7 +279,7 @@ export function ProdutoForm({ initial }: Props) {
                       style={{ flex: 1, marginBottom: 0 }}
                       rules={[{ required: true, message: 'URL' }]}
                     >
-                      <Input placeholder="URL" id={`admin-prod-img-url-${field.key}`} />
+                      <Input placeholder="URL" id={`admin-prod-img-url-${key}`} />
                     </FormItem>
                     <FormItem
                       {...field}
@@ -291,7 +291,7 @@ export function ProdutoForm({ initial }: Props) {
                         min={0}
                         placeholder="Ordem"
                         style={{ width: '100%' }}
-                        id={`admin-prod-img-ordem-${field.key}`}
+                        id={`admin-prod-img-ordem-${key}`}
                       />
                     </FormItem>
                     <Button
@@ -299,7 +299,7 @@ export function ProdutoForm({ initial }: Props) {
                       icon={<DeleteOutlined />}
                       tooltip="Remover"
                       onClick={() => remove(field.name)}
-                      id={`admin-prod-img-rm-${field.key}`}
+                      id={`admin-prod-img-rm-${key}`}
                     />
                   </Flex>
                   <FormItem
@@ -307,7 +307,7 @@ export function ProdutoForm({ initial }: Props) {
                     name={[field.name, 'altText']}
                     style={{ marginBottom: 0 }}
                   >
-                    <Input placeholder="Texto alternativo" id={`admin-prod-img-alt-${field.key}`} />
+                    <Input placeholder="Texto alternativo" id={`admin-prod-img-alt-${key}`} />
                   </FormItem>
                 </Flex>
               ))}

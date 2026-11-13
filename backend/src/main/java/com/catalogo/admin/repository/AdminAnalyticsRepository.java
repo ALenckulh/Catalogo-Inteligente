@@ -28,8 +28,10 @@ public class AdminAnalyticsRepository {
 
     public long countLeadsScoreAlto(double minScore) {
         Number n = (Number) em.createNativeQuery("""
-                SELECT COUNT(DISTINCT usuario_id) FROM score_produto
-                WHERE usuario_id IS NOT NULL AND valor >= :min
+                SELECT COUNT(DISTINCT sp.usuario_id)
+                FROM score_produto sp
+                JOIN usuario u ON u.id = sp.usuario_id
+                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN' AND sp.valor >= :min
                 """)
                 .setParameter("min", minScore)
                 .getSingleResult();
@@ -82,57 +84,80 @@ public class AdminAnalyticsRepository {
                 .toList();
     }
 
+    /**
+     * "Temperatura" dos usuários ativos (não ADMIN) pelo maior score de produto:
+     * QUENTE (≥ alto), MORNO (≥ morno), FRIO (&lt; morno) e SEM_SCORE (nenhum score).
+     * Sempre retorna os 4 níveis, nessa ordem, mesmo com contagem zero.
+     */
     @SuppressWarnings("unchecked")
-    public List<Object[]> scoreDistribution() {
+    public List<Object[]> scoreDistribution(double alto, double morno) {
         return em.createNativeQuery("""
-                SELECT
-                  CASE
-                    WHEN valor < 20 THEN '0-20'
-                    WHEN valor < 40 THEN '20-40'
-                    WHEN valor < 60 THEN '40-60'
-                    WHEN valor < 80 THEN '60-80'
-                    ELSE '80-100'
-                  END AS faixa,
-                  COUNT(*)
-                FROM score_produto
-                WHERE usuario_id IS NOT NULL
-                GROUP BY 1
-                ORDER BY 1
+                WITH mx AS (
+                    SELECT u.id, MAX(sp.valor) AS v
+                    FROM usuario u
+                    LEFT JOIN score_produto sp ON sp.usuario_id = u.id
+                    WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN'
+                    GROUP BY u.id
+                )
+                SELECT n.faixa, COUNT(mx.id)
+                FROM (VALUES (0, 'QUENTE'), (1, 'MORNO'), (2, 'FRIO'), (3, 'SEM_SCORE')) AS n(ord, faixa)
+                LEFT JOIN mx ON n.ord = CASE
+                                          WHEN mx.v IS NULL THEN 3
+                                          WHEN mx.v >= :alto THEN 0
+                                          WHEN mx.v >= :morno THEN 1
+                                          ELSE 2
+                                        END
+                GROUP BY n.ord, n.faixa
+                ORDER BY n.ord
                 """)
+                .setParameter("alto", alto)
+                .setParameter("morno", morno)
                 .getResultList();
     }
 
+    /**
+     * Contatos WhatsApp por dia desde {@code since} até hoje, com zero nos dias sem contato.
+     */
     @SuppressWarnings("unchecked")
     public List<Object[]> contatosPorDia(OffsetDateTime since) {
         return em.createNativeQuery("""
-                SELECT CAST(ocorrido_em AS date) AS dia, COUNT(*)
-                FROM evento
-                WHERE deleted_at IS NULL
-                  AND tipo = 'CONTATO_WHATSAPP'
-                  AND ocorrido_em >= :since
-                GROUP BY 1
-                ORDER BY 1
+                SELECT CAST(d AS date) AS dia, COUNT(e.id)
+                FROM generate_series(CAST(CAST(:since AS date) AS timestamp),
+                                     CAST(CURRENT_DATE AS timestamp),
+                                     interval '1 day') AS d
+                LEFT JOIN evento e
+                       ON CAST(e.ocorrido_em AS date) = CAST(d AS date)
+                      AND e.ocorrido_em >= :since
+                      AND e.deleted_at IS NULL
+                      AND e.tipo = 'CONTATO_WHATSAPP'
+                GROUP BY d
+                ORDER BY d
                 """)
                 .setParameter("since", since)
                 .getResultList();
     }
 
+    /**
+     * Usuários ativos (não ADMIN) cuja categoria de maior score é a categoria — top 10.
+     * Empates contam o usuário em todas as categorias empatadas.
+     */
     @SuppressWarnings("unchecked")
     public List<Object[]> leadsPorCategoria() {
         return em.createNativeQuery("""
                 SELECT c.nome, COUNT(DISTINCT sc.usuario_id)
                 FROM score_categoria sc
                 JOIN categoria c ON c.id = sc.categoria_id
+                JOIN usuario u ON u.id = sc.usuario_id
                 JOIN (
                     SELECT usuario_id, MAX(valor) AS maxv
                     FROM score_categoria
                     WHERE usuario_id IS NOT NULL
                     GROUP BY usuario_id
                 ) tops ON tops.usuario_id = sc.usuario_id AND tops.maxv = sc.valor
-                WHERE sc.usuario_id IS NOT NULL
+                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN'
                 GROUP BY c.nome
                 ORDER BY COUNT(DISTINCT sc.usuario_id) DESC
-                LIMIT 20
+                LIMIT 10
                 """)
                 .getResultList();
     }

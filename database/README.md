@@ -114,7 +114,8 @@ database/
     ├── V009__create_updated_at_trigger.sql
     ├── V010__seed_config.sql               # pesos padrão + λ global
     ├── V011__seed_demo_data.sql            # admin + categorias + produtos
-    └── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
+    ├── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
+    └── V013__compra_editavel.sql           # compra.updated_at + trigger, índice de compras ativas
 ```
 
 Após puxar o repositório com V012 (ou qualquer migração nova):

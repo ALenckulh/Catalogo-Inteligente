@@ -217,6 +217,8 @@ export function ProdutosCatalogo() {
       ) {
         track({
           tipo: 'FILTRO_APLICADO',
+          // Filtrar por categoria indica interesse nela: o motor soma na nota da categoria.
+          categoriaId: categoriaId ?? undefined,
           metadados: {
             filtros: {
               categoria_id: categoriaId ?? null,
@@ -341,7 +343,23 @@ export function ProdutosCatalogo() {
                 ) : (
                   <Row gutter={[16, 16]} role="list">
                     {items.map((p) => (
-                      <Col key={p.id} xs={24} sm={12} md={8} role="listitem">
+                      <Col
+                        key={p.id}
+                        xs={24}
+                        sm={12}
+                        md={8}
+                        role="listitem"
+                        onClickCapture={() => {
+                          // Pesquisou e abriu um resultado = interesse alto naquele produto.
+                          if (q) {
+                            track({
+                              tipo: 'PESQUISA',
+                              produtoId: p.id,
+                              metadados: { termo: q, origem: 'resultado_pesquisa' },
+                            })
+                          }
+                        }}
+                      >
                         <ProdutoCard produto={p} />
                       </Col>
                     ))}

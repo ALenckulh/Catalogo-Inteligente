@@ -2,45 +2,52 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { EyeOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { EyeOutlined } from '@ant-design/icons'
 import { getDashboard } from '@/lib/api/admin'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import type { AdminDashboard } from '@/lib/types'
 import {
   Button,
+  Card,
   Col,
   Flex,
   Row,
-  Space,
   Spin,
   Statistic,
-  Tooltip,
   Typography,
 } from '@/components/ui'
 import { DashboardCharts } from './_components/DashboardCharts'
+import { HelpTitle } from './_components/HelpTitle'
 
 const { Title } = Typography
 
-const KPI_HELP = {
-  usuariosAtivos:
-    'Contagem de contas PF/PJ com deleted_at nulo (não excluídas/anonimizadas LGPD). Exclui ADMIN.',
-  produtosAtivos:
-    'Contagem de produtos com ativo = true (visíveis na vitrine).',
-  contatos7d: 'Eventos CONTATO_WHATSAPP nos últimos 7 dias.',
-  leadsScoreAlto:
-    'Usuários cujo score_produto máximo é ≥ 70.',
-} as const
+type KpiKey = keyof AdminDashboard['kpis']
 
-function KpiTitle({ label, help }: { label: string; help: string }) {
-  return (
-    <Space size={4}>
-      <span>{label}</span>
-      <Tooltip title={help}>
-        <InfoCircleOutlined aria-label={`Ajuda: ${label}`} />
-      </Tooltip>
-    </Space>
-  )
-}
+const KPIS: { key: KpiKey; label: string; help: string; ver?: { href: string; id: string } }[] = [
+  {
+    key: 'usuariosAtivos',
+    label: 'Usuários ativos',
+    help: 'Clientes (pessoas ou empresas) com cadastro ativo no catálogo. Não conta administradores nem contas excluídas a pedido do cliente.',
+    ver: { href: '/admin/usuarios', id: 'admin-dash-ver-usuarios' },
+  },
+  {
+    key: 'produtosAtivos',
+    label: 'Produtos ativos',
+    help: 'Produtos que aparecem agora na vitrine para os clientes. Produtos desativados não entram na conta.',
+    ver: { href: '/admin/produtos', id: 'admin-dash-ver-produtos' },
+  },
+  {
+    key: 'contatos7d',
+    label: 'Contatos (7 dias)',
+    help: 'Quantas vezes alguém clicou no botão do WhatsApp para falar com você nos últimos 7 dias. Conta clientes cadastrados e visitantes.',
+  },
+  {
+    key: 'leadsScoreAlto',
+    label: 'Clientes com alto interesse',
+    help: 'Clientes com nota de interesse 70 ou mais em algum produto, os mesmos da faixa “Quente” do gráfico abaixo. São os melhores candidatos para um contato comercial.',
+    ver: { href: '/admin/usuarios?nivel=QUENTE&status=ativo', id: 'admin-dash-ver-alto-interesse' },
+  },
+]
 
 export default function AdminDashboardPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
@@ -70,62 +77,27 @@ export default function AdminDashboardPage() {
       <Title level={2} id="admin-dash-title" style={{ margin: 0 }}>
         Dashboard
       </Title>
-      <Row gutter={[16, 16]}>
-        <Col xs={12} md={6}>
-          <Flex vertical gap={8}>
-            <Statistic
-              title={
-                <KpiTitle label="Usuários ativos" help={KPI_HELP.usuariosAtivos} />
-              }
-              value={data.kpis.usuariosAtivos}
-            />
-            <Link href="/admin/usuarios">
-              <Button
-                variant="link"
-                size="small"
-                icon={<EyeOutlined />}
-                id="admin-dash-ver-usuarios"
-              >
-                Ver
-              </Button>
-            </Link>
-          </Flex>
-        </Col>
-        <Col xs={12} md={6}>
-          <Flex vertical gap={8}>
-            <Statistic
-              title={
-                <KpiTitle label="Produtos ativos" help={KPI_HELP.produtosAtivos} />
-              }
-              value={data.kpis.produtosAtivos}
-            />
-            <Link href="/admin/produtos">
-              <Button
-                variant="link"
-                size="small"
-                icon={<EyeOutlined />}
-                id="admin-dash-ver-produtos"
-              >
-                Ver
-              </Button>
-            </Link>
-          </Flex>
-        </Col>
-        <Col xs={12} md={6}>
-          <Statistic
-            title={<KpiTitle label="Contatos (7d)" help={KPI_HELP.contatos7d} />}
-            value={data.kpis.contatos7d}
-          />
-        </Col>
-        <Col xs={12} md={6}>
-          <Statistic
-            title={
-              <KpiTitle label="Leads score alto" help={KPI_HELP.leadsScoreAlto} />
-            }
-            value={data.kpis.leadsScoreAlto}
-          />
-        </Col>
-      </Row>
+      <Card size="small" title="Indicadores">
+        <Row gutter={[16, 16]}>
+          {KPIS.map((kpi) => (
+            <Col key={kpi.key} xs={12} md={6}>
+              <Statistic
+                title={<HelpTitle label={kpi.label} help={kpi.help} />}
+                value={data.kpis[kpi.key]}
+                suffix={
+                  kpi.ver && (
+                    <Link href={kpi.ver.href}>
+                      <Button variant="link" size="small" icon={<EyeOutlined />} id={kpi.ver.id}>
+                        Ver
+                      </Button>
+                    </Link>
+                  )
+                }
+              />
+            </Col>
+          ))}
+        </Row>
+      </Card>
       <DashboardCharts series={data.series} />
     </Flex>
   )

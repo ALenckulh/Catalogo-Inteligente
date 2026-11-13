@@ -4,15 +4,18 @@ import java.math.BigDecimal;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.catalogo.admin.domain.NivelInteresse;
 import com.catalogo.admin.dto.AdminUsuarioDetalhe;
 import com.catalogo.admin.dto.AdminUsuarioListItem;
 import com.catalogo.admin.dto.CompraResponse;
@@ -40,11 +43,12 @@ public class AdminUsuarioController {
             @RequestParam(required = false) TipoUsuario tipo,
             @RequestParam(required = false) String categoria,
             @RequestParam(required = false) BigDecimal scoreMin,
+            @RequestParam(required = false) NivelInteresse nivel,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer limit
     ) {
-        return usuarioService.listar(tipo, categoria, scoreMin, q, page, limit);
+        return usuarioService.listar(tipo, categoria, scoreMin, nivel, q, page, limit);
     }
 
     @GetMapping("/{id}")
@@ -60,6 +64,28 @@ public class AdminUsuarioController {
             Authentication authentication
     ) {
         return usuarioService.registrarCompra(id, requireAdmin(authentication), request);
+    }
+
+    @PutMapping("/{id}/compras/{compraId}")
+    public CompraResponse atualizarCompra(
+            @PathVariable Long id,
+            @PathVariable Long compraId,
+            @Valid @RequestBody RegistrarCompraRequest request,
+            Authentication authentication
+    ) {
+        requireAdmin(authentication);
+        return usuarioService.atualizarCompra(id, compraId, request);
+    }
+
+    @DeleteMapping("/{id}/compras/{compraId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluirCompra(
+            @PathVariable Long id,
+            @PathVariable Long compraId,
+            Authentication authentication
+    ) {
+        requireAdmin(authentication);
+        usuarioService.excluirCompra(id, compraId);
     }
 
     private static Long requireAdmin(Authentication authentication) {

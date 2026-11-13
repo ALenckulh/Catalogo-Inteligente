@@ -3,11 +3,13 @@ import type {
   AdminUsuarioDetalhe,
   AdminUsuarioListItem,
   Compra,
+  CompraInput,
   Page,
   ParametroDecay,
   PesoMetrica,
   Produto,
   ProdutoInput,
+  SimulacaoResponse,
   Usuario,
 } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
@@ -24,6 +26,7 @@ import {
 import { ApiError, apiClient } from './client'
 import { USE_MOCK } from './config'
 import { fromBackendPage, toBackendPage } from './pagination'
+import { nivelDoScore, type NivelInteresse } from '@/lib/nivelInteresse'
 
 export async function getDashboard(): Promise<AdminDashboard> {
   if (!USE_MOCK) {
@@ -38,6 +41,7 @@ export async function listAdminUsuarios(params?: {
   q?: string
   tipo?: string
   categoria?: string
+  nivel?: NivelInteresse
   page?: number
   limit?: number
 }): Promise<Page<AdminUsuarioListItem>> {
@@ -72,6 +76,10 @@ export async function listAdminUsuarios(params?: {
   if (params?.categoria) {
     const cat = params.categoria.toLowerCase()
     enriched = enriched.filter((u) => u.topCategoria?.toLowerCase() === cat)
+  }
+  if (params?.nivel) {
+    const nivel = params.nivel
+    enriched = enriched.filter((u) => nivelDoScore(u.scoreMaxProduto) === nivel)
   }
   const page = params?.page ?? 1
   const limit = params?.limit ?? 20
@@ -114,10 +122,7 @@ export async function getAdminUsuario(id: number): Promise<AdminUsuarioDetalhe> 
   }
 }
 
-export async function createCompra(
-  usuarioId: number,
-  body: Omit<Compra, 'id' | 'usuarioId' | 'produtoNome'>,
-): Promise<Compra> {
+export async function createCompra(usuarioId: number, body: CompraInput): Promise<Compra> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<Compra>(`/admin/usuarios/${usuarioId}/compras`, body)
     return data
@@ -125,13 +130,43 @@ export async function createCompra(
   await delay()
   const produto = mockProdutos.find((p) => p.id === body.produtoId)
   const compra: Compra = {
-    id: mockCompras.length + 1,
+    id: Math.max(0, ...mockCompras.map((c) => c.id)) + 1,
     usuarioId,
     produtoNome: produto?.nome,
     ...body,
   }
   mockCompras.push(compra)
   return compra
+}
+
+export async function updateCompra(
+  usuarioId: number,
+  compraId: number,
+  body: CompraInput,
+): Promise<Compra> {
+  if (!USE_MOCK) {
+    const { data } = await apiClient.put<Compra>(
+      `/admin/usuarios/${usuarioId}/compras/${compraId}`,
+      body,
+    )
+    return data
+  }
+  await delay()
+  const compra = mockCompras.find((c) => c.id === compraId && c.usuarioId === usuarioId)
+  if (!compra) throw new ApiError('NOT_FOUND', 'Compra não encontrada', 404)
+  const produto = mockProdutos.find((p) => p.id === body.produtoId)
+  Object.assign(compra, body, { produtoNome: produto?.nome })
+  return { ...compra }
+}
+
+export async function deleteCompra(usuarioId: number, compraId: number): Promise<void> {
+  if (!USE_MOCK) {
+    await apiClient.delete(`/admin/usuarios/${usuarioId}/compras/${compraId}`)
+    return
+  }
+  await delay()
+  const i = mockCompras.findIndex((c) => c.id === compraId && c.usuarioId === usuarioId)
+  if (i >= 0) mockCompras.splice(i, 1)
 }
 
 export async function listAdminProdutos(params?: {
@@ -273,6 +308,78 @@ export async function saveDecay(items: ParametroDecay[]): Promise<ParametroDecay
   await delay()
   mockDecay.splice(0, mockDecay.length, ...items)
   return structuredClone(mockDecay)
+}
+
+/** Remove o ajuste próprio da categoria: ela volta a usar os valores gerais. */
+export async function removerDecayCategoria(categoriaId: number): Promise<ParametroDecay[]> {
+  if (!USE_MOCK) {
+    const { data } = await apiClient.delete<ParametroDecay[]>(`/admin/configuracao/decay/${categoriaId}`)
+    return data
+  }
+  await delay()
+  const i = mockDecay.findIndex((d) => d.categoriaId === categoriaId)
+  if (i >= 0) mockDecay.splice(i, 1)
+  return structuredClone(mockDecay)
+}
+
+/** Simula parâmetros propostos com os dados reais, sem gravar (impacto + precisão em backtest). */
+export async function simularScoring(params: {
+  pesos: PesoMetrica[]
+  decay: ParametroDecay[]
+}): Promise<SimulacaoResponse> {
+  if (!USE_MOCK) {
+    const { data } = await apiClient.post<SimulacaoResponse>('/admin/configuracao/simular', {
+      pesos: params.pesos,
+      decay: params.decay.map(({ categoriaId, lambda, boostConversao }) => ({
+        categoriaId,
+        lambda,
+        boostConversao,
+      })),
+    })
+    // Campos de categoria podem faltar (backend de versão anterior): vazios em vez de quebrar a prévia.
+    const i = data.impacto
+    return {
+      ...data,
+      impacto: {
+        ...i,
+        mudamDeCategoria: i.mudamDeCategoria ?? 0,
+        categoriasAtual: i.categoriasAtual ?? [],
+        categoriasProposta: i.categoriasProposta ?? [],
+        mudancasCategoria: i.mudancasCategoria ?? [],
+      },
+    }
+  }
+  await delay()
+  const atual = mockDashboard.series.distribuicaoScores.map((d) => ({
+    nivel: d.faixa as SimulacaoResponse['impacto']['atual'][number]['nivel'],
+    quantidade: d.quantidade,
+  }))
+  return {
+    impacto: {
+      clientesAnalisados: atual.reduce((a, d) => a + d.quantidade, 0),
+      atual,
+      proposta: atual,
+      notaMediaAtual: 52,
+      notaMediaProposta: 52,
+      mudamDeNivel: 0,
+      mudancas: [],
+      mudamDeCategoria: 0,
+      categoriasAtual: [],
+      categoriasProposta: [],
+      mudancasCategoria: [],
+    },
+    precisao: { corte: null, amostras: 0, conversoes: 0, confianca: 'BAIXA', atual: null, proposta: null },
+  }
+}
+
+/** Recalcula e grava as notas de todos os clientes e visitantes com os parâmetros salvos. */
+export async function recalcularScores(): Promise<{ recalculados: number }> {
+  if (!USE_MOCK) {
+    const { data } = await apiClient.post<{ recalculados: number }>('/admin/configuracao/recalcular')
+    return data
+  }
+  await delay()
+  return { recalculados: 0 }
 }
 
 export async function updateAdminConta(

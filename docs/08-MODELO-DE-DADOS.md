@@ -300,9 +300,10 @@ Atende [RF24](02-REQUISITOS.md) e [04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFIC
 | `registrado_por` | `BIGINT` | NOT NULL, FK `usuario(id)` | Admin que lançou |
 | `observacoes` | `TEXT` | NULL | |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
-| `deleted_at` | `TIMESTAMPTZ` | NULL | Soft delete LGPD |
+| `updated_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | Última edição pelo admin (trigger `set_updated_at`, V013) |
+| `deleted_at` | `TIMESTAMPTZ` | NULL | Soft delete (LGPD ou exclusão pelo admin) |
 
-**Índices:** `(usuario_id, data_compra)`, `(produto_id, data_compra)`.
+**Índices:** `(usuario_id, data_compra)`, `(produto_id, data_compra)`, parcial `(usuario_id, data_compra) WHERE deleted_at IS NULL`.
 
 ### 4.11 `score_produto`
 
