@@ -13,6 +13,12 @@ export type { CardProps, CardShadow } from './Card'
 export { Alert } from './Alert'
 export type { AlertProps } from './Alert'
 
+export { Image } from './Image'
+export type { ImageProps } from './Image'
+
+export { Upload } from './Upload'
+export type { UploadProps } from './Upload'
+
 export { Select, PageableSelect, usePageableSelect } from './Select'
 export type { SelectProps, PageableSelectProps, PageableSelectPage } from './Select'
 

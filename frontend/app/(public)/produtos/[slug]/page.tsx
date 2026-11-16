@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { notFound, useParams, useRouter } from 'next/navigation'
 import { HeartFilled, HeartOutlined, WhatsAppOutlined } from '@ant-design/icons'
@@ -26,6 +25,7 @@ import {
   Tag,
   Typography,
 } from '@/components/ui'
+import { ProdutoGaleria } from './_components/ProdutoGaleria'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -174,7 +174,6 @@ export default function ProdutoPage() {
   if (!produto) return notFound()
 
   const imagens = [...produto.imagens].sort((a, b) => a.ordem - b.ordem)
-  const principal = imagens[0]
   const ficha = produto.fichaTecnica
     ? Object.entries(produto.fichaTecnica).map(([key, value]) => ({
         key,
@@ -196,28 +195,7 @@ export default function ProdutoPage() {
 
       <Row gutter={[32, 24]}>
         <Col xs={24} md={10}>
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              aspectRatio: '4 / 3',
-              maxHeight: 'min(60vh, 480px)',
-              background: 'var(--surface-neutral-subtle)',
-              borderRadius: 'var(--radius-default)',
-              overflow: 'hidden',
-            }}
-          >
-            {principal && (
-              <Image
-                src={principal.url}
-                alt={principal.altText ?? produto.nome}
-                fill
-                style={{ objectFit: 'contain' }}
-                unoptimized
-                priority
-              />
-            )}
-          </div>
+          <ProdutoGaleria imagens={imagens} nomeProduto={produto.nome} />
         </Col>
         <Col xs={24} md={14}>
           <Flex vertical gap="middle">

@@ -139,6 +139,22 @@ docker compose run --rm flyway migrate
 
 Detalhes: [database/README.md](./database/README.md).
 
+### Atualizar o banco
+
+Rode isto depois de puxar uma migration nova de `database/migrations/` (ex.: `V014__imagem_arquivo.sql`). A aplicação não roda as migrations sozinha.
+
+```bash
+cd database
+docker compose up -d postgres
+docker compose run --rm flyway migrate
+```
+
+Para conferir o que já foi aplicado:
+
+```bash
+docker compose run --rm flyway info
+```
+
 ### Backend
 
 ```bash

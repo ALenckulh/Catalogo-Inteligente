@@ -210,13 +210,13 @@ Item do catálogo. FK para `categoria` (1 categoria por produto).
 
 ### 4.6 `produto_imagem`
 
-Imagens de produto como URLs externas (CDN, S3, disco).
+Imagens de produto. `url` é uma URL externa (CDN, placeholder do seed) ou a referência `produtos/imagens/{id}` para um arquivo enviado pelo admin e guardado em [`imagem_arquivo`](#419-imagem_arquivo). A referência é relativa à base da API ([M16](13-MUDANCAS-DE-ESCOPO.md)).
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
 | `id` | `BIGSERIAL` | PK | |
 | `produto_id` | `BIGINT` | NOT NULL, FK `produto(id)` ON DELETE CASCADE | |
-| `url` | `VARCHAR(500)` | NOT NULL | URL completa |
+| `url` | `VARCHAR(500)` | NOT NULL | URL externa ou `produtos/imagens/{id}` |
 | `ordem` | `SMALLINT` | NOT NULL DEFAULT 0 | Ordem de exibição |
 | `alt_text` | `VARCHAR(200)` | NULL | Acessibilidade ([RNF11](02-REQUISITOS.md)) |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
@@ -432,6 +432,20 @@ Tokens de redefinição de senha ([RF06](02-REQUISITOS.md), [11](11-API-ENDPOINT
 
 **Índices:** `(usuario_id, created_at DESC)`.
 **Notas:** ao solicitar novo reset, invalidar tokens anteriores não usados do mesmo usuário (`usado_em IS NULL`).
+
+### 4.19 `imagem_arquivo`
+
+Bytes das imagens de produto enviadas pelo admin (BLOB), criada na V014 ([M16](13-MUDANCAS-DE-ESCOPO.md)). Fica separada de `produto_imagem` e sem FK para que os bytes nunca entrem nos `JOIN FETCH` das listagens. É lida só pelo `GET /api/produtos/imagens/{id}`.
+
+| Coluna | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| `id` | `BIGSERIAL` | PK | Referenciado em `produto_imagem.url` como `produtos/imagens/{id}` |
+| `content_type` | `VARCHAR(50)` | NOT NULL | Tipo detectado pelos magic bytes: `image/jpeg`, `image/png` ou `image/webp` |
+| `tamanho` | `INTEGER` | NOT NULL | Bytes, no máximo 5MB |
+| `conteudo` | `BYTEA` | NOT NULL | Arquivo |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
+
+**Notas:** é imutável, por isso não tem `updated_at`: trocar a foto gera um novo id. Os arquivos órfãos (sem referência em `produto_imagem.url`) com mais de 24h são apagados por um job diário às 3h ([M16](13-MUDANCAS-DE-ESCOPO.md)).
 
 ## 5. Notas de projeto
 

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { PictureOutlined } from '@ant-design/icons'
+import { imagemSrc } from '@/lib/api/config'
 import type { Produto } from '@/lib/types'
 import { toMoneyBRL } from '@/lib/formatters'
 import { Card, Flex, Tag, Typography } from '@/components/ui'
@@ -42,9 +43,9 @@ export function ProdutoCard({ produto }: ProdutoCardProps) {
             {imagem ? (
               <>
                 {/* img nativo: evita mismatch de attrs do next/image no SSR */}
-                {/* eslint-disable-next-line @next/next/no-img-element -- placehold.co mock; next/image causa hydration mismatch no Card */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- URL externa ou BLOB da API; next/image causa hydration mismatch no Card */}
                 <img
-                  src={imagem.url}
+                  src={imagemSrc(imagem.url)}
                   alt={imagem.altText ?? produto.nome}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                 />

@@ -35,6 +35,7 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
     implementation("com.bucket4j:bucket4j_jdk17-core:8.14.0")
+    implementation("org.apache.tika:tika-core:3.3.3")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

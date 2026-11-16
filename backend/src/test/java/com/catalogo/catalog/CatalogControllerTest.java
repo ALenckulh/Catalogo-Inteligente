@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,7 +26,9 @@ import com.catalogo.catalog.controller.CategoriaController;
 import com.catalogo.catalog.controller.ProdutoController;
 import com.catalogo.catalog.dto.CategoriaResponse;
 import com.catalogo.catalog.dto.ProdutoResponse;
+import com.catalogo.catalog.entity.ImagemArquivo;
 import com.catalogo.catalog.service.CatalogService;
+import com.catalogo.catalog.service.ImagemArquivoService;
 import com.catalogo.shared.ApiException;
 import com.catalogo.shared.GlobalExceptionHandler;
 import com.catalogo.shared.PageResponse;
@@ -37,6 +41,8 @@ class CatalogControllerTest {
     CatalogService catalogService;
     @Mock
     VisitanteRepository visitanteRepository;
+    @Mock
+    ImagemArquivoService imagemArquivoService;
 
     MockMvc mockMvc;
 
@@ -44,7 +50,7 @@ class CatalogControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(
-                        new ProdutoController(catalogService, visitanteRepository),
+                        new ProdutoController(catalogService, visitanteRepository, imagemArquivoService),
                         new CategoriaController(catalogService)
                 )
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -81,6 +87,20 @@ class CatalogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fichaTecnica.volts").value("220"))
                 .andExpect(jsonPath("$.categoriaId").value(2));
+    }
+
+    @Test
+    void imagemServeBytesComCacheImutavel() throws Exception {
+        ImagemArquivo img = new ImagemArquivo();
+        img.setContentType("image/webp");
+        img.setConteudo(new byte[] {1, 2, 3});
+        when(imagemArquivoService.buscar(5L)).thenReturn(img);
+        mockMvc.perform(get("/api/produtos/imagens/5"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/webp"))
+                .andExpect(header().string("Cache-Control", "max-age=31536000, public, immutable"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(content().bytes(new byte[] {1, 2, 3}));
     }
 
     @Test
