@@ -10,7 +10,7 @@ const PESO_MAX_SLIDER = 3
 
 type OnChange = (tipo: TipoEvento, peso: number) => void
 
-function rotuloPontos(tipo: TipoEvento, pontos: number): string {
+export function rotuloPontos(tipo: TipoEvento, pontos: number): string {
   const e = EVENTOS_SCORING[tipo]
   const p = formatPontos(pontos)
   if (e.penalidade) return `−${p} pts`
@@ -68,7 +68,7 @@ export function LinhaPeso({ tipo, pesos, onChange }: { tipo: TipoEvento; pesos: 
 }
 
 /** Barra com a fatia de cada ação no peso total (equivale à divisão dos pontos). */
-function ComposicaoNota({ pesos }: { pesos: PesoMetrica[] }) {
+export function ComposicaoNota({ pesos }: { pesos: PesoMetrica[] }) {
   const pontos = pontosPorAcao(pesos)
   const fatias = ORDEM_EVENTOS.filter((t) => EVENTOS_SCORING[t].alvo !== 'categoria')
     .map((t) => ({ tipo: t, pct: pontos[t] ?? 0, peso: pesos.find((p) => p.tipoEvento === t)?.peso ?? 0 }))

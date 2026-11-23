@@ -101,6 +101,8 @@ function FiltrosPanel({
           style={{ width: '100%' }}
           value={treeData.length ? categoriaId : undefined}
           treeData={treeData}
+          // Sem subcategorias, o espaço da seta de expandir só gera recuo.
+          classNames={{ popup: { root: treeData.some((n) => n.children) ? undefined : 'tree-select-flat' } }}
           onChange={(v: number | null) => onCategoria(v ?? undefined)}
         />
       </Flex>

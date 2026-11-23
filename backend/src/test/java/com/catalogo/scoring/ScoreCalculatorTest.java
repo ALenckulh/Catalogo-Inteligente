@@ -128,6 +128,41 @@ class ScoreCalculatorTest {
                 < ScoreCalculator.calcular(eventos, List.of(), lento, AGORA).notaMaxima());
     }
 
+    @Test
+    void tempoNaPaginaValeProporcionalAte2Minutos() {
+        ScoringParams params = params(Map.of(TipoEvento.TEMPO_PAGINA, 1.0, TipoEvento.CONTATO_WHATSAPP, 3.0));
+        Produto p = produto(10L, 1L);
+
+        // 60s = metade do peso: 0,5 / (1 + 3) * 100 = 12,5; 300s = peso cheio = 25
+        assertEquals(12.5, nota(params, tempo(p, 60)), 1e-9);
+        assertEquals(25.0, nota(params, tempo(p, 300)), 1e-9);
+    }
+
+    @Test
+    void rolarAteOFimSomaNoMaximoOPesoCheio() {
+        ScoringParams params = params(Map.of(TipoEvento.SCROLL_DEPTH, 1.0, TipoEvento.CONTATO_WHATSAPP, 3.0));
+        Produto p = produto(10L, 1L);
+        Evento[] marcos = new Evento[4];
+        for (int i = 0; i < 4; i++) {
+            marcos[i] = evento(TipoEvento.SCROLL_DEPTH, p, AGORA);
+            marcos[i].setMetadados(Map.of("pct", (i + 1) * 25));
+        }
+
+        // 1 marco = 1/4 do peso (6,25); os 4 marcos = peso cheio (25)
+        assertEquals(6.25, nota(params, marcos[0]), 1e-9);
+        assertEquals(25.0, nota(params, marcos), 1e-9);
+    }
+
+    private static Evento tempo(Produto p, int segundos) {
+        Evento e = evento(TipoEvento.TEMPO_PAGINA, p, AGORA);
+        e.setMetadados(Map.of("segundos_ativos", segundos));
+        return e;
+    }
+
+    private static double nota(ScoringParams params, Evento... eventos) {
+        return ScoreCalculator.calcular(List.of(eventos), List.of(), params, AGORA).notasProduto().get(10L);
+    }
+
     private static ScoringParams params(Map<TipoEvento, Double> pesos) {
         return new ScoringParams(pesos, 0.01, 1.0, Map.of(), Map.of());
     }

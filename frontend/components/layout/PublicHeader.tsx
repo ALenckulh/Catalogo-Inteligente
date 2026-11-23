@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MenuOutlined } from '@ant-design/icons'
 import { displayName } from '@/lib/api/auth'
+import { Logo } from './Logo'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
 import { entrarHref } from '@/lib/navigation'
@@ -123,7 +124,7 @@ export function PublicHeader() {
               whiteSpace: 'nowrap',
             }}
           >
-            Catálogo Inteligente
+            <Logo />
           </Link>
           <nav aria-label="Principal" className="hide-below-md">
             <Space size="middle">

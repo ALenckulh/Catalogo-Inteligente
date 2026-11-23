@@ -72,12 +72,13 @@ Cadastro de admins feito pela TI; sem auto-signup. Rota separada da área públi
 | A8 | Minha conta | `/admin/conta` | E-mail, senha, telefone |
 | A9 | Configuração de scoring | `/admin/configuracao` | Pesos de métricas (`peso_metrica`) e λ (`parametro_decay`) |
 | A10 | Design system | `/admin/design-system` | Catálogo interno de tokens e componentes (uso admin) |
+| A11 | Sobre o projeto | `/admin/projeto` | Como a nota de interesse é calculada, em linguagem simples |
 
 ### 2.3 Páginas de apoio
 
 | # | Página | Rota | Motivo |
 |---|---|---|---|
-| S0 | Sobre o projeto (TCC) | `/sobre` | Landing acadêmica (Hero, scoring, cronograma). |
+| S0 | Sobre a empresa | `/sobre` | Apresentação da Renova Retífica (serviços, contato, horário). |
 | S1 | Política de Privacidade | `/privacidade` | Exigência LGPD |
 | S2 | Termos de Uso | `/termos` | Exigência LGPD |
 | S3 | Erro 404 | — | Boa prática de UX |
@@ -392,15 +393,19 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 | Item | Spec |
 |---|---|
-| **Objetivo** | Apresentação acadêmica do TCC (PAC): problema, scoring, modelos, cronograma. |
+| **Objetivo** | Apresentação da Renova Retífica de Motores. |
 | **Rota / auth** | Pública. Link no header “Sobre”. |
-| **Layout** | Seções empilhadas (coexistem com `PublicFooter` global): |
-| | **Hero:** eyebrow PAC VIII / instituição; H1; pitch; `Tag`s de stack; CTAs “Ver o Motor de Scoring” + GitHub; card ilustrativo de score (`Statistic` + métricas). |
-| | **About:** 4 cards (Problema, Solução, Diferencial, Conformidade) + `Alert` hipótese central. |
-| | **ScoringEngine:** card da fórmula Σ peso×evento×e⁻λt; 6 cards de peso com `Progress`; `Steps` verticais Camadas 1–4 (status implementado / futuro). |
-| | **ModelsTable:** `Table` comparando KNN, Grafo/PPR, Regras+Decay, Sequenciais, Matrix Factorization (colunas: interpretabilidade, esparsidade, vol. mín., anônimo, cold start, calibração B2B, escalabilidade, status). |
-| | **Timeline:** 4 fases (semanas 1–4 Fundação · 5–8 Motor · 9–12 Avançadas · 13–16 Validação) com bullets de entrega. |
-| | **Footer acadêmico:** autor, e-mail, instituição; âncoras internas; 4 referências DOI; PAC VIII / MIT. |
+| **Layout** | Hero (logo, H1, CTAs “Ver catálogo” e WhatsApp, foto) · **Peças, óleos e motores** (4 cards de venda + “Ver catálogo”) · 5 cards de **Serviços** · **Motores que atendemos** (carros e caminhões, com fotos) · chamada WhatsApp · 4 cards de **Contato e horário** (telefone, e-mail, horário, endereço + link Google Maps). |
+| **Eventos / triggers** | Sem métrica de interesse. |
+
+#### Sobre o projeto (`/admin/projeto`)
+
+| Item | Spec |
+|---|---|
+| **Objetivo** | Explicar ao dono do catálogo, em linguagem simples, o que o sistema faz e como a nota de interesse é calculada. |
+| **Rota / auth** | Admin. Item “Sobre o projeto” no menu lateral. |
+| **Layout** | H1 “Como o catálogo encontra clientes interessados” + parágrafo + CTAs “Ver clientes com alto interesse” (→ `/admin/usuarios?nivel=QUENTE&status=ativo`) e “Ajustar o cálculo” (→ A9). Seções: **Como funciona** (`Steps`, 3 passos: navega com consentimento → ação vira pontos → nota vira nível) · **Quanto vale cada ação** (barra de composição + pontos por ação com os pesos reais, mesma lógica de A9) · **Exemplo** (`Timeline` com nota acumulada e nível a cada ação) · **O interesse esfria com o tempo** (meia-vida, quanto uma ação vale hoje/30/90/180 dias, com e sem contato; `Alert` da pausa de 60 dias após contato) · **O que a nota significa** (4 níveis + categoria favorita). |
+| **APIs** | `GET /api/admin/configuracao/pesos`; `GET /api/admin/configuracao/decay`. Seções com dados tratam carregando/erro ([09 §21](09-NORMAS-DE-USABILIDADE.md)). |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Rastreabilidade** | RNF12 (tom sóbrio) |
 

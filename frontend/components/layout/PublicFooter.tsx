@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Divider, Flex, Layout, Space, Typography } from '@/components/ui'
+import { Logo } from './Logo'
 
 const { Footer } = Layout
 const { Text } = Typography
@@ -26,7 +27,7 @@ export function PublicFooter() {
     >
       <Flex vertical gap="middle" className="shell-inner">
         <Flex justify="space-between" wrap="wrap" gap="middle">
-          <Text strong>Catálogo Inteligente</Text>
+          <Logo size="sm" />
           <nav aria-label="Rodapé">
             <Space size="large" wrap>
               {LINKS.map((item) => (
@@ -44,7 +45,7 @@ export function PublicFooter() {
         </Flex>
         <Divider style={{ margin: 0 }} />
         <Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>
-          © {new Date().getFullYear()} Catálogo Inteligente · Uso acadêmico (TCC)
+          © {new Date().getFullYear()} Renova Retífica de Motores
         </Text>
       </Flex>
     </Footer>

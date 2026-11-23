@@ -1,7 +1,7 @@
-/** Contato do dono do catálogo (mock) — CTA WhatsApp. */
+/** Contato da Renova Retífica — CTA WhatsApp. */
 export const CATALOGO_WHATSAPP = {
-  telefone: '5547999990000',
-  displayName: 'Catálogo Inteligente',
+  telefone: '5547920026438',
+  displayName: 'Renova Retífica de Motores',
 }
 
 export function whatsappUrl(mensagem: string): string {

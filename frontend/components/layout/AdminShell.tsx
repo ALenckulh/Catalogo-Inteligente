@@ -10,10 +10,12 @@ import {
   TeamOutlined,
   UserOutlined,
   LoginOutlined,
+  ReadOutlined,
 } from '@ant-design/icons'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { Button, Flex, Layout, Menu, Typography } from '@/components/ui'
 import type { MenuProps } from 'antd'
+import { Logo } from './Logo'
 
 const { Sider, Content, Header } = Layout
 const { Text } = Typography
@@ -34,6 +36,11 @@ const MENU_ITEMS: MenuProps['items'] = [
     key: '/admin/configuracao',
     icon: <SettingOutlined />,
     label: <Link href="/admin/configuracao">Configuração</Link>,
+  },
+  {
+    key: '/admin/projeto',
+    icon: <ReadOutlined />,
+    label: <Link href="/admin/projeto">Sobre o projeto</Link>,
   },
   {
     key: '/admin/design-system',
@@ -76,9 +83,7 @@ export function AdminShell({ children }: Props) {
         style={{ background: 'var(--surface-base)', borderRight: '1px solid var(--border-neutral-subtle)' }}
       >
         <div style={{ padding: '16px 20px' }}>
-          <Text strong style={{ fontSize: 14 }}>
-            Catálogo Inteligente
-          </Text>
+          <Logo size="sm" />
           <br />
           <Text type="secondary" style={{ fontSize: 12 }}>
             Admin

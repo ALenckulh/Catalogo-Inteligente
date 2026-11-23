@@ -341,7 +341,7 @@ export default function ContaPage() {
                     label: 'Suporte',
                     children: (
                       <>
-                        Dúvidas: veja também <Link href="/sobre">Sobre o projeto</Link> e{' '}
+                        Dúvidas: veja também <Link href="/sobre">Sobre a empresa</Link> e{' '}
                         <Link href="/privacidade">Privacidade</Link>.
                       </>
                     ),

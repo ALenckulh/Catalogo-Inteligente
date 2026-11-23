@@ -13,7 +13,7 @@ export function TermosConteudo({ nivel = 2 }: LegalConteudoProps) {
   return (
     <>
       <Paragraph type="secondary">
-        Documento simplificado para o Catálogo Inteligente (TCC). Versão 1.0.
+        Documento simplificado da Renova Retífica de Motores. Versão 1.0.
       </Paragraph>
       <Title level={nivel}>Objeto</Title>
       <Paragraph>
@@ -39,7 +39,7 @@ export function PrivacidadeConteudo({ nivel = 2 }: LegalConteudoProps) {
   return (
     <>
       <Paragraph type="secondary">
-        Documento simplificado para o Catálogo Inteligente (TCC). Versão 1.0.
+        Documento simplificado da Renova Retífica de Motores. Versão 1.0.
       </Paragraph>
       <Title level={nivel}>Dados coletados</Title>
       <Paragraph>

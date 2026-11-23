@@ -193,12 +193,13 @@ public final class ScoreCalculator {
 
     private static double eventValor(Evento e) {
         Map<String, Object> meta = e.getMetadados();
-        if (e.getTipo() == TipoEvento.SCROLL_DEPTH && meta != null && meta.get("scroll") != null) {
-            double v = toDouble(meta.get("scroll"));
-            return Math.max(0.0, Math.min(1.0, v > 1 ? v / 100.0 : v));
+        // O front envia um evento por marco de rolagem (25/50/75/100%): cada um vale 1/4,
+        // então rolar até o fim soma no máximo o peso cheio (docs/03 §4.0.1).
+        if (e.getTipo() == TipoEvento.SCROLL_DEPTH) {
+            return 0.25;
         }
-        if (e.getTipo() == TipoEvento.TEMPO_PAGINA && meta != null && meta.get("segundos") != null) {
-            double sec = toDouble(meta.get("segundos"));
+        if (e.getTipo() == TipoEvento.TEMPO_PAGINA && meta != null && meta.get("segundos_ativos") != null) {
+            double sec = toDouble(meta.get("segundos_ativos"));
             return Math.max(0.0, Math.min(1.0, sec / 120.0));
         }
         return 1.0;
