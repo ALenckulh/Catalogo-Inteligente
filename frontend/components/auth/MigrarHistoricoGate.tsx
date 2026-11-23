@@ -28,6 +28,10 @@ function shouldPromptMigrar(isAuthenticated: boolean, loading: boolean): boolean
   }
 }
 
+/**
+ * Depois do login/cadastro, se havia navegação anônima, pergunta se a pessoa quer levar esse histórico
+ * para a conta (consentimento). A resposta vai para POST /api/auth/migrar-historico.
+ */
 export function MigrarHistoricoGate() {
   const { isAuthenticated, loading } = useCurrentUser()
   const mounted = useMounted()

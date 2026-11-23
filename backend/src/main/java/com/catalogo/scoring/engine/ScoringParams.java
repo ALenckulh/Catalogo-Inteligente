@@ -15,6 +15,7 @@ import com.catalogo.scoring.entity.PesoMetrica;
 /**
  * Parâmetros do cálculo de score (pesos, λ e boost), desacoplados do banco para permitir
  * recalcular com valores persistidos ({@link #from}) ou simular valores propostos.
+ * Record imutável: carregado uma vez e reutilizado para recalcular N sujeitos (recalcularTodos).
  */
 public record ScoringParams(
         Map<TipoEvento, Double> pesos,
@@ -78,6 +79,7 @@ public record ScoringParams(
         return max > 0 ? max : 1.0;
     }
 
+    /** λ da categoria (linha própria em parametro_decay) ou, se não houver, o global (categoria_id NULL). */
     public double lambda(Long categoriaId) {
         return categoriaId != null && lambdaPorCategoria.containsKey(categoriaId)
                 ? lambdaPorCategoria.get(categoriaId)

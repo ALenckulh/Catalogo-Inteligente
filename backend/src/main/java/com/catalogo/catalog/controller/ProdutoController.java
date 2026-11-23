@@ -41,6 +41,10 @@ public class ProdutoController {
         this.imagemArquivoService = imagemArquivoService;
     }
 
+    /**
+     * Controller só cuida de HTTP: lê filtros, identifica o sujeito (usuário logado ou visitante pelo
+     * header de cookie) e delega a busca e o ranking ao CatalogService.
+     */
     @GetMapping
     public PageResponse<ProdutoResponse> list(
             @RequestParam(required = false) String q,

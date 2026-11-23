@@ -3,6 +3,7 @@ package com.catalogo.catalog.entity;
 import java.io.Serializable;
 import java.util.Objects;
 
+/** Chave composta do favorito: PRIMARY KEY (usuario_id, produto_id); um usuário favorita cada produto uma vez. */
 public class FavoritoId implements Serializable {
 
     private Long usuarioId;

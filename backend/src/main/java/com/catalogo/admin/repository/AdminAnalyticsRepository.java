@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+/** Números do dashboard admin em SQL nativo (agregações que ficariam ilegíveis em JPQL). */
 @Repository
 public class AdminAnalyticsRepository {
 
@@ -38,6 +39,11 @@ public class AdminAnalyticsRepository {
         return n.longValue();
     }
 
+    /**
+     * Clientes com maior nota: subquery com MAX(valor) por usuário + dois LEFT JOIN LATERAL, um para a
+     * categoria de maior nota (ORDER BY valor DESC LIMIT 1) e outro para a última atividade.
+     * LATERAL deixa a subquery "enxergar" o u.id da linha externa.
+     */
     @SuppressWarnings("unchecked")
     public List<Object[]> topLeads(int limit) {
         // Avoid Hibernate rewriting PG casts (:: / CAST ... AS text) into bogus Java types.
@@ -117,6 +123,8 @@ public class AdminAnalyticsRepository {
 
     /**
      * Contatos WhatsApp por dia desde {@code since} até hoje, com zero nos dias sem contato.
+     * generate_series cria uma linha para cada dia do período e o LEFT JOIN com evento conta os contatos;
+     * assim dia sem contato aparece com 0 em vez de sumir do gráfico.
      */
     @SuppressWarnings("unchecked")
     public List<Object[]> contatosPorDia(OffsetDateTime since) {

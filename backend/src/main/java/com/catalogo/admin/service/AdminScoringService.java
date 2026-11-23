@@ -78,6 +78,11 @@ public class AdminScoringService {
     public record Cliente(Long id, String nome) {
     }
 
+    /**
+     * Prévia da tela de Configuração, sem gravar nada (readOnly): compara parâmetros atuais × propostos
+     * com os dados reais. Impacto = quantos clientes mudam de nível e de categoria favorita;
+     * Precisão = backtest de quanto cada cenário acerta quem converteu depois.
+     */
     @Transactional(readOnly = true)
     public SimulacaoResponse simular(SimulacaoRequest request) {
         ScoringParams atual = scoreEngine.carregarParams();
@@ -143,6 +148,7 @@ public class AdminScoringService {
 
     // ---------------------------------------------------------------- impacto
 
+    /** Para cada cliente, calcula a nota com os dois cenários e conta mudanças de nível e de categoria favorita. */
     static Impacto calcularImpacto(
             List<Cliente> clientes,
             List<Evento> eventos,
@@ -321,6 +327,7 @@ public class AdminScoringService {
         convertidosDepois.keySet().retainAll(antes.keySet());
 
         int positivos = convertidosDepois.size();
+        // Confiança pelo nº de clientes que converteram depois do corte: < 10 baixa, < 30 média, senão alta.
         Confianca confianca = positivos < 10 ? Confianca.BAIXA : positivos < 30 ? Confianca.MEDIA : Confianca.ALTA;
         return new Precisao(
                 corte,
@@ -388,7 +395,11 @@ public class AdminScoringService {
         );
     }
 
-    /** AUC por Mann–Whitney com postos médios em empates; null sem positivos ou sem negativos. */
+    /**
+     * AUC por Mann–Whitney com postos médios em empates; null sem positivos ou sem negativos.
+     * Em uma frase: a chance de um cliente que converteu, sorteado, ter nota maior que um que não converteu
+     * (0,5 = chute, 1,0 = perfeito).
+     */
     static Double auc(List<double[]> notas) {
         long pos = notas.stream().filter(n -> n[1] == 1).count();
         long neg = notas.size() - pos;

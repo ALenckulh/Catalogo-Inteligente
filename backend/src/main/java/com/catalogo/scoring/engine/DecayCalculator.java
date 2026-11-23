@@ -5,9 +5,12 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * Decay rules from frontend/docs/04-ESPECIFICACAO-TECNICA.md §5.2–5.4.
+ * Interesse antigo vale menos: fator e^(−λ·dias). Com λ = 0,01 a meia-vida é ln2/λ ≈ 69 dias
+ * (ex.: 30 dias → e^(−0,3) ≈ 0,74).
  */
 public final class DecayCalculator {
 
+    /** Contato no WhatsApp abre uma negociação B2B que leva semanas: o interesse não esfria por 60 dias. */
     public static final int PAUSE_CONTACT_DAYS = 60;
     public static final int PURCHASE_HALF_YEARS = 2;
 
@@ -15,6 +18,9 @@ public final class DecayCalculator {
     }
 
     /**
+     * Faixas: &lt; 7 dias = 1,0; 7–90 = e^(−λd); 91–180 = e^(−λd) com conversão, senão e^(−2λd);
+     * &gt; 180 = e^(−λd) com conversão, senão 0. Contato nos últimos 60 dias = 1,0 (pausa).
+     *
      * @param ocorridoEm         event time
      * @param now                reference
      * @param lambda             decay rate

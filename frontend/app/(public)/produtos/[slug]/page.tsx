@@ -77,6 +77,7 @@ export default function ProdutoPage() {
       .catch(() => setFavorito(false))
   }, [produto, user, isAuthenticated])
 
+  // Uma visualização por abertura da ficha (a ordem das views também forma a sequência de navegação).
   useEffect(() => {
     if (!produto || viewed.current) return
     viewed.current = true
@@ -86,6 +87,7 @@ export default function ProdutoPage() {
   useEffect(() => {
     if (!produto) return
 
+    // Um SCROLL_DEPTH por marco (25/50/75/100%), uma vez cada por visita; no backend cada um vale 1/4.
     function onScroll() {
       const doc = document.documentElement
       const max = doc.scrollHeight - window.innerHeight
@@ -103,6 +105,7 @@ export default function ProdutoPage() {
       }
     }
 
+    // Tempo ativo: soma só enquanto a aba está visível; o total vai num TEMPO_PAGINA ao sair da página.
     function tick() {
       if (document.visibilityState === 'visible') {
         const now = Date.now()
@@ -133,6 +136,7 @@ export default function ProdutoPage() {
     }
   }, [produto, track])
 
+  // Favoritar faz duas chamadas: /api/favoritos guarda o estado e o evento FAVORITAR é o sinal para o score.
   const toggleFav = useCallback(async () => {
     if (!produto || !user) return
     setFavLoading(true)

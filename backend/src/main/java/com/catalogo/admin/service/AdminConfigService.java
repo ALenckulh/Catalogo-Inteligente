@@ -41,6 +41,7 @@ public class AdminConfigService {
         return pesoMetricaRepository.findAll().stream().map(PesoMetricaResponse::from).toList();
     }
 
+    /** Admin altera os pesos das métricas (tabela peso_metrica) sem redeploy; registra quem e quando alterou. */
     @Transactional
     public List<PesoMetricaResponse> patchPesos(Long adminId, PesosPatchRequest request) {
         for (PesosPatchRequest.Item item : request.pesos()) {

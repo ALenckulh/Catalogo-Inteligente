@@ -25,6 +25,11 @@ public class VisitanteService {
         this.sessaoRepository = sessaoRepository;
     }
 
+    /**
+     * Rastreio de quem não está logado (só após aceite dos cookies comportamentais no front):
+     * sem cookie, cria um visitante com cookie_id (UUID); com cookie, reaproveita. Sempre abre uma sessão nova.
+     * O front guarda o UUID e o envia no header X-Visitante-Cookie-Id.
+     */
     @Transactional
     public SessaoResponse abrirSessao(AbrirSessaoRequest request) {
         Visitante visitante;

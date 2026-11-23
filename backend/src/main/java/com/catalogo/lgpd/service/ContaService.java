@@ -105,6 +105,10 @@ public class ContaService {
         return new ContaResponse(UsuarioResponse.from(usuario), latestConsentimentos(usuarioId));
     }
 
+    /**
+     * Consentimento é append-only: cada aceite ou revogação vira uma linha nova (tipo, aceito, versão, data),
+     * nunca um UPDATE. O histórico serve de prova; o vigente é o mais recente de cada tipo.
+     */
     @Transactional
     public List<ConsentimentoResponse> salvarConsentimentos(Long usuarioId, ConsentimentosBatchRequest request) {
         Usuario usuario = requireUsuario(usuarioId);
@@ -154,6 +158,10 @@ public class ContaService {
         return sb.toString();
     }
 
+    /**
+     * Portabilidade (LGPD): junta usuário, consentimentos vigentes, favoritos e eventos, e registra uma
+     * solicitacao_lgpd EXPORTACAO já ATENDIDA (a exportação é síncrona).
+     */
     private ExportacaoResponse buildExportAndMarkSolicitacao(Long usuarioId) {
         Usuario usuario = requireUsuario(usuarioId);
         List<ConsentimentoResponse> consents = latestConsentimentos(usuarioId);
@@ -193,7 +201,12 @@ public class ContaService {
         return new MessageResponse("Conta anonimizada");
     }
 
-    /** Soft-delete + PII wipe (08 §5.2). Idempotent if already deleted. */
+    /**
+     * Soft-delete + PII wipe (08 §5.2). Idempotent if already deleted.
+     * Exclusão = anonimização, não DELETE físico: compra é histórico comercial (FK RESTRICT, guarda fiscal)
+     * e as métricas agregadas continuam íntegras. E-mail vira anon_{id}@removido.local (mantém o UNIQUE e
+     * libera o original); senha "!" nunca bate com BCrypt; deleted_at faz o filtro JWT recusar o token.
+     */
     @Transactional
     public void anonymizeUsuario(Usuario usuario) {
         if (usuario.getDeletedAt() != null) {
@@ -217,6 +230,7 @@ public class ContaService {
         usuarioRepository.save(usuario);
     }
 
+    /** Consentimento vigente = linha mais recente de cada tipo (lista vem ordenada por data desc). */
     private List<ConsentimentoResponse> latestConsentimentos(Long usuarioId) {
         Map<TipoConsentimento, ConsentimentoLgpd> latest = new EnumMap<>(TipoConsentimento.class);
         for (ConsentimentoLgpd c : consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(usuarioId)) {

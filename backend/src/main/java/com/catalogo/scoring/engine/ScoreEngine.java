@@ -23,6 +23,11 @@ import com.catalogo.scoring.repository.PesoMetricaRepository;
 import com.catalogo.scoring.repository.ScoreCategoriaRepository;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
 
+/**
+ * Orquestra o score de um sujeito (usuário ou visitante): carrega eventos, compras e parâmetros do banco,
+ * delega o cálculo ao ScoreCalculator (puro) e grava o resultado. As tabelas score_* funcionam como cache
+ * materializado: sempre podem ser recalculadas a partir dos eventos.
+ */
 @Service
 public class ScoreEngine {
 
@@ -77,6 +82,7 @@ public class ScoreEngine {
                 ? eventoRepository.findAtivosByUsuarioId(usuarioId)
                 : eventoRepository.findAtivosByVisitanteId(visitanteId);
 
+        // Compras só entram com 3 ou mais (MIN_COMPRAS): com menos, a amostra é pequena e vira ruído.
         List<Compra> compras = List.of();
         if (usuarioId != null
                 && compraRepository.countByUsuarioIdAndDeletedAtIsNull(usuarioId) >= ScoreCalculator.MIN_COMPRAS) {
@@ -91,6 +97,10 @@ public class ScoreEngine {
         log.debug("Score recalc usuario={} visitante={} produtos={}", usuarioId, visitanteId, r.notasProduto().size());
     }
 
+    /**
+     * Faixa de preço: mediana dos preços dos produtos com conversão × sem conversão, e o gap entre elas.
+     * Mostra ao vendedor quanto o cliente realmente paga comparado com o que ele só olha.
+     */
     private void upsertFaixaPreco(
             Long usuarioId,
             Long visitanteId,
@@ -116,6 +126,7 @@ public class ScoreEngine {
         faixaPrecoUsuarioRepository.save(faixa);
     }
 
+    /** Upsert: procura a linha do sujeito + produto; se não existe, cria; atualiza valor e calculado_em. */
     private void upsertScoreProduto(Long usuarioId, Long visitanteId, Long produtoId, double valor, OffsetDateTime now) {
         ScoreProduto score = usuarioId != null
                 ? scoreProdutoRepository.findByUsuarioIdAndProdutoId(usuarioId, produtoId).orElseGet(ScoreProduto::new)

@@ -40,6 +40,8 @@ export const apiClient = axios.create({
   timeout: 15_000,
 })
 
+// Em toda requisição: JWT em Authorization: Bearer e o id do visitante anônimo em X-Visitante-Cookie-Id.
+// O token fica no localStorage (exposto a XSS; a alternativa, cookie httpOnly, exigiria tratar CSRF).
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = readStorage(AUTH_TOKEN_KEY)
   if (token) {
@@ -52,6 +54,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+// 401 fora das rotas de login/cadastro = token expirado ou conta excluída: limpa a sessão local.
 apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {

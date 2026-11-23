@@ -25,6 +25,10 @@ public class EventoController {
         this.eventoService = eventoService;
     }
 
+    /**
+     * 202 Accepted: o evento só é enfileirado no RabbitMQ; gravação e recálculo do score acontecem depois,
+     * no worker, sem segurar a resposta (RNF02).
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public EventoAceitoResponse aceitar(

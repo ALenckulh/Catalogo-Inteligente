@@ -13,6 +13,9 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Filas de eventos conforme {@code frontend/docs/12-ARQUITETURA-BACKEND.md} §6.
+ * Um DirectExchange (events.exchange) roteia pela routing key para 5 filas duráveis, que sobrevivem a
+ * restart do broker, mais a DLQ. Hoje um único listener (EventoPersistWorker) consome todas.
+ * Desligável por catalogo.rabbit.enabled=false, que é o que os testes usam para rodar sem RabbitMQ.
  */
 @Configuration
 @ConditionalOnProperty(name = "catalogo.rabbit.enabled", havingValue = "true", matchIfMissing = true)
@@ -97,6 +100,10 @@ public class RabbitConfig {
         return BindingBuilder.bind(dlq).to(eventsExchange).with(DLQ);
     }
 
+    /**
+     * Fila durável com dead letter: mensagem rejeitada sem requeue vai para events.dlq em vez de se perder.
+     * Retry com backoff não está configurado: o padrão do Spring AMQP recoloca na fila a mensagem que falhou.
+     */
     private static Queue durableWithDlq(String name) {
         return QueueBuilder.durable(name)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_EVENTS)

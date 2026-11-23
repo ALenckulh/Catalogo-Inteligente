@@ -32,6 +32,10 @@ public class FavoritoService {
                 .toList();
     }
 
+    /**
+     * Favoritar de novo reativa a linha existente (deletedAt = null) em vez de inserir outra,
+     * o que violaria a PK composta (usuario_id, produto_id). Desfavoritar é soft delete.
+     */
     @Transactional
     public void favoritar(Long usuarioId, Long produtoId) {
         Produto produto = produtoRepository.findById(produtoId)

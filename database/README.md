@@ -22,7 +22,7 @@ docker compose up -d postgres
 docker compose run --rm flyway migrate
 ```
 
-Na primeira execução, o Flyway aplica V001 → V011 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
+Na primeira execução, o Flyway aplica V001 → V015 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
 
 ## RabbitMQ (API / eventos)
 
@@ -96,6 +96,16 @@ Criadas pelo `V011__seed_demo_data.sql`. **Para desenvolvimento apenas** — alt
 
 O hash é gerado em tempo de seed com `crypt('admin123', gen_salt('bf', 10))` (pgcrypto), produzindo um bcrypt `$2a$` compatível com `BCryptPasswordEncoder` do Spring Security.
 
+## Dados de demonstração (personas)
+
+`seed/demo_personas.sql` cria 24 clientes com perfis (mecânicas, frotas, produtores rurais, usuários comuns), as navegações, favoritos, contatos e compras deles e 15 visitantes anônimos. As datas são relativas a hoje, então **rode na véspera da apresentação** para os contatos dos últimos 7/14 dias e as notas ficarem atuais. Com o Postgres e o backend rodando:
+
+```bash
+bash database/seed/recarregar-demo.sh
+```
+
+O script recria tudo (é seguro rodar de novo), apaga usuários e visitantes de teste e chama o recálculo de notas, porque eventos inseridos direto no banco não passam pela fila. Senha de todas as personas: `demo123` (ex.: `juliana.rpereira@gmail.com`, para mostrar a vitrine personalizada).
+
 ## Estrutura dos arquivos
 
 ```
@@ -113,10 +123,11 @@ database/
     ├── V008__create_indexes.sql
     ├── V009__create_updated_at_trigger.sql
     ├── V010__seed_config.sql               # pesos padrão + λ global
-    ├── V011__seed_demo_data.sql            # admin + categorias + produtos
+    ├── V011__seed_demo_data.sql            # admin (+ categorias/produtos genéricos, removidos no V015)
     ├── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
     ├── V013__compra_editavel.sql           # compra.updated_at + trigger, índice de compras ativas
-    └── V014__imagem_arquivo.sql            # imagens de produto enviadas pelo admin (BYTEA)
+    ├── V014__imagem_arquivo.sql            # imagens de produto enviadas pelo admin (BYTEA)
+    └── V015__seed_catalogo_retifica.sql    # catálogo da Renova: peças, óleos, motores e serviços (substitui produtos do V011)
 ```
 
 Após puxar o repositório com V012 (ou qualquer migração nova):

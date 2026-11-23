@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+/**
+ * Converte exceções no JSON { code, message } com o status HTTP certo, para o front tratar erros de um jeito só.
+ * Os services lançam ApiException(code, message, status); qualquer erro não previsto vira 500 sem stack trace.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -19,6 +23,7 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getCode(), ex.getMessage()));
     }
 
+    /** Bean Validation (@Valid) → 400 VALIDATION_ERROR com o primeiro campo inválido. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         FieldError fieldError = ex.getBindingResult().getFieldError();
@@ -37,6 +42,7 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("BAD_REQUEST", "Payload inválido"));
     }
 
+    /** Upload acima de 5 MB → 413. */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleUploadSize(MaxUploadSizeExceededException ex) {
         return ResponseEntity
@@ -44,6 +50,7 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("FILE_TOO_LARGE", "Arquivo maior que o limite de 5MB"));
     }
 
+    /** Fallback: 500 INTERNAL_ERROR sem expor detalhes internos ao cliente. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         return ResponseEntity

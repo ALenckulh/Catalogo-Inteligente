@@ -18,6 +18,7 @@ import com.catalogo.eventos.entity.Evento;
  * Cálculo puro (sem banco) das notas de um sujeito (usuário ou visitante), conforme
  * docs/04-ESPECIFICACAO-TECNICA.md §4–5. Usado pelo {@link ScoreEngine} (persistência)
  * e pela simulação de parâmetros no admin.
+ * Por ser puro, é testável sem banco e a prévia do admin usa exatamente a mesma conta que será gravada.
  */
 public final class ScoreCalculator {
 
@@ -43,6 +44,10 @@ public final class ScoreCalculator {
     }
 
     /**
+     * Nota de produto: bruto = Σ (peso do tipo × valor do evento × fator de decaimento) + compras;
+     * nota = clamp(bruto ÷ ScoreMax × 100, 0, 100). Depois calcula as notas de categoria e as listas de
+     * preços com/sem conversão (para a faixa de preço).
+     *
      * @param eventos ativos do sujeito (apenas os com produto entram na nota)
      * @param compras compras já elegíveis (vazio quando abaixo de {@link #MIN_COMPRAS})
      * @param agora   instante de referência do decaimento
@@ -101,6 +106,7 @@ public final class ScoreCalculator {
                 raw += peso * valor * decay;
             }
 
+            // Cada compra do produto soma peso do WhatsApp × fator de idade (1,0 até 2 anos, depois 0,5).
             for (Compra c : compras) {
                 if (c.getProduto() != null && produtoId.equals(c.getProduto().getId())) {
                     OffsetDateTime compraEm = c.getDataCompra().atStartOfDay().atOffset(agora.getOffset());
@@ -108,6 +114,7 @@ public final class ScoreCalculator {
                 }
             }
 
+            // Normaliza para 0–100 dividindo pelo ScoreMax (soma dos pesos de produto).
             double normalized = Math.max(0.0, Math.min(100.0, raw / scoreMax * 100.0));
             productScores.put(produtoId, normalized);
             productInteractions.put(produtoId, pe.size());
@@ -129,6 +136,11 @@ public final class ScoreCalculator {
         return e.getTipo() == TipoEvento.CONTATO_WHATSAPP || e.getConversao() != null;
     }
 
+    /**
+     * Nota de categoria = média ponderada das notas dos produtos dela, com peso ln(1 + nº de interações)
+     * (mais interações pesam mais, com retorno decrescente), + pontos de filtro na categoria,
+     * × boost se houve conversão na categoria nos últimos 30 dias. Limitada a 0–100.
+     */
     private static Map<Long, Double> calcularCategorias(
             Map<Long, Double> productScores,
             Map<Long, Integer> productInteractions,

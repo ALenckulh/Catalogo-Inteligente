@@ -24,6 +24,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Rate limit: auth 5/min/IP; eventos 60/min por cookie ou IP ([11 §1](frontend/docs/11-API-ENDPOINTS.md)).
+ * Algoritmo token bucket (Bucket4j): um balde por chave; cada requisição consome 1 ficha e o balde
+ * se recarrega a cada minuto. Balde vazio → 429 com Retry-After: 60.
+ * Limites conhecidos: fica em memória (não vale para várias instâncias), o mapa não é limpo e o
+ * X-Forwarded-For pode ser falsificado sem proxy confiável. Evolução: Bucket4j com Redis.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
@@ -68,6 +72,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /** Chave do balde: eventos por cookie do visitante (ou IP); rotas de auth por IP + rota. */
     private static String rateKey(HttpServletRequest request, boolean eventos) {
         if (eventos) {
             // ponytail: cookie/IP only — parse sessaoId from body if cookie-less auth needs per-sessao caps

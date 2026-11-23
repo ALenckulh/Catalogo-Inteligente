@@ -181,3 +181,13 @@ Cada item traz:
 - **Arquivos órfãos:** sobram arquivos quando o admin envia uma foto e não salva o produto, troca ou remove a foto, ou quando o produto é apagado. Um job diário (`ImagemArquivoService.limparOrfas`, às 3h) apaga os arquivos com mais de 24h que nenhum `produto_imagem.url` referencia. As 24h protegem o upload de um formulário ainda aberto. Produto inativo continua referenciando as fotos, então elas ficam.
 - **Rastreabilidade:** RF23; [08 §4.6, §4.19](08-MODELO-DE-DADOS.md); [11](11-API-ENDPOINTS.md).
 - **Código:** `database/migrations/V014__imagem_arquivo.sql`; `ImagemArquivoService`, `ProdutoController.imagem`, `AdminProdutoController.uploadImagem`; `ImagemArquivoServiceTest`; `frontend/app/admin/produtos/_components/ImagemUploadField.tsx`, `lib/api/config.ts` (`imagemSrc`).
+
+### M17 — Serviços de retífica no catálogo
+
+- **Contexto:** o catálogo foi especificado para produtos ([01](01-VISAO-GERAL.md)), e o seed original (V011) trazia itens genéricos de indústria (compressor, chave de impacto). A empresa usada na demonstração, a Renova Retífica ([03 §S0](03-PAGINAS-E-UX.md)), vende peças, óleos e motores, mas o negócio principal é o serviço de retífica.
+- **Decisão:** o catálogo passa a ter a categoria raiz **Serviços de retífica** (cabeçote, virabrequim e bielas, bloco, retífica completa e montagem), ao lado de Peças de motor, Óleos e lubrificantes, Motores retificados e Meio motor e usados revisados (os cards de venda do `/sobre`).
+  - **Preço de referência:** `produto.preco` é obrigatório, então o serviço leva o valor "a partir de". A descrição avisa que o valor final sai após a avaliação na oficina e que as peças são cobradas à parte. A ficha técnica traz Prazo, Garantia, Inclui e Atende.
+  - **Mesmo fluxo:** a ficha leva ao contato pelo WhatsApp para orçamento, como os produtos. Não há carrinho, então nada muda na conversão.
+- **Justificativa:** quem procura "retífica de cabeçote diesel" é um lead tão quente quanto quem procura uma peça. Fora do catálogo, esse interesse não geraria eventos nem nota. Não há tabela, campo ou endpoint novo.
+- **Rastreabilidade:** RF08–RF12, RF23; [03 §5–6](03-PAGINAS-E-UX.md).
+- **Código:** `database/migrations/V015__seed_catalogo_retifica.sql` (remove os 6 produtos do V011, e as categorias antigas quando ficam vazias, e cria 20 categorias e 87 itens, 2 deles inativos).

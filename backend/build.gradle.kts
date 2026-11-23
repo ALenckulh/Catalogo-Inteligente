@@ -59,6 +59,7 @@ tasks.jacocoTestReport {
         xml.required.set(true)
         html.required.set(true)
     }
+    // Cobertura conta só a lógica: DTOs, entidades, repositórios e configs ficam de fora.
     classDirectories.setFrom(
         files(classDirectories.files.map {
             fileTree(it) {
@@ -79,6 +80,7 @@ tasks.jacocoTestReport {
     )
 }
 
+// Gate de qualidade: o build (check) falha se a cobertura de linhas ficar abaixo de 75%.
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
     violationRules {

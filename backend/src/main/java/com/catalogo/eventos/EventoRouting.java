@@ -8,6 +8,7 @@ public final class EventoRouting {
     private EventoRouting() {
     }
 
+    /** Agrupa os eventos por natureza (navegação, favorito, contato, pesquisa) para poder escalar consumidores separados. */
     public static String queueFor(TipoEvento tipo) {
         return switch (tipo) {
             case VISUALIZACAO_PRODUTO, SCROLL_DEPTH, TEMPO_PAGINA, FILTRO_APLICADO -> RabbitConfig.QUEUE_PRODUCT_VIEW;

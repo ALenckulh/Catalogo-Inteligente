@@ -28,6 +28,9 @@ public class PopularidadeGlobalService {
 
     /**
      * Raw then normalize to [0,100] vs max in map. Keys = produtoId.
+     * Camada 1 (popularidade global): eventos dos últimos 30 dias (visualização 0,2, favorito 0,5,
+     * WhatsApp 1,0) + compras dos últimos 90 dias (1 cada). O mais popular fica com 100.
+     * Pesos fixos aqui no código, não lidos da peso_metrica.
      */
     @Transactional(readOnly = true)
     public Map<Long, BigDecimal> scoresByProduto() {

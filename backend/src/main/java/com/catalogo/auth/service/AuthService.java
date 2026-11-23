@@ -34,6 +34,7 @@ public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final String TERMOS_VERSAO = "1.0";
+    /** Mesma mensagem para e-mail inexistente e senha errada: não revela quais e-mails estão cadastrados. */
     private static final String AUTH_FAIL = "Credenciais inválidas";
 
     private final UsuarioRepository usuarioRepository;
@@ -56,6 +57,11 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
+    /**
+     * Cadastro PF/PJ: proíbe ADMIN, exige aceite de termos e privacidade, checa e-mail/CPF/CNPJ únicos (409),
+     * valida CPF/CNPJ pelo dígito verificador, idade e telefone, e grava a senha com BCrypt.
+     * Cada consentimento LGPD vira uma linha própria em consentimento_lgpd (histórico que serve de prova).
+     */
     @Transactional
     public AuthSessionResponse signup(SignupRequest request) {
         if (request.tipo() == TipoUsuario.ADMIN) {
@@ -156,6 +162,10 @@ public class AuthService {
         return email;
     }
 
+    /**
+     * Login PF/PJ: 1) busca pelo e-mail ignorando contas apagadas; 2) recusa ADMIN (que entra por
+     * /api/admin/auth/login); 3) compara a senha com o hash BCrypt; 4) devolve { token JWT, usuario } sem o hash.
+     */
     @Transactional(readOnly = true)
     public AuthSessionResponse loginConsumidor(LoginRequest request) {
         Usuario usuario = findForLogin(request.email());
@@ -166,6 +176,7 @@ public class AuthService {
         return session(usuario);
     }
 
+    /** Mesmo fluxo do login de consumidor, mas só aceita ADMIN. */
     @Transactional(readOnly = true)
     public AuthSessionResponse loginAdmin(LoginRequest request) {
         Usuario usuario = findForLogin(request.email());
@@ -176,6 +187,10 @@ public class AuthService {
         return session(usuario);
     }
 
+    /**
+     * Recuperação de senha, etapa 1: gera um token aleatório (UUID sem hífens) válido por 2 h.
+     * Responde a mesma mensagem exista ou não o e-mail, para não revelar cadastros.
+     */
     @Transactional
     public MessageResponse requestPasswordReset(PasswordResetRequest request) {
         usuarioRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email().trim()).ifPresent(usuario -> {
@@ -185,12 +200,12 @@ public class AuthService {
             reset.setExpiraEm(OffsetDateTime.now().plusHours(2));
             reset.setCreatedAt(OffsetDateTime.now());
             passwordResetTokenRepository.save(reset);
-            // ponytail: no SMTP in Phase 1 — log token in dev; add mailer when needed
             log.info("password-reset token for {}: {}", usuario.getEmail(), reset.getToken());
         });
         return new MessageResponse("Se o e-mail existir, enviaremos instruções de recuperação");
     }
 
+    /** Etapa 2: recusa token já usado (usado_em) ou expirado; troca a senha e marca o token como usado. */
     @Transactional
     public MessageResponse confirmPasswordReset(PasswordResetConfirmRequest request) {
         PasswordResetToken reset = passwordResetTokenRepository.findByToken(request.token())

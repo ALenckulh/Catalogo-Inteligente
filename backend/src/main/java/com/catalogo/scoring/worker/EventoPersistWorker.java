@@ -20,6 +20,11 @@ import com.catalogo.scoring.engine.ScoreEngine;
 import com.catalogo.visitante.entity.Sessao;
 import com.catalogo.visitante.entity.Visitante;
 
+/**
+ * Consumidor das filas de eventos: grava o evento e recalcula o score do sujeito.
+ * Roda no mesmo processo da API (ADR-B07, um JAR só); como a fila desacopla os dois, extrair este worker
+ * para outro serviço é mudança de deploy, não de lógica.
+ */
 @Component
 @ConditionalOnProperty(name = "catalogo.rabbit.enabled", havingValue = "true", matchIfMissing = true)
 public class EventoPersistWorker {
@@ -41,11 +46,15 @@ public class EventoPersistWorker {
             RabbitConfig.QUEUE_SEARCH,
             RabbitConfig.QUEUE_SESSION
     })
+    // @Transactional: INSERT do evento e recálculo do score commitam juntos; se o recálculo falhar,
+    // o evento sofre rollback e a mensagem é rejeitada (nunca fica evento gravado sem score atualizado).
     @Transactional
     public void persist(EventoMessage message) {
         Evento evento = new Evento();
         evento.setTipo(message.tipo());
 
+        // Entidades "vazias" só com o id: o Hibernate precisa apenas do id para gravar a FK,
+        // então não faz um SELECT de cada relação.
         Sessao sessao = new Sessao();
         sessao.setId(message.sessaoId());
         evento.setSessao(sessao);

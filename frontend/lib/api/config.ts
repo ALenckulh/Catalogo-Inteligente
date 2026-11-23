@@ -1,4 +1,7 @@
-/** true → lib/mocks; false → live Spring API (`NEXT_PUBLIC_USE_MOCK`). */
+/**
+ * true → lib/mocks; false → live Spring API (`NEXT_PUBLIC_USE_MOCK`).
+ * Permite rodar o front sem backend: cada função de lib/api tem o ramo mock e o HTTP real.
+ */
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false'
 
 export const API_BASE_URL =

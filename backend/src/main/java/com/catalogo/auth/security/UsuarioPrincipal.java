@@ -32,6 +32,7 @@ public class UsuarioPrincipal implements UserDetails {
         return tipo;
     }
 
+    /** ROLE_ + tipo: é o que hasRole("ADMIN") confere no SecurityConfig. */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + tipo.name()));

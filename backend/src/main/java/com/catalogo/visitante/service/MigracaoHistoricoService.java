@@ -37,6 +37,11 @@ public class MigracaoHistoricoService {
         this.scoreMigrationRepository = scoreMigrationRepository;
     }
 
+    /**
+     * Após login/cadastro, se a pessoa aceitar no modal, leva o histórico anônimo para a conta:
+     * 1) liga o visitante ao usuário (migrado_em); 2) passa sessões e eventos do visitante para o usuário
+     * (UPDATE nativo); 3) reatribui os scores, mesclando conflitos. Tudo numa transação só.
+     */
     @Transactional
     public MessageResponse migrar(Long usuarioId, MigrarHistoricoRequest request, String cookieHeader) {
         UUID cookieId = parseCookie(cookieHeader);

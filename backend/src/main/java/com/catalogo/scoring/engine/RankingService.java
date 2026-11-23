@@ -33,6 +33,10 @@ public class RankingService {
     public record Actor(Long usuarioId, Long visitanteId, long interactionCount, boolean hasPersistedScores) {
     }
 
+    /**
+     * Cold start: quanto a nota pessoal pesa na ordem do catálogo.
+     * 0–2 interações → 0 (só popularidade); 3–9 → (n−2)/8; ≥10 com score gravado → 1; ≥10 sem score → 0,8.
+     */
     public double personalWeight(long interactions, boolean hasPersistedScores) {
         if (hasPersistedScores && interactions >= 10) {
             return 1.0;
@@ -60,6 +64,7 @@ public class RankingService {
         return map;
     }
 
+    /** Nota usada na ordenação: w × nota pessoal + (1 − w) × popularidade global. */
     public BigDecimal blendedScore(
             Long produtoId,
             double personalWeight,

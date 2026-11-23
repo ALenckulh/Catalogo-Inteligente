@@ -1,5 +1,9 @@
 package com.catalogo.shared;
 
+/**
+ * Validação de CPF/CNPJ pelos dígitos verificadores (módulo 11 com pesos).
+ * Recusa tamanho errado e sequências repetidas (111.111.111-11), que passariam na conta.
+ */
 public final class Documentos {
 
     private Documentos() {
@@ -31,6 +35,7 @@ public final class Documentos {
         return digits.charAt(12) - '0' == d1 && digits.charAt(13) - '0' == d2;
     }
 
+    /** Soma dígito × peso decrescente; resto < 2 → 0, senão 11 − resto. */
     private static int cpfDigit(String digits, int length, int weightStart) {
         int sum = 0;
         for (int i = 0; i < length; i++) {

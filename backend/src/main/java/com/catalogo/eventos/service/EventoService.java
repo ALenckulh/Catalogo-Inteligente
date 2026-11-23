@@ -39,6 +39,13 @@ public class EventoService {
         this.eventoPublisher = eventoPublisher;
     }
 
+    /**
+     * Valida e enfileira um evento de comportamento:
+     * logado → exige consentimento de cookies comportamentais (403 sem ele) e resolve/cria a sessão;
+     * anônimo → exige o header X-Visitante-Cookie-Id e acha visitante e sessão.
+     * Depois monta o EventoMessage e publica; quem grava é o EventoPersistWorker.
+     * Atenção: readOnly, mas resolveOrCreateForUsuario pode criar sessão; testar esse caminho (ver guia §12).
+     */
     @Transactional(readOnly = true)
     public EventoAceitoResponse aceitar(EventoRequest request, Authentication authentication, String cookieHeader) {
         Long usuarioId = null;
@@ -71,6 +78,10 @@ public class EventoService {
         return EventoAceitoResponse.ok();
     }
 
+    /**
+     * LGPD no backend, não só no front: usa o consentimento mais recente (tabela append-only) e
+     * recusa com 403 CONSENT_REQUIRED se o usuário não aceitou ou revogou.
+     */
     private void requireBehavioralConsent(Long usuarioId) {
         boolean ok = consentimentoRepository
                 .findFirstByUsuario_IdAndTipoOrderByAceitoEmDesc(usuarioId, TipoConsentimento.COOKIES_COMPORTAMENTAIS)

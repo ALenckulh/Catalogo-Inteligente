@@ -15,6 +15,14 @@ public class ScoreMigrationRepository {
     @PersistenceContext
     private EntityManager em;
 
+    /**
+     * Para cada tabela de score, três passos nesta ordem:
+     * 1) UPDATE ... GREATEST: onde usuário e visitante têm nota para o mesmo item, o usuário fica com a maior;
+     * 2) DELETE ... USING: apaga a linha do visitante que conflitava;
+     * 3) UPDATE: transfere as linhas restantes do visitante para o usuário.
+     * Sem o passo 2, o passo 3 violaria o índice único parcial (usuario_id, produto_id).
+     * Roda dentro da transação de MigracaoHistoricoService.migrar.
+     */
     public void reassignVisitanteToUsuario(Long usuarioId, Long visitanteId) {
         mergeMaxProduto(usuarioId, visitanteId);
         deleteConflictingProduto(usuarioId, visitanteId);

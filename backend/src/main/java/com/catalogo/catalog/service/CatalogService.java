@@ -53,6 +53,12 @@ public class CatalogService {
         this.rankingService = rankingService;
     }
 
+    /**
+     * Catálogo ordenado por intenção:
+     * 1) busca até 100 produtos ativos que batem com os filtros; 2) conta as interações do sujeito;
+     * 3) calcula o peso pessoal w (cold start); 4) nota final = w × nota pessoal + (1 − w) × popularidade;
+     * 5) ordena (desempate por id) e pagina em memória.
+     */
     @Transactional(readOnly = true)
     public PageResponse<ProdutoResponse> listProdutos(
             String q,
@@ -79,7 +85,8 @@ public class CatalogService {
 
         String query = (q == null || q.isBlank()) ? null : q.trim();
 
-        // Fetch up to 100 candidates then rank in memory (TCC page size)
+        // Fetch up to 100 candidates then rank in memory (TCC page size).
+        // Limite: com catálogo maior, o que passar dos 100 mais recentes não aparece; evolução = ordenar no SQL.
         PageRequest fetchPage = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Produto> result = produtoRepository.search(query, categoriaIds, precoMin, precoMax, fetchPage);
         List<Produto> produtos = new ArrayList<>(result.getContent());
@@ -136,6 +143,10 @@ public class CatalogService {
                 .toList();
     }
 
+    /**
+     * Categoria + todas as subcategorias: busca em largura (BFS) na árvore parent_id, com fila e Set de
+     * visitados. O resultado vai para a query como IN :categoriaIds.
+     */
     private Set<Long> descendantIds(Long rootId) {
         List<Categoria> all = categoriaRepository.findAll();
         if (all.stream().noneMatch(c -> c.getId().equals(rootId))) {

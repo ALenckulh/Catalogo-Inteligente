@@ -46,6 +46,10 @@ public class AuthController {
         return authService.loginConsumidor(request);
     }
 
+    /**
+     * Stateless: o servidor não guarda sessão, então só confirma. Quem "desloga" é o front, apagando o token;
+     * o JWT vale até o exp (24 h). Evolução: denylist de tokens ou access token curto + refresh token.
+     */
     @PostMapping("/logout")
     public MessageResponse logout(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {

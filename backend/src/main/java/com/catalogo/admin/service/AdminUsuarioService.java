@@ -114,6 +114,8 @@ public class AdminUsuarioService {
 
         List<Usuario> all = query.getResultList();
         List<AdminUsuarioListItem> enriched = new ArrayList<>();
+        // ponytail: N+1 (uma query de nota/categoria/última atividade por usuário) e filtro/paginação em memória;
+        // ok no volume do TCC. Com escala: uma query única com JOIN, como a de topLeads.
         for (Usuario u : all) {
             if (u.getTipo() == TipoUsuario.ADMIN) {
                 continue;
@@ -175,6 +177,10 @@ public class AdminUsuarioService {
         return new AdminUsuarioDetalhe(UsuarioResponse.from(u), scoreRows, catRows, faixa, compras);
     }
 
+    /**
+     * Compra registrada pelo admin (não há checkout), com registrado_por = admin.
+     * Recalcula o score na hora, de forma síncrona, porque a compra muda a nota; editar e excluir também.
+     */
     @Transactional
     public CompraResponse registrarCompra(Long usuarioId, Long adminId, RegistrarCompraRequest request) {
         Usuario u = usuarioRepository.findById(usuarioId)

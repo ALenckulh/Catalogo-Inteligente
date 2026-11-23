@@ -29,6 +29,10 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
+    /**
+     * Claims: sub = id do usuário, tipo (PF/PJ/ADMIN), email, iat e exp (catalogo.jwt.expiration-ms = 24 h).
+     * Assinado com HMAC-SHA256 usando catalogo.jwt.secret.
+     */
     public String generate(Usuario usuario) {
         Date now = new Date();
         return Jwts.builder()
@@ -41,6 +45,7 @@ public class JwtService {
                 .compact();
     }
 
+    /** Valida assinatura e expiração; lança exceção se o token for inválido. */
     public Claims parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)

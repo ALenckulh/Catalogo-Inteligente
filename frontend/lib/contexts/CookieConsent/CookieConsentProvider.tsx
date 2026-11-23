@@ -10,6 +10,7 @@ import {
 } from './CookieConsentContext'
 
 const STORAGE_KEY = 'ci_cookie_consent'
+// Escolha do banner vale 12 meses; depois o banner volta a aparecer.
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000
 
 const defaultPrefs: CookieConsentPreferences = {
@@ -62,6 +63,7 @@ export function CookieConsentProvider({ children }: Props) {
     return () => window.clearTimeout(t)
   }, [])
 
+  // Só com cookies comportamentais aceitos o visitante anônimo ganha sessão (e passa a ser rastreado).
   useEffect(() => {
     if (!hydrated || !preferences.behavioral || sessaoBootstrapped.current) return
     sessaoBootstrapped.current = true
