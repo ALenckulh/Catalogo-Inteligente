@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +44,37 @@ class AdminProdutoServiceTest {
     @BeforeEach
     void setUp() {
         service = new AdminProdutoService(produtoRepository, categoriaRepository);
+    }
+
+    @Test
+    void fichaTecnica_vaziaLimpa_ausenteMantem_brancosDescartados() {
+        Produto p = new Produto();
+        p.setId(9L);
+        p.setNome("N");
+        p.setSlug("n");
+        p.setPreco(BigDecimal.TEN);
+        p.setFichaTecnica(new LinkedHashMap<>(Map.of("Marca", "X")));
+        when(produtoRepository.findByIdWithDetails(9L)).thenReturn(Optional.of(p));
+
+        service.patch(9L, patchFicha(null));
+        assertEquals(Map.of("Marca", "X"), p.getFichaTecnica());
+
+        Map<String, Object> suja = new LinkedHashMap<>();
+        suja.put(" Medida ", " STD ");
+        suja.put("  ", "sem chave");
+        suja.put("Vazio", "   ");
+        suja.put("Nulo", null);
+        suja.put("Peso", 2);
+        service.patch(9L, patchFicha(suja));
+        assertEquals(List.of("Medida", "Peso"), List.copyOf(p.getFichaTecnica().keySet()));
+        assertEquals("STD", p.getFichaTecnica().get("Medida"));
+
+        service.patch(9L, patchFicha(Map.of()));
+        assertEquals(Map.of(), p.getFichaTecnica());
+    }
+
+    private static PatchProdutoRequest patchFicha(Map<String, Object> ficha) {
+        return new PatchProdutoRequest(null, null, null, null, null, null, ficha, null);
     }
 
     @Test

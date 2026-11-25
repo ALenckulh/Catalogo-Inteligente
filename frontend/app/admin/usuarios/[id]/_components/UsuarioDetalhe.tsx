@@ -48,7 +48,7 @@ export function UsuarioDetalhe() {
   const aba: Aba = isAba(abaUrl) ? abaUrl : 'scores'
 
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [data, setData] = useState<AdminUsuarioDetalhe | null>(null)
   const [erroCarga, setErroCarga] = useState(false)
   const [tentativa, setTentativa] = useState(0)
@@ -99,10 +99,7 @@ export function UsuarioDetalhe() {
   }
   if (authLoading || !isAdmin || !data) {
     return (
-      <>
-        {contextHolder}
-        <PageLoading />
-      </>
+      <PageLoading />
     )
   }
 
@@ -270,7 +267,6 @@ export function UsuarioDetalhe() {
 
   return (
     <Flex vertical gap="middle">
-      {contextHolder}
       <Breadcrumb
         items={[{ title: <Link href="/admin/usuarios">Usuários</Link> }, { title: nome }]}
       />

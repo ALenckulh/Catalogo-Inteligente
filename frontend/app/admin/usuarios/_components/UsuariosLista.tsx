@@ -180,7 +180,7 @@ export function UsuariosLista() {
       <Flex gap="middle" wrap="wrap">
         <Input.Search
           id="admin-usuarios-busca"
-          placeholder="Informe o termo de busca"
+          placeholder="Nome, e-mail, CPF/CNPJ ou telefone"
           allowClear
           style={{ maxWidth: 280 }}
           onSearch={(v) => {

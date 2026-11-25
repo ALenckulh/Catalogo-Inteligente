@@ -26,6 +26,7 @@ import {
   PlusOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
+import { chaveRepetida, fichaToPairs, pairsToFicha, type FichaPar } from './fichaTecnica'
 import { ImagemUploadField } from './ImagemUploadField'
 
 const { Title } = Typography
@@ -43,27 +44,9 @@ function slugify(nome: string): string {
     .replace(/^-|-$/g, '')
 }
 
-function fichaToPairs(ficha: Record<string, string | number | boolean> | null | undefined) {
-  if (!ficha) return []
-  return Object.entries(ficha).map(([chave, valor]) => ({ chave, valor: String(valor) }))
-}
-
-function pairsToFicha(
-  pairs: Array<{ chave?: string; valor?: string }> | undefined,
-): Record<string, string> | undefined {
-  if (!pairs?.length) return undefined
-  const out: Record<string, string> = {}
-  for (const row of pairs) {
-    const k = row.chave?.trim()
-    if (!k) continue
-    out[k] = row.valor?.trim() ?? ''
-  }
-  return Object.keys(out).length ? out : undefined
-}
-
 export function ProdutoForm({ initial }: Props) {
   const router = useRouter()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [form] = Form.useForm()
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -104,7 +87,7 @@ export function ProdutoForm({ initial }: Props) {
     preco: number
     categoriaId: number
     ativo: boolean
-    fichaPairs?: Array<{ chave?: string; valor?: string }>
+    fichaPairs?: FichaPar[]
     imagens?: Array<{ url?: string; altText?: string; ordem?: number }>
   }) {
     setError(null)
@@ -144,7 +127,6 @@ export function ProdutoForm({ initial }: Props) {
 
   return (
     <Flex vertical gap={16} style={{ maxWidth: 640 }}>
-      {contextHolder}
       {error && <Alert type="error" showIcon title={error} />}
       <Form
         form={form}
@@ -238,7 +220,16 @@ export function ProdutoForm({ initial }: Props) {
                     {...field}
                     name={[field.name, 'chave']}
                     style={{ flex: 1, marginBottom: 0 }}
-                    rules={[{ required: true, message: 'Chave' }]}
+                    dependencies={['fichaPairs']}
+                    rules={[
+                      { required: true, whitespace: true, message: 'Informe a chave' },
+                      {
+                        validator: (_, v) =>
+                          chaveRepetida(form.getFieldValue('fichaPairs'), v)
+                            ? Promise.reject(new Error('Chave repetida'))
+                            : Promise.resolve(),
+                      },
+                    ]}
                   >
                     <Input placeholder="Chave" id={`admin-prod-ficha-chave-${key}`} />
                   </FormItem>
@@ -246,7 +237,7 @@ export function ProdutoForm({ initial }: Props) {
                     {...field}
                     name={[field.name, 'valor']}
                     style={{ flex: 1, marginBottom: 0 }}
-                    rules={[{ required: true, message: 'Valor' }]}
+                    rules={[{ required: true, whitespace: true, message: 'Informe o valor' }]}
                   >
                     <Input placeholder="Valor" id={`admin-prod-ficha-valor-${key}`} />
                   </FormItem>

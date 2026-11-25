@@ -29,7 +29,7 @@ const { Title } = Typography
 
 export default function AdminProdutosPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [q, setQ] = useState('')
   const [ativo, setAtivo] = useState<boolean | undefined>(undefined)
 
@@ -44,7 +44,6 @@ export default function AdminProdutosPage() {
   if (authLoading || !isAdmin) {
     return (
       <Flex justify="center" style={{ padding: 48 }}>
-        {contextHolder}
         <Spin />
       </Flex>
     )
@@ -129,7 +128,6 @@ export default function AdminProdutosPage() {
 
   return (
     <Flex vertical gap={16}>
-      {contextHolder}
       <Flex justify="space-between" align="center" wrap="wrap" gap="middle">
         <Title level={2} style={{ margin: 0 }} id="admin-produtos-title">
           Produtos

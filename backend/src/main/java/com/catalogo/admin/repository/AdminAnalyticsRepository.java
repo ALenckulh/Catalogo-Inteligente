@@ -1,12 +1,16 @@
 package com.catalogo.admin.repository;
 
+import com.catalogo.shared.BuscaTexto;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Repository;
 
 import com.catalogo.admin.domain.NivelInteresse;
@@ -263,12 +267,7 @@ public class AdminAnalyticsRepository {
         if (f.ativo() != null) {
             sql.append(f.ativo() ? " AND u.deleted_at IS NULL" : " AND u.deleted_at IS NOT NULL");
         }
-        if (f.q() != null && !f.q().isBlank()) {
-            sql.append(" AND (LOWER(u.email) LIKE :q")
-                    .append(" OR LOWER(u.nome_completo) LIKE :q")
-                    .append(" OR LOWER(u.razao_social) LIKE :q)");
-            params.put("q", "%" + f.q().trim().toLowerCase(Locale.ROOT) + "%");
-        }
+        filtroTexto(f.q(), sql, params);
         if (f.categoria() != null && !f.categoria().isBlank()) {
             sql.append(" AND LOWER(tc.cat_nome) = :categoria");
             params.put("categoria", f.categoria().trim().toLowerCase(Locale.ROOT));
@@ -296,6 +295,30 @@ public class AdminAnalyticsRepository {
             }
         }
         return sql.toString();
+    }
+
+    /** Nome, razão social ou e-mail; se a busca for só de números, também CPF, CNPJ e telefone (gravados só com dígitos). */
+    static void filtroTexto(String q, StringBuilder sql, Map<String, Object> params) {
+        List<String> padroes = BuscaTexto.padroes(q);
+        if (padroes.isEmpty()) {
+            return;
+        }
+        List<String> palavras = new ArrayList<>();
+        for (int i = 0; i < padroes.size(); i++) {
+            String nome = "q" + i;
+            palavras.add(Stream.of("u.email", "u.nome_completo", "u.razao_social")
+                    .map(c -> "unaccent(LOWER(" + c + ")) LIKE unaccent(:" + nome + ") ESCAPE '" + BuscaTexto.ESCAPE + "'")
+                    .collect(Collectors.joining(" OR ", "(", ")")));
+            params.put(nome, padroes.get(i));
+        }
+        sql.append(" AND (").append(String.join(" AND ", palavras));
+        String digitos = BuscaTexto.digitos(q);
+        if (digitos != null) {
+            // '55' na frente: acha o telefone digitado com ou sem o DDI, seja qual for a forma gravada.
+            sql.append(" OR u.cpf LIKE :digitos OR u.cnpj LIKE :digitos OR '55' || u.telefone LIKE :digitos");
+            params.put("digitos", "%" + digitos + "%");
+        }
+        sql.append(")");
     }
 
     /** Sem valor = menor que todos (primeiro no crescente); id como desempate deixa a paginação estável. */

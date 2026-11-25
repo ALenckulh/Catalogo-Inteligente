@@ -45,7 +45,7 @@ export default function ContaPage() {
   const { user, isAuthenticated, loading: authLoading, logout, updateUser } = useCurrentUser()
   const { acceptCustom, canTrackBehavioral } = useCookieConsent()
   const { modal } = App.useApp()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [form] = Form.useForm()
   const [conta, setConta] = useState<Usuario | null>(null)
   const [loading, setLoading] = useState(true)
@@ -215,7 +215,6 @@ export default function ContaPage() {
 
   return (
     <Flex vertical className="page page--narrow" style={{ gap: 'var(--space-4)' }}>
-      {contextHolder}
       <Title level={1} id="conta-title" style={{ margin: 0 }}>
         Minha conta
       </Title>

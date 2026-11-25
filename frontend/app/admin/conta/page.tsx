@@ -24,7 +24,7 @@ const { Title, Paragraph } = Typography
 export default function AdminContaPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
   const { user, logout, updateUser } = useCurrentUser()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [form] = Form.useForm()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -67,7 +67,6 @@ export default function AdminContaPage() {
   if (authLoading || !isAdmin) {
     return (
       <Flex justify="center" style={{ padding: 48 }}>
-        {contextHolder}
         <Spin />
       </Flex>
     )
@@ -75,7 +74,6 @@ export default function AdminContaPage() {
 
   return (
     <Flex vertical gap={16} style={{ maxWidth: 480 }}>
-      {contextHolder}
       <Title level={2} style={{ margin: 0 }} id="admin-conta-title">
         Minha conta
       </Title>

@@ -35,7 +35,7 @@ export default function ProdutoPage() {
   const slug = params.slug
   const track = useTrackEvent()
   const { user, isAuthenticated } = useCurrentUser()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
 
   const [produto, setProduto] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -210,7 +210,6 @@ export default function ProdutoPage() {
 
   return (
     <Flex vertical className="page page--has-fixed-cta" style={{ gap: 'var(--space-6)' }}>
-      {contextHolder}
       <Breadcrumb
         items={[
           { title: <Link href="/">Vitrine</Link> },

@@ -2,6 +2,7 @@ package com.catalogo.admin.service;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
@@ -109,7 +110,7 @@ public class AdminProdutoService {
             p.setAtivo(input.ativo());
         }
         if (input.fichaTecnica() != null) {
-            p.setFichaTecnica(new LinkedHashMap<>(input.fichaTecnica()));
+            p.setFichaTecnica(limparFicha(input.fichaTecnica()));
         }
         if (input.imagens() != null) {
             replaceImagens(p, input.imagens());
@@ -135,7 +136,7 @@ public class AdminProdutoService {
         p.setCategoria(cat);
         p.setAtivo(Boolean.TRUE.equals(input.ativo()));
         if (input.fichaTecnica() != null) {
-            p.setFichaTecnica(new LinkedHashMap<>(input.fichaTecnica()));
+            p.setFichaTecnica(limparFicha(input.fichaTecnica()));
         }
         if (input.imagens() != null) {
             replaceImagens(p, input.imagens());
@@ -143,6 +144,18 @@ public class AdminProdutoService {
         OffsetDateTime now = OffsetDateTime.now();
         p.setCreatedAt(now);
         p.setUpdatedAt(now);
+    }
+
+    /** Sem espaços nas pontas e sem linha em branco na ficha pública; mantém a ordem. */
+    private static Map<String, Object> limparFicha(Map<String, Object> ficha) {
+        Map<String, Object> limpa = new LinkedHashMap<>();
+        ficha.forEach((chave, valor) -> {
+            Object v = valor instanceof String s ? s.trim() : valor;
+            if (chave != null && !chave.isBlank() && v != null && !"".equals(v)) {
+                limpa.put(chave.trim(), v);
+            }
+        });
+        return limpa;
     }
 
     private static void replaceImagens(Produto p, java.util.List<ProdutoInput.ImagemInput> imagens) {

@@ -608,7 +608,7 @@ Estes trechos descrevem o comportamento de hoje ou citam o bug.
 - [x] **B34** Sem filtro e 5 combinações → 200, total igual ao SQL
 - [x] **B35** Relógio adiantado ou atrasado não impede a revogação; na tela, uma linha por troca com a hora do servidor
 - [x] **Antes e depois** O mesmo roteiro de API: 29 falhas no código antigo, 0 no novo
-- [ ] **B29–B35** Conferência na 8080, depois de reiniciar o backend (sem gravar eventos)
+- [x] **B29–B35** Conferência na 8080, depois de reiniciar o backend (24/11): papéis (exceto `DELETE /api/conta` com o admin, testado só no ambiente de teste), listagem LGPD, `contatoProativo` dos 24 clientes, eventos inválidos → 400 e filas vazias; nas telas, WhatsApp e troca de conta entre abas. Sem gravar nada: a nota de categoria na hora (B32), a DLQ e a data do consentimento (B35) foram provadas só no ambiente de teste
 
 ---
 
