@@ -245,7 +245,7 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 |---|---|
 | **Objetivo** | Gerir dados, consentimentos LGPD e pedidos de direitos do titular; ajuda. |
 | **Rota / auth** | Autenticado PF/PJ. Visitante → `/entrar?next=/conta`. |
-| **Layout** | `Tabs`: Dados · Privacidade · Ajuda. Abaixo das abas, após `Divider`, “Sair da conta” (`text`) → `/`. |
+| **Layout** | `Tabs`: Dados · Privacidade · Ajuda. Abaixo das abas, após `Divider`, “Sair da conta” (`text` + `danger`) → `/`. |
 | **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (valor da **conta**; alternar muda a conta e este navegador) e CONTATO_PROATIVO, que salvam ao alternar. Se a conta aceita e este navegador não, um `Alert` avisa e oferece "Aceitar neste navegador". A escolha do navegador só vai para a conta que nunca decidiu; separados por `Divider`, Exportar em JSON ou CSV / Solicitar exclusão (registra `solicitacao_lgpd`). **Ajuda:** `Collapse` com 3 itens (contato WhatsApp; cookies/recomendações; suporte com links `/sobre` e `/privacidade`). |
 | **Componentes** | `Tabs`, `Descriptions`, `Form`, `Switch`, `Button`, `modal.confirm` de `App.useApp()` (exclusão), `Alert`, `Collapse` (FAQ), `notification`. |
 | **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `GET /api/conta/exportar`; `DELETE /api/conta`. |
@@ -323,7 +323,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Rota / auth** | Admin. |
 | **Layout** | Busca + `Table` (`pageSize` 20) + ações icon+tooltip: Editar / (Des)ativar. Botão “Novo produto”. Paginação, ordenação e filtro no servidor. |
 | **Conteúdo e campos** | Colunas: `nome`, `slug`, `preco`, `categoria`, `ativo` (filtro Sim/Não), `updated_at` (data, com a hora na dica) — Nome/Slug/Preço/Atualizado sortable. Nome (14px), slug e categoria (12px) em uma linha. |
-| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check), `notification` (toggle ativo). |
+| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check; Stop em `danger`), `notification` (toggle ativo). |
 | **APIs** | `GET /api/admin/produtos` (`q`, `ativo`, `page`, `limit`, `sort`); PATCH para `ativo`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Estados** | Loading: Spin. |
@@ -349,7 +349,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Admin altera próprios dados de acesso. |
 | **Rota / auth** | Admin. |
-| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha.”). No fim, após `Divider`, “Sair da conta” (`text`) → `/admin/entrar`. |
+| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha.”). No fim, após `Divider`, “Sair da conta” (`text` + `danger`) → `/admin/entrar`. |
 | **Conteúdo e campos** | `email`, `telefone`, senha atual + nova (opcional: “deixe em branco para manter”). Trocar a senha exige a atual. Tooltips. |
 | **Componentes** | `Form`, `Input`, `Input.Password`, `Button`, `Alert`, `notification`. |
 | **APIs** | `GET/PATCH /api/admin/conta`. |
@@ -404,8 +404,8 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Explicar ao dono do catálogo, em linguagem simples, o que o sistema faz e como a nota de interesse é calculada. |
 | **Rota / auth** | Admin. Item “Sobre o projeto” no menu lateral. |
-| **Layout** | H1 “Como o catálogo encontra clientes interessados” + parágrafo + CTAs “Ver clientes com alto interesse” (→ `/admin/usuarios?nivel=QUENTE&status=ativo`) e “Ajustar o cálculo” (→ A9). Seções: **Como funciona** (`Steps`, 3 passos: navega com consentimento → ação vira pontos → nota vira nível) · **Quanto vale cada ação** (barra de composição + pontos por ação com os pesos reais, mesma lógica de A9) · **Exemplo** (`Timeline` com nota acumulada e nível a cada ação) · **O interesse esfria com o tempo** (meia-vida, quanto uma ação vale hoje/30/90/180 dias, com e sem contato; `Alert` da pausa após contato ou compra, com os dias configurados) · **O que a nota significa** (4 níveis + categoria favorita). |
-| **APIs** | `GET /api/admin/configuracao/pesos`; `GET /api/admin/configuracao/decay`. Seções com dados tratam carregando/erro ([09 §21](09-NORMAS-DE-USABILIDADE.md)). |
+| **Layout** | H1 “Como o catálogo encontra clientes interessados” + parágrafo + CTAs “Ver clientes com alto interesse” (→ `/admin/usuarios?nivel=QUENTE&status=ativo`) e “Ajustar o cálculo” (→ A9). Em seguida, um `Card` com 3 passos em colunas iguais (navega com consentimento → ação vira pontos → nota vira nível). Cada seção, separada por `Divider`, tem a explicação à esquerda e um `Card` à direita (abaixo de 992 px, um embaixo do outro); largura máxima de 1.120 px. Seções, nesta ordem: **Quanto vale cada ação** (pontos com os pesos reais, mesma lógica de A9, em três grupos: Intenção de compra, Navegação e Diminui a nota; da maior para a menor, com o resumo visível e o detalhe no ícone de ajuda; peso 0 não aparece) · **O que a nota significa** (4 níveis + categoria favorita) · **Exemplo** (`Timeline` com nota acumulada e nível a cada ação) · **O interesse esfria com o tempo** (meia-vida; `Table` com quanto uma ação vale hoje/30/90/180 dias, com e sem contato; pausa após contato ou compra, com os dias configurados). Cor, só a do nível. |
+| **APIs** | `GET /api/admin/configuracao/pesos`; `GET /api/admin/configuracao/decay`. As seções compartilham um só estado de carregando/erro ([09 §21](09-NORMAS-DE-USABILIDADE.md)). |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Rastreabilidade** | RNF12 (tom sóbrio) |
 

@@ -148,6 +148,7 @@ export default function AdminContaPage() {
       <Button
         id="admin-conta-sair"
         variant="text"
+        color="danger"
         icon={<LogoutOutlined />}
         style={{ alignSelf: 'flex-start' }}
         onClick={() => void sair()}

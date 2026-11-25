@@ -118,6 +118,7 @@ export default function AdminProdutosPage() {
           <Button
             variant="text"
             size="small"
+            color={row.ativo ? 'danger' : 'default'}
             icon={row.ativo ? <StopOutlined /> : <CheckCircleOutlined />}
             tooltip={row.ativo ? 'Desativar' : 'Ativar'}
             id={`admin-prod-${row.id}-toggle`}

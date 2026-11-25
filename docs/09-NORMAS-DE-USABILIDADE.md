@@ -42,6 +42,7 @@ O wrapper decide o default pela cor: `color="primary"` nasce `solid`; `variant="
 | `outlined` + `danger` | Ação destrutiva de página (Solicitar exclusão da conta), separada das demais por `Divider` |
 | `dashed` / `filled` | Casos raros (adicionar item em lista, destaque suave) — evitar no admin atual |
 | `text` | Ações em **tabela** / toolbar densa (Abrir, Editar, Ativar, Excluir) e navegação no header |
+| `text` + `danger` | Sair da conta, Desativar, Excluir e Remover, em tabela, lista ou fim de página. O inverso (Ativar) e o que não perde nada (Cancelar, Limpar, Desfazer, Restaurar padrão) ficam neutros; recusar consentimento também |
 | `link` | Navegação auxiliar leve (Ver do KPI, Limpar filtros, Desfazer) |
 
 **O header não disputa com a página:** "Cadastrar" é `outlined`. O CTA da tela é sempre da página.

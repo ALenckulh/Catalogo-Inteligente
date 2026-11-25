@@ -252,6 +252,7 @@ export function ProdutoForm({ initial }: Props) {
                   </FormItem>
                   <Button
                     variant="text"
+                    color="danger"
                     icon={<DeleteOutlined />}
                     tooltip="Remover"
                     onClick={() => remove(field.name)}
@@ -307,6 +308,7 @@ export function ProdutoForm({ initial }: Props) {
                     </FormItem>
                     <Button
                       variant="text"
+                      color="danger"
                       icon={<DeleteOutlined />}
                       tooltip="Remover"
                       onClick={() => remove(field.name)}

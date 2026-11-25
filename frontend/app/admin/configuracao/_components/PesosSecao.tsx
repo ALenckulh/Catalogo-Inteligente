@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { Flex, Slider, Tooltip, Typography } from '@/components/ui'
-import { EVENTOS_SCORING, ORDEM_EVENTOS, formatPontos, pontosPorAcao } from '@/lib/scoring'
+import { EVENTOS_SCORING, ORDEM_EVENTOS, descricaoCompleta, formatPontos, pontosPorAcao } from '@/lib/scoring'
 import { palette } from '@/lib/theme/tokens'
 import type { PesoMetrica, TipoMetrica } from '@/lib/types'
 import { HelpTitle } from '../../_components/HelpTitle'
@@ -105,7 +105,7 @@ export function LinhaPeso({
         rotulo ?? (
           <>
             <span aria-hidden style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, background: e.cor }} />
-            <Tooltip title={e.descricao}>
+            <Tooltip title={descricaoCompleta(tipo)}>
               <span style={{ borderBottom: `1px dotted ${palette.neutral[400]}`, cursor: 'help' }}>{e.nome}</span>
             </Tooltip>
           </>

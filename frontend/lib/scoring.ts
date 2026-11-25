@@ -8,7 +8,10 @@ import type { ParametroDecay, PesoMetrica, TipoMetrica } from '@/lib/types'
 
 interface EventoScoring {
   nome: string
-  descricao: string
+  /** Uma frase: o que o cliente fez. */
+  resumo: string
+  /** Como a ação conta; vem depois do resumo. */
+  detalhe?: string
   /** Cor da fatia na barra de composição da nota. */
   cor: string
   /** Soma na nota da categoria (não na de produto) e fica fora do divisor da nota de produto. */
@@ -24,60 +27,75 @@ interface EventoScoring {
 export const EVENTOS_SCORING: Record<TipoMetrica, EventoScoring> = {
   CONTATO_WHATSAPP: {
     nome: 'Chamar no WhatsApp',
-    descricao: 'O cliente clicou em “Falar no WhatsApp” na página do produto. É o sinal mais forte de intenção de compra.',
+    resumo: 'O cliente clicou em “Entrar em contato” na página do produto.',
+    detalhe: 'É o sinal mais forte de intenção de compra.',
     cor: palette.primary[600],
   },
   COMPRA: {
     nome: 'Comprar',
-    descricao: 'Compra que você registrou para o cliente. Soma a partir de 3 compras, sem esfriar, e vale metade depois de 2 anos. Não muda o peso das outras ações.',
+    resumo: 'Compra que você registrou para o cliente.',
+    detalhe: 'Soma a partir de 3 compras, sem esfriar, e vale metade depois de 2 anos. Não muda o peso das outras ações.',
     cor: palette.success[500],
     foraDoDivisor: true,
   },
   FAVORITAR: {
     nome: 'Favoritar',
-    descricao: 'O cliente marcou o produto como favorito.',
+    resumo: 'O cliente marcou o produto como favorito.',
     cor: palette.secondary[400],
   },
   VISUALIZACAO_PRODUTO: {
     nome: 'Ver um produto',
-    descricao: 'O cliente abriu a página do produto. Cada visita soma.',
+    resumo: 'O cliente abriu a página do produto.',
+    detalhe: 'Cada visita soma.',
     cor: palette.primary[300],
   },
   RETORNO_PAGINA: {
     nome: 'Voltar ao produto',
-    descricao: 'O cliente viu o mesmo produto em outra visita. Soma uma vez por visita depois da primeira, além de “Ver um produto”. Não muda o peso das outras ações.',
+    resumo: 'O cliente viu o mesmo produto em outra visita.',
+    detalhe: 'Soma uma vez por visita depois da primeira, além de “Ver um produto”. Não muda o peso das outras ações.',
     cor: palette.secondary[600],
     foraDoDivisor: true,
   },
   TEMPO_PAGINA: {
     nome: 'Tempo na página',
-    descricao: 'Quanto tempo o cliente ficou na página do produto. Vale o máximo com 2 minutos ou mais; menos tempo vale proporcionalmente menos.',
+    resumo: 'Quanto tempo o cliente ficou na página do produto.',
+    detalhe: 'Vale o máximo com 2 minutos ou mais; menos tempo vale proporcionalmente menos.',
     cor: palette.warning[400],
     proporcional: 'com 2 min ou mais',
   },
   SCROLL_DEPTH: {
     nome: 'Rolar a página',
-    descricao: 'Quanto da página do produto o cliente rolou. Vale o máximo ao chegar no fim; menos rolagem vale proporcionalmente menos.',
+    resumo: 'Quanto da página do produto o cliente rolou.',
+    detalhe: 'Vale o máximo ao chegar no fim; menos rolagem vale proporcionalmente menos.',
     cor: palette.secondary[200],
     proporcional: 'rolando até o fim',
   },
   DESFAVORITAR: {
     nome: 'Remover dos favoritos',
-    descricao: 'O cliente tirou o produto dos favoritos. Diminui a nota daquele produto.',
+    resumo: 'O cliente tirou o produto dos favoritos.',
+    detalhe: 'Diminui a nota daquele produto.',
     cor: palette.neutral[500],
     penalidade: true,
   },
   PESQUISA: {
     nome: 'Pesquisar e abrir',
-    descricao: 'O cliente pesquisou no catálogo e abriu um produto do resultado. Indica interesse forte naquele produto. Pesquisas sem abrir nenhum produto não contam.',
+    resumo: 'O cliente pesquisou no catálogo e abriu um produto do resultado.',
+    detalhe: 'Indica interesse forte naquele produto. Pesquisas sem abrir nenhum produto não contam.',
     cor: palette.error[300],
   },
   FILTRO_APLICADO: {
     nome: 'Filtrar por categoria',
-    descricao: 'O cliente filtrou o catálogo por uma categoria. Soma na nota de interesse daquela categoria (usada em “Categoria favorita”), não na nota de produto.',
+    resumo: 'O cliente filtrou o catálogo por uma categoria.',
+    detalhe: 'Soma na nota de interesse daquela categoria (usada em “Categoria favorita”), não na nota de produto.',
     cor: palette.neutral[500],
     alvo: 'categoria',
   },
+}
+
+/** Resumo e detalhe juntos, para quando só há lugar para um texto. */
+export function descricaoCompleta(tipo: TipoMetrica): string {
+  const { resumo, detalhe } = EVENTOS_SCORING[tipo]
+  return detalhe ? `${resumo} ${detalhe}` : resumo
 }
 
 /** Ordem de exibição: do sinal mais forte ao mais fraco; o de categoria por último. */

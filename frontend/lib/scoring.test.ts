@@ -7,6 +7,7 @@ import {
   PAUSA_PADRAO,
   PESOS_PADRAO,
   decayGlobal,
+  descricaoCompleta,
   fatorDecaimento,
   formatPontos,
   lambdaDeMeiaVida,
@@ -18,6 +19,11 @@ import {
 describe('scoring', () => {
   it('ORDEM_EVENTOS cobre todos os eventos uma vez', () => {
     expect([...ORDEM_EVENTOS].sort()).toEqual(Object.keys(EVENTOS_SCORING).sort())
+  })
+
+  it('descricaoCompleta junta o resumo e o detalhe', () => {
+    expect(descricaoCompleta('VISUALIZACAO_PRODUTO')).toBe('O cliente abriu a página do produto. Cada visita soma.')
+    expect(descricaoCompleta('FAVORITAR')).toBe('O cliente marcou o produto como favorito.')
   })
 
   it('scoreMax soma só pesos positivos de produto', () => {
