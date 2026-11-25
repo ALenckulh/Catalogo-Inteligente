@@ -117,7 +117,7 @@ flowchart LR
 | **Ator** | Visitante, comprador ou dono do catálogo |
 | **Pré-condição** | Ter conta |
 | **Fluxo principal** | 1. A pessoa informa e-mail e senha. 2. O sistema confere e devolve um token válido por 24 horas. 3. Volta para a página de origem. |
-| **Alternativas** | **Credencial errada:** mensagem genérica. **Admin na entrada pública, ou comprador na entrada admin:** a mesma mensagem. **Mais de 5 tentativas por minuto:** erro 429. **Esqueceu a senha:** pede o código, válido por 2 horas, e define a nova senha. O código sai no log do backend; não há envio de e-mail. |
+| **Alternativas** | **Credencial errada:** mensagem genérica. **Admin na entrada pública, ou comprador na entrada admin:** a mesma mensagem. **Mais de 5 tentativas por minuto:** erro 429. **Esqueceu a senha:** recebe por e-mail um código válido por 2 horas e define a nova senha, o que encerra as outras sessões. Pedir de novo anula o código anterior. **Sair da conta:** encerra só aquela sessão. |
 | **Resultado** | Sessão iniciada ou senha trocada |
 | **Rastreabilidade** | RF05–RF07, RNF04, RNF06, RNF07 · telas 2, 4 e A1 · `POST /api/auth/login`, `POST /api/admin/auth/login`, `POST /api/auth/password-reset` e `/confirm` |
 
@@ -127,8 +127,8 @@ flowchart LR
 |---|---|
 | **Ator** | Comprador |
 | **Pré-condição** | Ter navegado sem conta neste navegador e acabado de entrar ou se cadastrar |
-| **Fluxo principal** | 1. O sistema pergunta se deve associar o histórico. 2. A pessoa aceita. 3. Sessões, eventos e notas passam para a conta. |
-| **Alternativas** | **Recusa:** nada é associado nem apagado. **Nota repetida para o mesmo produto:** fica a maior. |
+| **Fluxo principal** | 1. O sistema pergunta se deve associar o histórico. 2. A pessoa aceita. 3. Sessões e eventos passam para a conta, e as notas são recalculadas. |
+| **Alternativas** | **Recusa:** o histórico anônimo é descartado. **Fecha o aviso:** nada muda, e a pergunta volta no próximo login. |
 | **Resultado** | O histórico anônimo passa a contar para o comprador |
 | **Rastreabilidade** | RF19 · telas 2 e 3 · `POST /api/auth/migrar-historico` |
 
@@ -151,7 +151,7 @@ flowchart LR
 | **Pré-condição** | Estar logado |
 | **Fluxo principal** | 1. O comprador clica em "Entrar em contato" na ficha. 2. O sistema envia `CONTATO_WHATSAPP` com conversão leve. 3. Abre o WhatsApp com a mensagem pronta. |
 | **Alternativas** | **Pelos favoritos:** conversão forte. **Sem consentimento:** abre o WhatsApp sem registrar o evento. |
-| **Resultado** | Contato iniciado; o decaimento do produto fica pausado por 60 dias |
+| **Resultado** | Contato iniciado; o decaimento do produto fica pausado (60 dias por padrão) |
 | **Rastreabilidade** | RF14 · telas 6 e 7 · `POST /api/eventos` |
 
 ### UC09 — Gerir dados e privacidade
@@ -176,7 +176,7 @@ flowchart LR
 | **Ator** | Worker de score |
 | **Pré-condição** | Evento na fila |
 | **Fluxo principal** | 1. O worker recebe o evento e o grava. 2. Soma, por produto, peso × valor × decaimento. 3. Divide pelo máximo possível e limita de 0 a 100. 4. Calcula a nota das categorias e a faixa de preço. 5. Grava as notas. |
-| **Alternativas** | **Contato nos últimos 60 dias:** sem decaimento. **Menos de 3 compras:** elas não entram. **Falha no cálculo:** nada é gravado e a mensagem volta para a fila. |
+| **Alternativas** | **Contato ou compra dentro da pausa (60 dias por padrão):** sem decaimento. **Conta excluída:** o evento é descartado. **Menos de 3 compras:** elas não somam pontos, mas valem como conversão. **Falha no cálculo:** nada é gravado e a mensagem volta para a fila. |
 | **Resultado** | Notas atualizadas: Quente (70 ou mais), Morno (40 a 69) ou Frio (abaixo de 40) |
 | **Rastreabilidade** | RF08, RF09, RNF02 · [04 §4–5](04-ESPECIFICACAO-TECNICA.md) · [05 §5](05-ARQUITETURA.md) |
 
@@ -190,7 +190,7 @@ flowchart LR
 |---|---|
 | **Ator** | Dono do catálogo |
 | **Pré-condição** | Estar logado como admin |
-| **Fluxo principal** | 1. Abre o dashboard. 2. O sistema mostra os indicadores, o nível de interesse dos clientes, a categoria favorita e os contatos dos últimos 14 dias. 3. Clica em "Ver" nos clientes com alto interesse. 4. Chega à lista de usuários filtrada por Quente. |
+| **Fluxo principal** | 1. Abre o dashboard. 2. O sistema mostra os indicadores, o nível de interesse dos clientes, a categoria favorita, os contatos dos últimos 14 dias e os 5 clientes com maior nota, com a próxima compra provável. 3. Abre um cliente, ou clica em "Ver" nos clientes com alto interesse e chega à lista filtrada por Quente. |
 | **Alternativas** | **Sem dados:** cada gráfico mostra um aviso. |
 | **Resultado** | Visão de quem priorizar |
 | **Rastreabilidade** | RF20, RF21 · telas A2 e A3 · `GET /api/admin/dashboard`, `GET /api/admin/usuarios` |
@@ -201,7 +201,7 @@ flowchart LR
 |---|---|
 | **Ator** | Dono do catálogo |
 | **Pré-condição** | Cliente cadastrado |
-| **Fluxo principal** | 1. Filtra e ordena os usuários por nota. 2. Abre o detalhe. 3. Vê as notas por produto e categoria e a faixa de preço com e sem contato. 4. Abre o WhatsApp do cliente (**pendente:** hoje o botão abre o número da loja). |
+| **Fluxo principal** | 1. Filtra e ordena os usuários por nota. 2. Abre o detalhe. 3. Vê as notas por produto e categoria e a faixa de preço com e sem conversão. 4. Abre o WhatsApp do cliente; sem autorização de contato, o sistema avisa antes. |
 | **Alternativas** | **Diferença de preço maior que R$ 10:** aviso de possível barreira de preço. **Sem telefone:** botão desabilitado com explicação. |
 | **Resultado** | Contato com contexto do que o cliente procura |
 | **Rastreabilidade** | RF21, RF22 · telas A3 e A4 · `GET /api/admin/usuarios/{id}` |
@@ -213,7 +213,7 @@ flowchart LR
 | **Ator** | Dono do catálogo |
 | **Pré-condição** | Cliente cadastrado |
 | **Fluxo principal** | 1. No detalhe do cliente, informa produto, quantidade, preço e data. 2. O sistema calcula o total, salva e recalcula a nota. |
-| **Alternativas** | **Editar ou excluir:** também recalcula. **Menos de 3 compras:** aviso de que ainda não contam na nota. |
+| **Alternativas** | **Editar ou excluir:** também recalcula. **Menos de 3 compras:** aviso de que ainda não somam pontos. **Data futura:** recusada. |
 | **Resultado** | Histórico de compras e nota atualizados |
 | **Rastreabilidade** | RF24 · tela A4 · `POST/PUT/DELETE /api/admin/usuarios/{id}/compras` |
 
@@ -234,7 +234,7 @@ flowchart LR
 |---|---|
 | **Ator** | Dono do catálogo |
 | **Pré-condição** | Estar logado como admin |
-| **Fluxo principal** | 1. Ajusta os pesos, a duração do interesse ou o bônus por categoria. 2. O sistema mostra quem mudaria de nível e a precisão, sem gravar. 3. Salva, com a opção de recalcular todas as notas. |
+| **Fluxo principal** | 1. Ajusta os pesos, a duração do interesse, a pausa ou os bônus por categoria. 2. O sistema mostra quem mudaria de nível e a precisão, sem gravar. 3. Salva, com a opção de recalcular todas as notas. |
 | **Alternativas** | **Desfazer** ou **Restaurar padrão:** nada é gravado até salvar. **Ajuste por categoria:** criar ou remover. **Sem histórico suficiente:** a precisão aparece vazia. |
 | **Resultado** | Parâmetros novos valendo, sem novo deploy |
 | **Rastreabilidade** | RF25, RNF13 · tela A9 · `GET/PATCH …/configuracao/pesos` e `/decay`, `DELETE …/decay/{categoriaId}`, `POST …/simular`, `POST …/recalcular` |

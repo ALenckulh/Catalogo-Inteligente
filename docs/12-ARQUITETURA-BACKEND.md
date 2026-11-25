@@ -55,7 +55,7 @@ backend/
 │   │   └── repository/
 │   ├── admin/        # dashboard, usuários, produtos, conta, configuração, solicitações LGPD
 │   ├── lgpd/         # conta do titular, consentimentos, exportação, anonimização
-│   └── shared/       # PageResponse, ErrorResponse, ApiException, GlobalExceptionHandler, Documentos, HealthController
+│   └── shared/       # PageResponse, ErrorResponse, ApiException, GlobalExceptionHandler, Documentos, DadosConta, BuscaTexto, Fuso, HealthController
 ├── src/main/resources/
 │   ├── application.yml
 │   ├── application-dev.yml
@@ -94,7 +94,7 @@ backend/
 | **Paginação** | `PageResponse<T>`: `{ "items", "page", "limit", "total" }` — wrapper sobre Spring `Page`. |
 | **Erros** | HTTP status + `{ "code", "message" }`. `@ControllerAdvice` global. |
 | **Soft delete** | Filtro `deleted_at IS NULL` nas consultas dos repositórios (`…DeletedAtIsNull`, `findAtivos…`). |
-| **Timestamps** | `TIMESTAMPTZ` ↔ `OffsetDateTime`. JPA Auditing para `createdAt` / `updatedAt`. |
+| **Timestamps** | `TIMESTAMPTZ` ↔ `OffsetDateTime`. JPA Auditing para `createdAt` / `updatedAt`. O **dia** (decaimento, gráfico, compra) é o de Brasília, por `Fuso`, qualquer que seja o fuso do servidor. |
 | **Dinheiro** | `BigDecimal` (`NUMERIC(12,2)`). Nunca `double`/`float`. |
 | **Scores** | `BigDecimal` [0, 100], 2 casas (`NUMERIC(5,2)`). |
 | **DTOs** | `record` com `from(entity)`. A conversão fica no DTO, não no service. |
@@ -110,15 +110,17 @@ backend/
   - públicas: catálogo (GET), cadastro, login, recuperação de senha, sessão de visitante, eventos e saúde
   - `/api/admin/**`: `hasRole("ADMIN")` ([RNF07](02-REQUISITOS.md))
   - demais: autenticado
-- **JWT** (JJWT), stateless. Claims: `sub` (usuarioId), `tipo` (`PF`\|`PJ`\|`ADMIN`), `email`, `iat`, `exp` (24 h). O filtro relê o usuário a cada requisição e recusa conta excluída.
+- **JWT** (JJWT), stateless. Claims: `jti`, `sub` (usuarioId), `tipo` (`PF`\|`PJ`\|`ADMIN`), `email`, `iat`, `exp` (24 h). O filtro relê o usuário a cada requisição e recusa conta excluída, token encerrado no logout (`token_revogado`) e token anterior à última troca de senha (`sessoes_validas_desde`). Só erro do **token** segue como anônimo (401 se a rota exigir login); banco fora responde 503.
 - Login consumidor e admin em rotas distintas (`POST /api/auth/login` vs `POST /api/admin/auth/login`).
 - **Rate limit** (Bucket4j in-memory no MVP) — chave e limites em [11 §1](11-API-ENDPOINTS.md):
-  - auth sensível: 5 req/min por IP
+  - auth sensível, incluindo `password-reset/confirm`: 5 req/min por IP
   - `POST /api/eventos`: 60 req/min por cookie do visitante (ou IP)
   - `POST /api/visitantes/sessao`: 30 req/min por IP
+  - demais rotas com login: 120 req/min por usuário (`UsuarioRateLimitFilter`, depois do JWT)
   - excedido → `429` + `Retry-After`
 - Header `X-Visitante-Cookie-Id` obrigatório em telemetria pública quando não autenticado.
-- Consentimento comportamental: logado sem aceite → `POST /api/eventos` retorna `403`. Do visitante, quem bloqueia é o front.
+- Consentimento comportamental (`ConsentimentoService`): logado sem aceite, ou visitante sem `aceite_cookies_em` → `POST /api/eventos` e `POST /api/visitantes/sessao` retornam `403`.
+- E-mail (`EmailService`, assíncrono): a resposta não espera o SMTP nem revela se a conta existe; o código não vai para o log.
 - CORS: só origens `localhost` e `127.0.0.1` (`CorsConfig`).
 
 ---
@@ -137,11 +139,11 @@ A fila é parte **central** da arquitetura ([05 §2](05-ARQUITETURA.md), [RNF02]
 | `events.product.favorite` | `FAVORITAR`, `DESFAVORITAR` | API | Worker scoring |
 | `events.product.contact` | `CONTATO_WHATSAPP` | API | Worker scoring |
 | `events.search` | `PESQUISA` | API | Worker scoring |
-| `events.session` | nenhum tipo de evento usa hoje (reservada) | — | Worker scoring |
 | `events.dlq` | dead letter | — | Monitor/log |
 
 - **Falhas** (`config/FalhaPassageira.java`): passageira (banco fora, deadlock) volta para a fila; dado inválido ou mensagem malformada vai para a DLQ. A API já recusa com 400 o evento que o worker não conseguiria gravar.
 - **Transação:** gravar o evento e recalcular a nota é uma transação só; se o cálculo falha, o evento não fica gravado.
+- **Conta excluída:** o worker trava a linha do usuário ao gravar e descarta o evento de conta já excluída; a exclusão trava a mesma linha antes de apagar os eventos.
 - Config em `config/RabbitConfig.java` (exchanges, queues, bindings, DLQ).
 - O enum `tipo_evento` no payload permanece fino; a fila só agrupa consumidores ([05 §2](05-ARQUITETURA.md)).
 
@@ -172,10 +174,14 @@ A Camada 3 (grafo/PPR) e modelos de ML são trabalho futuro ([04 §13](04-ESPECI
 
 Regras operacionais:
 - λ lido de `parametro_decay` (por `categoria_id` ou global `NULL`).
+- Favoritar e desfavoritar: por produto, só o último conta.
+- Nota sem sinal (compra excluída, evento removido) é apagada no recálculo.
 - Pesos lidos de `peso_metrica` (admin: [11 §3.8](11-API-ENDPOINTS.md)).
-- Contato WhatsApp: pausa decay por 60 dias — [04 §5.4](04-ESPECIFICACAO-TECNICA.md).
-- Histórico de compras: `< 3` registros → não entra na nota; a partir de 3, cada compra soma o peso do WhatsApp (metade após 2 anos) — [04 §9.2](04-ESPECIFICACAO-TECNICA.md).
-- Transição fallback → score pessoal: 0–2 / 3–9 / 10+ interações — [04 §6.2](04-ESPECIFICACAO-TECNICA.md).
+- Contato WhatsApp ou compra: pausa decay por `parametro_decay.pausa_dias` (padrão 60) — [04 §5.4](04-ESPECIFICACAO-TECNICA.md).
+- Retorno ao produto: cada sessão com visualização depois da primeira soma o peso `RETORNO_PAGINA` (começa em 0).
+- Recorrência: com 3 ou mais compras, categoria comprada em 2 ou mais datas recebe `boost_recorrencia`.
+- Compra vale como conversão desde a primeira (boost, faixa, decaimento). Pontos: `< 3` registros → nenhum; a partir de 3, cada compra soma o peso `COMPRA` (metade após 2 anos) — [04 §9.2](04-ESPECIFICACAO-TECNICA.md).
+- Transição fallback → score pessoal: 0–2 / 3–9 / 10+ interações; logado com notas, mínimo de 80% — [04 §6.2](04-ESPECIFICACAO-TECNICA.md).
 - **MVP (ADR-B07):** consumer no mesmo processo Spring; extrair processo separado se throughput exigir.
 
 ---
@@ -187,7 +193,7 @@ Código em [`backend/`](../backend/) (ver [`backend/README.md`](../backend/READM
 | Perfil | Uso | Config |
 |---|---|---|
 | `dev` | local | `application-dev.yml` — DB/Rabbit locais, JWT secret de dev |
-| `prod` | fora do ambiente local | variáveis `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, `JWT_SECRET` — sem segredos no git |
+| `prod` | fora do ambiente local | variáveis `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, `JWT_SECRET`, `MAIL_*` — sem segredos no git |
 
 Pré-requisitos locais:
 1. `database/`: `docker compose up -d postgres rabbitmq` + `flyway migrate` ([database/README.md](../database/README.md)).
@@ -237,7 +243,7 @@ controller → service → repository → entity (Postgres)
 
 ### ADR-B03: DTOs `record` com `from()` (revista)
 - **Contexto:** converter entidade em DTO sem reflexão e com tipo verificado pelo compilador.
-- **Decisão original:** MapStruct. **Revisão:** os DTOs são `record` com um método estático `from(entity)`, porque as conversões são simples e cada uma fica ao lado do próprio contrato. A dependência do MapStruct ainda está no `build.gradle.kts`, sem uso.
+- **Decisão original:** MapStruct. **Revisão:** os DTOs são `record` com um método estático `from(entity)`, porque as conversões são simples e cada uma fica ao lado do próprio contrato. A dependência do MapStruct foi removida.
 - **Alternativa rejeitada:** ModelMapper (reflexão, menos type-safe).
 
 ### ADR-B04: Flyway em `database/migrations/`
@@ -253,7 +259,8 @@ controller → service → repository → entity (Postgres)
 ### ADR-B06: JWT stateless
 - **Contexto:** API REST consumida pelo Next.js; admin e consumidor separados.
 - **Decisão:** JWT com claim `tipo`; sem sessão server-side no MVP.
-- **Benefício:** escala horizontal simples; logout = invalidação client-side (+ denylist opcional depois).
+- **Benefício:** escala horizontal simples.
+- **Revisão:** o logout grava o `jti` em `token_revogado`, e trocar a senha invalida os tokens anteriores. Custa uma leitura por chave primária a cada requisição.
 
 ### ADR-B07: Worker no mesmo processo (fase 1)
 - **Contexto:** Um JAR facilita demos e TCC.

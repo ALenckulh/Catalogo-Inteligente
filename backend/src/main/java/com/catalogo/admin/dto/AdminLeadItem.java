@@ -13,6 +13,7 @@ public record AdminLeadItem(
         String telefone,
         BigDecimal scoreMaxProduto,
         String topCategoria,
-        OffsetDateTime ultimaAtividade
+        OffsetDateTime ultimaAtividade,
+        String proximaCompra
 ) {
 }

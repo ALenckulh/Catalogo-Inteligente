@@ -63,7 +63,8 @@ class ContaControllerTest {
     void getOk() throws Exception {
         when(contaService.getConta(1L)).thenReturn(new ContaResponse(
                 new UsuarioResponse(1L, TipoUsuario.PF, "a@b.c", null, null, null, "A", null, null, null, null, null),
-                List.of()
+                List.of(),
+                null
         ));
 
         mockMvc.perform(get("/api/conta").principal(auth()))
@@ -77,6 +78,8 @@ class ContaControllerTest {
                 new UsuarioResponse(1L, TipoUsuario.PF, "a@b.c", null, null, null, "A", null, null, null, null, null),
                 List.of(),
                 List.of(7L),
+                List.of(),
+                List.of(),
                 List.of()
         ));
 
@@ -113,7 +116,8 @@ class ContaControllerTest {
     void patchOk() throws Exception {
         when(contaService.patchConta(eq(1L), any())).thenReturn(new ContaResponse(
                 new UsuarioResponse(1L, TipoUsuario.PF, "a@b.c", "1199", null, null, "A", null, null, null, null, null),
-                List.of()
+                List.of(),
+                null
         ));
 
         mockMvc.perform(patch("/api/conta")

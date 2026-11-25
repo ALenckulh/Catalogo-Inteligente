@@ -1,7 +1,8 @@
 import type { EventoPayload } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
+import { aguardarEnvioInicial } from '@/lib/consentSync'
 import { apiClient, toApiError } from './client'
-import { USE_MOCK } from './config'
+import { AUTH_TOKEN_KEY, USE_MOCK } from './config'
 import { garantirSessao, readSessaoId, reabrirSessao } from './visitantes'
 
 interface TrackOptions {
@@ -17,6 +18,22 @@ function sessaoRecusada(e: unknown): boolean {
   return ['INVALID_SESSAO', 'INVALID_COOKIE'].includes(toApiError(e).code)
 }
 
+function tokenAtual(): string | null {
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Login cuja conta recusou a coleta (403 CONSENT_REQUIRED): não adianta insistir até algo mudar. */
+let recusadoCom: string | null = null
+
+/** A conta aceitou a coleta em /conta: volta a enviar. Trocar de login também volta. */
+export function liberarEventos(): void {
+  recusadoCom = null
+}
+
 /**
  * Envia evento comportamental. Caller deve checar CookieConsent antes.
  * A sessão nasce aqui, no primeiro evento: página aberta sem evento não cria sessão.
@@ -24,6 +41,9 @@ function sessaoRecusada(e: unknown): boolean {
  */
 export async function trackEvent(payload: EventoPayload, options?: TrackOptions): Promise<void> {
   if (!USE_MOCK) {
+    const token = tokenAtual()
+    if (token !== null && recusadoCom === token) return
+
     const enviar = (sessaoId: number | undefined) =>
       apiClient.post(
         '/eventos',
@@ -44,10 +64,11 @@ export async function trackEvent(payload: EventoPayload, options?: TrackOptions)
       return
     }
 
-    const sessaoId = await garantirSessao()
+    await aguardarEnvioInicial()
     try {
-      await enviar(sessaoId)
+      await enviar(await garantirSessao())
     } catch (e) {
+      if (toApiError(e).code === 'CONSENT_REQUIRED') recusadoCom = token
       if (!sessaoRecusada(e)) throw e
       await enviar(await reabrirSessao())
     }

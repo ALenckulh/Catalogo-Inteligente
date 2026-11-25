@@ -13,7 +13,9 @@ Catálogo REST do backend Spring Boot. Visão geral da arquitetura: [05-ARQUITET
 | Auth | JWT no header `Authorization: Bearer` (24 h). Níveis: `público` · `auth` (logado) · `admin` · `visitante+cookie`. Sem token válido → `401`; papel errado → `403 FORBIDDEN`. `/conta`, `/favoritos` e `/auth/migrar-historico` são só de cliente (PF/PJ) |
 | IDs | `produtoId` / `usuarioId` = `BIGINT`. Produto na URL pública usa `slug` |
 | **JSON wire** | **camelCase** em request/response (ex.: `emailAlternativo`, `produtoId`, `fichaTecnica`). Colunas DB permanecem snake_case ([08](08-MODELO-DE-DADOS.md)); mapear no backend (ex. Jackson). |
-| Erros | HTTP status + body `{ "code": string, "message": string }` |
+| Erros | HTTP status + body `{ "code": string, "message": string }`. `400 VALIDATION_ERROR` (campo, parâmetro ou texto maior que o limite), `404 NOT_FOUND` (também rota inexistente), `405 METHOD_NOT_ALLOWED`, `409` (duplicado), `415 UNSUPPORTED_MEDIA_TYPE`, `503 SERVICE_UNAVAILABLE` (banco fora do ar; nunca 401) |
+| Busca `q` | Cada palavra precisa aparecer, em qualquer ordem, sem diferenciar acento nem maiúscula; `%` e `_` são texto |
+| Senha | De 6 a 72 caracteres (limite do BCrypt, em bytes) no cadastro, em `/conta`, na conta do admin e na recuperação |
 | **Page&lt;T&gt;** | Listas paginadas: `{ "items": T[], "page": number, "limit": number, "total": number }` |
 | **AuthSession** | Login/signup: `{ "token": string, "usuario": Usuario }` — `usuario` sem hash de senha |
 | Eventos | `POST /api/eventos` publica na fila e responde rápido ([RNF02](02-REQUISITOS.md)) |
@@ -35,11 +37,12 @@ Catálogo REST do backend Spring Boot. Visão geral da arquitetura: [05-ARQUITET
 
 | Endpoint | Limite | Chave |
 |---|---|---|
-| `POST /api/auth/login`, `POST /api/admin/auth/login`, `POST /api/auth/signup`, `POST /api/auth/password-reset` | 5 req/min | IP |
+| `POST /api/auth/login`, `POST /api/admin/auth/login`, `POST /api/auth/signup`, `POST /api/auth/password-reset`, `POST /api/auth/password-reset/confirm` | 5 req/min | IP |
 | `POST /api/eventos` | 60 req/min | `X-Visitante-Cookie-Id` (ou IP, sem o header) |
 | `POST /api/visitantes/sessao` | 30 req/min | IP |
+| Demais rotas, com login (menos `/api/eventos`) | 120 req/min | usuário |
 
-Excedido → `429 Too Many Requests` com header `Retry-After`.
+Excedido → `429 Too Many Requests` (`RATE_LIMIT`) com header `Retry-After`.
 
 Cadastro de admin (**RF07**): fora da API de self-service — seed / processo de TI.
 
@@ -122,7 +125,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Auth** | auth (ou admin) |
 | **Telas** | 8, A8 |
 | **RF** | — |
-| **Notas** | Responde OK; quem esquece o token é o front. O JWT continua válido até expirar (24 h), exceto se a conta for excluída. |
+| **Notas** | Encerra só este token (`token_revogado`); as outras sessões da pessoa seguem. Trocar ou redefinir a senha encerra todas. |
 
 #### `POST /api/auth/password-reset`
 
@@ -132,7 +135,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Telas** | 4 (etapa 1) |
 | **RF** | RF06 |
 | **Body** | `email` |
-| **Notas** | Resposta genérica (não enumerar e-mails). Rate limit. |
+| **Notas** | Resposta genérica (não enumerar e-mails). Se a conta existe, envia por e-mail um código válido por 2 horas e anula os anteriores. Rate limit. |
 
 #### `POST /api/auth/password-reset/confirm`
 
@@ -142,6 +145,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Telas** | 4 (etapa 2) |
 | **RF** | RF06 |
 | **Body** | `token`, `novaSenha` (alias legado `nova_senha` aceito) |
+| **Notas** | Encerra todas as sessões da conta. Rate limit. |
 
 #### `POST /api/auth/migrar-historico`
 
@@ -151,8 +155,8 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Telas** | 2, 3 (modal pós-login/signup) |
 | **RF** | RF19 |
 | **Entidades** | `visitante`, `evento`, `sessao` |
-| **Body** | `aceitar: boolean` (associa cookie atual ao `usuarioId` ou descarta) |
-| **Notas** | [04 §7](04-ESPECIFICACAO-TECNICA.md). Preenche `visitante.usuario_id` / `migrado_em` e passa ao usuário só eventos e sessões ainda sem dono. |
+| **Body** | `aceitar: boolean` (associa o histórico do cookie atual à conta ou o descarta) |
+| **Notas** | [04 §7](04-ESPECIFICACAO-TECNICA.md). `true`: preenche `visitante.usuario_id` / `migrado_em`, passa ao usuário só eventos e sessões ainda sem dono e recalcula as notas da conta. `false`: descarta o que ainda é anônimo ([08 §5.3](08-MODELO-DE-DADOS.md)). |
 
 #### `POST /api/visitantes/sessao`
 
@@ -162,9 +166,9 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Telas** | 5, 6, 7 e header (no primeiro evento da visita) |
 | **RF** | RF18 |
 | **Entidades** | `visitante`, `sessao` |
-| **Body** | `cookieId?` (UUID), `fingerprint?`, contexto (`dispositivo`, `userAgent`, `canalOrigem`) |
+| **Body** | `cookieId?` (UUID), `aceiteCookies` (boolean), contexto (`dispositivo`, `userAgent`, `canalOrigem`) |
 | **Resposta** | `cookieId` (null com token: sessão sem visitante), `sessaoId`. O cliente guarda o cookie por 30 dias e o esquece no logout |
-| **Notas** | Cada chamada insere uma sessão. O front só chama no primeiro evento da visita (com aceite dos cookies comportamentais) e reaproveita a sessão enquanto houver evento a cada 30 min. `cookieId` desconhecido → `400 INVALID_COOKIE`; o front cria outro visitante. |
+| **Notas** | Cada chamada insere uma sessão. O front só chama no primeiro evento da visita (com aceite dos cookies comportamentais) e reaproveita a sessão enquanto houver evento a cada 30 min. `cookieId` desconhecido → `400 INVALID_COOKIE`; o front cria outro visitante. Sem `aceiteCookies: true`, ou logado sem consentimento → `403 CONSENT_REQUIRED`. |
 
 #### `POST /api/admin/auth/login`
 
@@ -271,7 +275,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Headers** | `X-Visitante-Cookie-Id: <uuid>` quando não autenticado |
 | **Body** | `tipo` (`TipoEvento`), `produtoId?`, `categoriaId?`, `conversao?` (`LEVE`\|`FORTE`\|`CONFIRMADA`), `metadados?` (objeto), `sessaoId?` |
 | **Resposta** | `202 Accepted` com body `{ "aceito": true }` — não espera persistência completa |
-| **Notas** | `produtoId` ou `categoriaId` inexistente, ou texto com o caractere nulo → `400 VALIDATION_ERROR`. Logado sem consentimento → `403 CONSENT_REQUIRED`. Para o visitante, quem bloqueia o envio é o front: o backend não guarda o consentimento de quem não tem conta. `sessaoId` de outro usuário, de outro visitante ou sem o dono certo → `400 INVALID_SESSAO`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front envia `{ tipo, produtoId?, categoriaId?, conversao?, metadados?, sessaoId }` e, em `INVALID_SESSAO` ou `INVALID_COOKIE`, reabre a sessão e reenvia uma vez. `PESQUISA` com `produtoId` = cliente abriu um resultado da busca (soma no produto); `FILTRO_APLICADO` com `categoriaId` = filtro por categoria (soma na nota da categoria) — ver [13 — M1/M2](13-MUDANCAS-DE-ESCOPO.md). Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
+| **Notas** | `400 VALIDATION_ERROR`: `produtoId` inexistente ou inativo (`DESFAVORITAR` aceita inativo), `categoriaId` inexistente, produto ausente quando o tipo exige (todos, menos `PESQUISA` e `FILTRO_APLICADO`), `FAVORITAR`/`DESFAVORITAR` sem login, `conversao` fora de `CONTATO_WHATSAPP` ou `CONFIRMADA` (que é a compra), `metadados` acima de 10 mil caracteres ou com o caractere nulo. `COMPRA` e `RETORNO_PAGINA` (só pesos) também dão 400. Logado sem consentimento, ou visitante sem aceite gravado → `403 CONSENT_REQUIRED`. `sessaoId` de outro usuário, de outro visitante ou sem o dono certo → `400 INVALID_SESSAO`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front envia `{ tipo, produtoId?, categoriaId?, conversao?, metadados?, sessaoId }` e, em `INVALID_SESSAO` ou `INVALID_COOKIE`, reabre a sessão e reenvia uma vez. `PESQUISA` com `produtoId` = cliente abriu um resultado da busca (soma no produto); `FILTRO_APLICADO` com `categoriaId` = filtro por categoria (soma na nota da categoria) — ver [13 — M1/M2](13-MUDANCAS-DE-ESCOPO.md). Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
 
 Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_WHATSAPP`, `PESQUISA`, `FILTRO_APLICADO`, `SCROLL_DEPTH`, `TEMPO_PAGINA`.
 
@@ -295,7 +299,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | auth |
 | **Telas** | 8 |
 | **Body** | parcial: `telefone?`, `emailAlternativo?`, `nomeCompleto?`, `idade?`; troca de senha (opcional): `senhaAtual`, `novaSenha` |
-| **Notas** | Front consome os quatro primeiros campos. Não altera `tipo`. Senha atual errada: `400 INVALID_PASSWORD` (não 401, que o front trata como sessão expirada). |
+| **Notas** | Mesmas regras do cadastro: nome com 3 a 255 caracteres, idade de 18 a 120, telefone e e-mail alternativo válidos (`""` limpa os dois últimos). Front consome os quatro primeiros campos. Não altera `tipo`. Trocar a senha encerra as outras sessões, e a resposta traz um `token` novo para esta (nulo nos demais casos). Senha atual errada: `400 INVALID_PASSWORD` (não 401, que o front trata como sessão expirada). |
 
 #### `POST /api/conta/consentimentos`
 
@@ -316,7 +320,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | 8 |
 | **RF** | RF29 |
 | **Query** | `formato=json\|csv` |
-| **Notas** | Portabilidade: usuário, consentimentos vigentes, favoritos e eventos. Síncrono; grava uma `solicitacao_lgpd` `EXPORTACAO` já `ATENDIDA`. |
+| **Notas** | Portabilidade: usuário, consentimentos vigentes, favoritos, eventos, compras (sem as observações internas) e solicitações. No CSV, texto que começa com `=`, `+`, `-` ou `@` ganha um apóstrofo, para a planilha não executar. Síncrono; grava uma `solicitacao_lgpd` `EXPORTACAO` já `ATENDIDA`. |
 
 #### `POST /api/conta/solicitacoes-lgpd`
 
@@ -352,7 +356,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **RF** | RF20 |
 | **Resposta** | `AdminDashboard`: |
 | | `kpis`: `{ usuariosAtivos, produtosAtivos, contatos7d, leadsScoreAlto }` |
-| | `leads[]`: `{ usuarioId, nome, tipo, email, telefone, scoreMaxProduto, topCategoria, ultimaAtividade }` |
+| | `leads[]`: `{ usuarioId, nome, tipo, email, telefone, scoreMaxProduto, topCategoria, ultimaAtividade, proximaCompra }` — os 10 clientes com maior nota |
 | | `series`: `{ distribuicaoScores[{ faixa, quantidade }], contatosPorDia[{ data, quantidade }], leadsPorCategoria[{ categoria, quantidade }] }` — `distribuicaoScores`: sempre 4 níveis, nesta ordem, em `faixa`: `QUENTE` (score máx. de produto ≥ 70), `MORNO` (≥ 40), `FRIO` (< 40), `SEM_SCORE` (sem score); `quantidade` = usuários ativos (não ADMIN); a soma = `kpis.usuariosAtivos`. `contatosPorDia`: 14 dias corridos até hoje, com `quantidade = 0` nos dias sem contato. `leadsPorCategoria`: top 10, `quantidade` = usuários ativos cuja categoria de maior score é a categoria. |
 
 #### `GET /api/admin/usuarios`
@@ -362,8 +366,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A3 |
 | **RF** | RF21 |
-| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?`, `ativo?` (boolean), `page?`, `limit?` (até 100 por página), `sort?` (`campo,asc\|desc`; campos `nome`, `email`, `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`; outro valor = mais recentes primeiro) |
-| **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`) |
+| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?` (nome, e-mail; com 3 dígitos ou mais, também CPF, CNPJ e telefone), `ativo?` (boolean), `page?`, `limit?` (até 100 por página), `sort?` (`campo,asc\|desc`; campos `nome`, `email`, `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`; outro valor = mais recentes primeiro) |
+| **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`), `proximaCompra` (nome do produto ativo de maior nota sem compra nos últimos 30 dias; null se não houver) |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria` |
 
 † Front ainda não envia `scoreMin`.
@@ -386,8 +390,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A4 |
 | **RF** | RF24 |
 | **Entidades** | `compra` |
-| **Body** | `produtoId`, `precoUnitario`, `quantidade`, `valorTotal`, `data` (ISO date `YYYY-MM-DD`), `observacoes?` |
-| **Notas** | `registradoPor` = admin logado. Se &lt; 3 compras do cliente, peso histórico = 0 no score ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). |
+| **Body** | `produtoId`, `precoUnitario` (2 casas), `quantidade`, `data` (ISO date `YYYY-MM-DD`), `observacoes?` (até 500) |
+| **Notas** | `registradoPor` = admin logado. `valorTotal` = preço × quantidade, calculado no backend. Data futura (dia de Brasília) → `400`; produto inativo é aceito. Com menos de 3 compras, elas não somam pontos na nota, mas valem como conversão ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). |
 
 #### `PUT /api/admin/usuarios/{id}/compras/{compraId}`
 
@@ -445,8 +449,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A6 |
 | **RF** | RF23 |
 | **Entidades** | `produto`, `produto_imagem` |
-| **Body** | `nome`, `slug`, `descricao?`, `preco`, `categoriaId`, `ativo`, `fichaTecnica?` (`Record<string,string>`), `imagens?[]` (`url`, `altText?`, `ordem`) |
-| **Notas** | `imagens[].url` aceita URL externa ou a referência devolvida pelo upload (`produtos/imagens/{id}`). Ver [M16](13-MUDANCAS-DE-ESCOPO.md). |
+| **Body** | `nome` (até 200), `slug` (até 220), `descricao?`, `preco` (10 dígitos e 2 casas), `categoriaId`, `ativo`, `fichaTecnica?` (`Record<string,string>`), `imagens?[]` (`url` até 500, `altText?` até 200, `ordem`) |
+| **Notas** | `slug`: letras minúsculas sem acento, números e hífen, diferente de `imagens`. `imagens[].url` aceita `http(s)` ou a referência devolvida pelo upload (`produtos/imagens/{id}`), que precisa existir. A ficha é gravada sem espaços nas pontas e sem linha em branco. Ver [M16](13-MUDANCAS-DE-ESCOPO.md). |
 
 #### `POST /api/admin/produtos/imagens`
 
@@ -467,7 +471,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A5 (toggle ativo), A7 |
 | **RF** | RF23 |
-| **Body** | campos parciais do `POST` (incl. `fichaTecnica`, `imagens` — substituição da lista quando enviado). Campo enviado segue a regra do `POST`: `preco` > 0, `nome` e `slug` não vazios (`400`) |
+| **Body** | campos parciais do `POST` (incl. `fichaTecnica`, `imagens` — substituição da lista quando enviado). Campo enviado segue a regra do `POST` (`400`). `fichaTecnica: {}` esvazia a ficha |
 
 #### `DELETE /api/admin/produtos/{id}`
 
@@ -489,7 +493,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A8 |
 | **RF** | RF26 |
-| **Body (PATCH)** | `email?`, `telefone?`, `senhaAtual?` + `novaSenha?` |
+| **Body (PATCH)** | `email?`, `telefone?`, `senhaAtual?` + `novaSenha?` (validados como no cadastro) |
+| **Resposta (PATCH)** | `{ usuario, token }` — `token` só vem ao trocar a senha, que encerra as outras sessões |
 | **Notas** | `telefone` ausente ou nulo não altera; `""` limpa. `novaSenha` exige `senhaAtual`; se ela estiver errada, `400 INVALID_PASSWORD`. |
 
 #### `GET /api/admin/configuracao/pesos` · `PATCH /api/admin/configuracao/pesos`
@@ -500,8 +505,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A9 |
 | **RF** | RF25, RNF13 |
 | **Entidades** | `peso_metrica` |
-| **GET** | `PesoMetrica[]` — `{ tipoEvento, peso }` |
-| **Body (PATCH)** | `{ "pesos": [{ "tipoEvento", "peso" }] }` |
+| **GET** | `PesoMetrica[]` — `{ tipoEvento, peso }`; inclui `COMPRA` e `RETORNO_PAGINA`, que só têm peso |
+| **Body (PATCH)** | `{ "pesos": [{ "tipoEvento", "peso" }] }` — `peso` de 0 a 9,9999 |
 
 #### `GET /api/admin/configuracao/decay` · `PATCH /api/admin/configuracao/decay`
 
@@ -511,8 +516,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A9 |
 | **RF** | RF25, RNF13 |
 | **Entidades** | `parametro_decay` |
-| **GET** | `ParametroDecay[]` — `{ categoriaId, categoriaNome?, lambda, boostConversao }` (`categoriaId` null = global) |
-| **Body (PATCH)** | `{ "items": [{ "categoriaId", "lambda", "boostConversao" }] }` (bulk; upsert — cria o ajuste da categoria se não existir) |
+| **GET** | `ParametroDecay[]` — `{ categoriaId, categoriaNome?, lambda, boostConversao, boostRecorrencia, pausaDias }` (`categoriaId` null = global; `pausaDias` só vale no global) |
+| **Body (PATCH)** | `{ "items": [{ "categoriaId", "lambda", "boostConversao", "boostRecorrencia"?, "pausaDias"? }] }` (bulk; upsert — cria o ajuste da categoria se não existir). `lambda` de 0,001 a 0,1; `boostConversao` e `boostRecorrencia` de 1 a 1,5; `pausaDias` de 0 a 180. Opcional ausente não altera |
 
 #### `DELETE /api/admin/configuracao/decay/{categoriaId}`
 
@@ -530,7 +535,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 |---|---|
 | **Auth** | admin |
 | **Telas** | A9 (prévia) |
-| **Body** | `{ "pesos": [{ tipoEvento, peso }], "decay": [{ categoriaId, lambda, boostConversao }] }` — valores **propostos** (não grava nada). |
+| **Body** | `{ "pesos": [{ tipoEvento, peso }], "decay": [{ categoriaId, lambda, boostConversao, boostRecorrencia?, pausaDias? }] }` — valores **propostos** (não grava nada). |
 | **Resposta** | `{ impacto, precisao }`. **impacto:** recalcula agora, a partir dos eventos (365 dias) e compras, a nota máx. de cada cliente ativo (não ADMIN) com os parâmetros salvos e com os propostos → `clientesAnalisados`, `atual[]`/`proposta[]` (`{ nivel, quantidade }` para QUENTE/MORNO/FRIO/SEM_SCORE), `notaMediaAtual/Proposta`, `mudamDeNivel`, `mudancas[]` (top 10: `{ usuarioId, nome, nivelAtual, nivelProposto, notaAtual, notaProposta }`); categoria favorita (maior nota de categoria) de cada cliente nos dois cenários → `mudamDeCategoria`, `categoriasAtual[]`/`categoriasProposta[]` (`{ categoriaId, nome, quantidade }`, as mesmas até 6 categorias nos dois), `mudancasCategoria[]` (top 10: `{ usuarioId, nome, categoriaAtual, categoriaProposta }`, null = nenhuma). **precisao (backtest):** corte = percentil 70 dos horários dos eventos; notas com o histórico anterior ao corte; acerto pelas conversões (contato WhatsApp, evento com `conversao`, compra) a partir do corte, clientes e visitantes → `corte` (null se histórico insuficiente), `amostras`, `conversoes`, `confianca` (BAIXA < 10 conversões ≤ MEDIA < 30 ≤ ALTA), `atual`/`proposta`: `{ precisaoQuentes, recallQuentes, auc, acertoTop3, quentes }` (frações 0–1; null = indefinido). |
 | **Cálculo** | Mesmo `ScoreCalculator` do motor (a prévia bate com o que será gravado). |
 
@@ -540,7 +545,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 |---|---|
 | **Auth** | admin |
 | **Telas** | A9 (após salvar, opcional) |
-| **Resposta** | `{ "recalculados": number }` — recalcula e grava `score_produto`/`score_categoria`/`faixa_preco_usuario` de todo usuário com eventos e de visitantes sem usuário, com os parâmetros salvos. Síncrono (volume atual). |
+| **Resposta** | `{ "recalculados": number }` — recalcula e grava `score_produto`/`score_categoria`/`faixa_preco_usuario` de todo cliente ou visitante com evento, compra ou nota já gravada (menos conta excluída), com os parâmetros salvos; apaga a nota que não tem mais sinal. Síncrono (volume atual). |
 
 ---
 
@@ -566,7 +571,7 @@ Fluxo administrativo para processar os pedidos criados por `POST /api/conta/soli
 | **RF** | RF29, RF30 |
 | **Entidades** | `solicitacao_lgpd` |
 | **Body** | `status` (`EM_PROCESSAMENTO`\|`ATENDIDA`\|`REJEITADA`), `observacoes?` |
-| **Notas** | Transição para `ATENDIDA` em pedidos de `EXCLUSAO` executa o soft delete anonimizado ([08 §5.2](08-MODELO-DE-DADOS.md)); `EXPORTACAO` só muda o status (não gera arquivo). Preenche `atendidoEm` em `ATENDIDA`/`REJEITADA`. |
+| **Notas** | Transição para `ATENDIDA` em pedidos de `EXCLUSAO` executa o soft delete anonimizado ([08 §5.2](08-MODELO-DE-DADOS.md)); `REVOGACAO_CONSENTIMENTO` grava a recusa de cookies comportamentais e de contato proativo; `EXPORTACAO` só muda o status (não gera arquivo). `atendidoEm` é preenchido em `ATENDIDA`/`REJEITADA` e limpo ao reabrir (`EM_PROCESSAMENTO`). |
 
 ---
 

@@ -117,7 +117,7 @@ Importação **sempre** pelo barrel:
 import { Button, Form, FormItem, Input, Table, Tag } from '@/components/ui'
 ```
 
-Nunca `import { Button } from 'antd'` direto — o wrapper existe para padronizar props extras (`variant`, `color`, `shadow`, `tooltip`) e permitir trocar o DS no futuro. Para componentes que **não** têm wrapper (Tag, Modal, Table, Statistic, Progress, Timeline, Steps, Divider, Space, Flex, Row, Col, Typography, Alert, Spin, Empty, Popconfirm, Tooltip, Badge, Breadcrumb, Pagination, Descriptions, DatePicker, Checkbox, Radio, Drawer, Result, List, Tabs, Layout) o barrel re-exporta direto do antd — mesmo caminho de import.
+Nunca `import { Button } from 'antd'` direto — o wrapper existe para padronizar props extras (`variant`, `color`, `shadow`, `tooltip`, tabela compacta) e permitir trocar o DS no futuro. Para componentes que **não** têm wrapper (Tag, Modal, Statistic, Progress, Timeline, Steps, Divider, Space, Flex, Row, Col, Typography, Alert, Spin, Empty, Popconfirm, Tooltip, Badge, Breadcrumb, Pagination, Descriptions, DatePicker, Checkbox, Radio, Drawer, Result, List, Tabs, Layout) o barrel re-exporta direto do antd — mesmo caminho de import.
 
 ## 5. `lib/`
 
@@ -132,7 +132,7 @@ CSS vars reais ficam em `app/design-tokens.css` (fonte de verdade visual, import
 
 Hooks compartilhados por 2+ rotas. Ver [padroes/HOOKS.md](padroes/HOOKS.md).
 
-Existentes: `useAppNotification` (wrapper de `notification.useNotification()`), `useTabelaPaginada` (tabela com paginação e ordenação no servidor), `useRequireAdmin` (exige admin) e `useTrackEvent` (envia evento só com consentimento).
+Existentes: `useAppNotification` (avisos do `<App>` da raiz), `useTabelaPaginada` (tabela com paginação e ordenação no servidor), `useRequireAdmin` (exige admin) e `useTrackEvent` (envia evento só com consentimento).
 
 ### 5.3 `lib/contexts/`
 

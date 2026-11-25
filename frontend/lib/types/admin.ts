@@ -1,4 +1,4 @@
-import type { TipoEvento } from './index'
+import type { TipoMetrica } from './index'
 
 export interface Compra {
   id: number
@@ -12,7 +12,8 @@ export interface Compra {
   observacoes: string | null
 }
 
-export type CompraInput = Omit<Compra, 'id' | 'usuarioId' | 'produtoNome'>
+/** O total é calculado pelo backend. */
+export type CompraInput = Omit<Compra, 'id' | 'usuarioId' | 'produtoNome' | 'valorTotal'>
 
 export interface ScoreProdutoRow {
   produtoId: number
@@ -36,6 +37,8 @@ export type AdminUsuarioListItem = import('./index').Usuario & {
   scoreMaxProduto: number | null
   topCategoria: string | null
   ultimaAtividade: string | null
+  /** Produto de maior nota não comprado nos últimos 30 dias. */
+  proximaCompra: string | null
   /** Conta não soft-deleted (`deleted_at` nulo). */
   ativo: boolean
 }
@@ -51,7 +54,7 @@ export interface AdminUsuarioDetalhe {
 }
 
 export interface PesoMetrica {
-  tipoEvento: TipoEvento
+  tipoEvento: TipoMetrica
   peso: number
 }
 
@@ -60,6 +63,10 @@ export interface ParametroDecay {
   categoriaNome: string | null
   lambda: number
   boostConversao: number
+  /** Bônus da categoria com compra em mais de uma data. */
+  boostRecorrencia: number
+  /** Dias sem esfriar depois de contato ou compra; só o item global vale. */
+  pausaDias: number
 }
 
 /** Nível de interesse (espelha `NivelInteresse` do backend). */

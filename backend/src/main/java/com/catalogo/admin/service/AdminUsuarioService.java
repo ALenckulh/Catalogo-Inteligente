@@ -1,5 +1,6 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -50,6 +51,9 @@ import jakarta.persistence.PersistenceContext;
 
 @Service
 public class AdminUsuarioService {
+
+    /** Limite da coluna compra.valor_total, numeric(12,2). */
+    private static final BigDecimal TOTAL_MAX = new BigDecimal("9999999999.99");
 
     @PersistenceContext
     private EntityManager em;
@@ -111,7 +115,7 @@ public class AdminUsuarioService {
         List<AdminUsuarioListItem> items = rows.stream()
                 .filter(r -> porId.containsKey(toLong(r[0])))
                 .map(r -> AdminUsuarioListItem.from(
-                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3])))
+                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3]), (String) r[4]))
                 .toList();
         return new PageResponse<>(items, pageIndex, size, total);
     }
@@ -168,12 +172,7 @@ public class AdminUsuarioService {
 
         Compra compra = new Compra();
         compra.setUsuarioId(u.getId());
-        compra.setProduto(produto);
-        compra.setPrecoUnitario(request.precoUnitario());
-        compra.setQuantidade(request.quantidade());
-        compra.setValorTotal(request.valorTotal());
-        compra.setDataCompra(request.data());
-        compra.setObservacoes(request.observacoes());
+        preencher(compra, produto, request);
         compra.setRegistradoPor(adminId);
         compra = compraRepository.save(compra);
 
@@ -187,16 +186,28 @@ public class AdminUsuarioService {
         Produto produto = produtoRepository.findById(request.produtoId())
                 .orElseThrow(() -> new ApiException("NOT_FOUND", "Produto não encontrado", HttpStatus.NOT_FOUND));
 
-        compra.setProduto(produto);
-        compra.setPrecoUnitario(request.precoUnitario());
-        compra.setQuantidade(request.quantidade());
-        compra.setValorTotal(request.valorTotal());
-        compra.setDataCompra(request.data());
-        compra.setObservacoes(request.observacoes());
+        preencher(compra, produto, request);
         compra = compraRepository.save(compra);
 
         scoreEngine.recalc(usuarioId, null);
         return CompraResponse.from(compra);
+    }
+
+    private static void preencher(Compra compra, Produto produto, RegistrarCompraRequest request) {
+        if (request.data().isAfter(Fuso.hoje())) {
+            throw new ApiException("VALIDATION_ERROR", "A data da compra não pode ser futura", HttpStatus.BAD_REQUEST);
+        }
+        BigDecimal total = request.precoUnitario().multiply(BigDecimal.valueOf(request.quantidade()));
+        if (total.compareTo(TOTAL_MAX) > 0) {
+            throw new ApiException(
+                    "VALIDATION_ERROR", "O total da compra passa de R$ 9.999.999.999,99", HttpStatus.BAD_REQUEST);
+        }
+        compra.setProduto(produto);
+        compra.setPrecoUnitario(request.precoUnitario());
+        compra.setQuantidade(request.quantidade());
+        compra.setValorTotal(total);
+        compra.setDataCompra(request.data());
+        compra.setObservacoes(request.observacoes());
     }
 
     /** Soft delete: todas as leituras de compra já filtram {@code deleted_at}. */

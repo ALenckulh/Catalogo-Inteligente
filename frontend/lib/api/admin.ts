@@ -23,6 +23,7 @@ import {
   mockUsuarios,
   withCategoria,
 } from '@/lib/mocks/data'
+import { persistToken } from './auth'
 import { ApiError, apiClient } from './client'
 import { USE_MOCK } from './config'
 import { fromBackendPage, toBackendPage } from './pagination'
@@ -73,6 +74,7 @@ export async function listAdminUsuarios(params?: {
       scoreMaxProduto: lead?.scoreMaxProduto ?? null,
       topCategoria: lead?.topCategoria ?? null,
       ultimaAtividade: lead?.ultimaAtividade ?? null,
+      proximaCompra: lead?.proximaCompra ?? null,
       ativo: true,
     }
   })
@@ -152,6 +154,7 @@ export async function createCompra(usuarioId: number, body: CompraInput): Promis
     id: Math.max(0, ...mockCompras.map((c) => c.id)) + 1,
     usuarioId,
     produtoNome: produto?.nome,
+    valorTotal: body.precoUnitario * body.quantidade,
     ...body,
   }
   mockCompras.push(compra)
@@ -174,7 +177,10 @@ export async function updateCompra(
   const compra = mockCompras.find((c) => c.id === compraId && c.usuarioId === usuarioId)
   if (!compra) throw new ApiError('NOT_FOUND', 'Compra não encontrada', 404)
   const produto = mockProdutos.find((p) => p.id === body.produtoId)
-  Object.assign(compra, body, { produtoNome: produto?.nome })
+  Object.assign(compra, body, {
+    produtoNome: produto?.nome,
+    valorTotal: body.precoUnitario * body.quantidade,
+  })
   return { ...compra }
 }
 
@@ -373,10 +379,12 @@ export async function simularScoring(params: {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<SimulacaoResponse>('/admin/configuracao/simular', {
       pesos: params.pesos,
-      decay: params.decay.map(({ categoriaId, lambda, boostConversao }) => ({
+      decay: params.decay.map(({ categoriaId, lambda, boostConversao, boostRecorrencia, pausaDias }) => ({
         categoriaId,
         lambda,
         boostConversao,
+        boostRecorrencia,
+        pausaDias,
       })),
     })
     // Campos de categoria podem faltar (backend de versão anterior): vazios em vez de quebrar a prévia.
@@ -430,8 +438,9 @@ export async function updateAdminConta(
   patch: Partial<Pick<Usuario, 'telefone' | 'email'>> & { senhaAtual?: string; novaSenha?: string },
 ): Promise<Usuario> {
   if (!USE_MOCK) {
-    const { data } = await apiClient.patch<Usuario>('/admin/conta', patch)
-    return data
+    const { data } = await apiClient.patch<{ usuario: Usuario; token: string | null }>('/admin/conta', patch)
+    if (data.token) persistToken(data.token)
+    return data.usuario
   }
   await delay()
   const admin = mockUsuarios.find((u) => u.tipo === 'ADMIN')

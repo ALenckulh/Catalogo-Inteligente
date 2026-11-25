@@ -1,8 +1,10 @@
 package com.catalogo.config;
 
+import jakarta.servlet.DispatcherType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -33,7 +35,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtFilter,
+            ObjectProvider<UsuarioRateLimitFilter> limitePorUsuario
+    ) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 // CSRF desligado: API stateless e o token vai no header Authorization, que o navegador
@@ -44,6 +50,8 @@ public class SecurityConfig {
                 // /api/admin/** exige ROLE_ADMIN (montada em UsuarioPrincipal); conta, favoritos e migração são só
                 // de cliente (PF/PJ): com o token do admin, DELETE /api/conta apagava o próprio admin.
                 .authorizeHttpRequests(auth -> auth
+                        // Página de erro interna: exigindo login, URL malformada (400) saía como 401 e o front deslogava.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/api/auth/signup", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/password-reset", "/api/auth/password-reset/confirm").permitAll()
@@ -65,6 +73,7 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, e) ->
                                 responder(response, HttpStatus.FORBIDDEN, "FORBIDDEN", "Acesso negado")))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        limitePorUsuario.ifAvailable(filtro -> http.addFilterAfter(filtro, JwtAuthenticationFilter.class));
         return http.build();
     }
 

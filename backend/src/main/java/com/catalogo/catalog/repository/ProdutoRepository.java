@@ -18,6 +18,8 @@ public interface ProdutoRepository extends JpaRepository<Produto, Long>, Produto
 
     boolean existsBySlugIgnoreCase(String slug);
 
+    boolean existsByIdAndAtivoTrue(Long id);
+
     @Query("""
             SELECT p FROM Produto p
             LEFT JOIN FETCH p.imagens

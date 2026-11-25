@@ -12,11 +12,12 @@ import {
   updateConsentimentos,
 } from '@/lib/api/conta'
 import { toApiError } from '@/lib/api/client'
+import { liberarEventos } from '@/lib/api/eventos'
 import { formatCnpj, formatCpf, formatTelefone } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
-import { syncConsent } from '@/lib/consentSync'
+import { desmarcarConta, marcarContaDecidida } from '@/lib/consentSync'
 import { isValidTelefone, normalizeTelefone, telefoneForMask } from '@/lib/validators'
 import type { ConsentimentoLgpd, Usuario } from '@/lib/types'
 import { PageError, PageLoading } from '@/components/layout/PageStates'
@@ -54,6 +55,8 @@ export default function ContaPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [contato, setContato] = useState(false)
+  /** Valor da conta; null enquanto ela nunca decidiu (aí vale a escolha deste navegador, que vai para ela). */
+  const [cookiesConta, setCookiesConta] = useState<boolean | null>(null)
   const [salvandoConsent, setSalvandoConsent] = useState<TipoConsentimento | null>(null)
   const saindo = useRef(false)
 
@@ -71,6 +74,7 @@ export default function ContaPage() {
       setFalhou(false)
       setError(null)
       setContato(false)
+      setCookiesConta(null)
       getConta(user.id)
         .then((data) => {
           // Os campos do Form vêm de `initialValues`: o <Form> só monta depois do loading, e chamar
@@ -78,6 +82,8 @@ export default function ContaPage() {
           setConta(data.usuario)
           const contatoConsent = data.consentimentos.find((c) => c.tipo === 'CONTATO_PROATIVO')
           if (contatoConsent) setContato(contatoConsent.aceito)
+          const cookies = data.consentimentos.find((c) => c.tipo === 'COOKIES_COMPORTAMENTAIS')
+          setCookiesConta(cookies?.aceito ?? null)
         })
         .catch(() => setFalhou(true))
         .finally(() => setLoading(false))
@@ -111,33 +117,34 @@ export default function ContaPage() {
     }
   }
 
-  /** Salva ao alternar. O gate local muda antes da API: revogar para a coleta na hora. */
+  const cookiesLigado = cookiesConta ?? canTrackBehavioral
+
+  /** Salva ao alternar, na conta e neste navegador. O gate local muda antes da API: revogar para a coleta na hora. */
   async function onToggleConsent(tipo: TipoConsentimento, aceito: boolean) {
     if (!user) return
-    const aplicar = (valor: boolean) => {
-      if (tipo === 'COOKIES_COMPORTAMENTAIS') {
-        acceptCustom(valor)
-      } else {
-        setContato(valor)
-      }
+    const navegadorAntes = canTrackBehavioral
+    const contaAntes = cookiesConta
+    const cookies = tipo === 'COOKIES_COMPORTAMENTAIS'
+    if (cookies) {
+      marcarContaDecidida(user.id)
+      acceptCustom(aceito)
+      setCookiesConta(aceito)
+    } else {
+      setContato(aceito)
     }
-
-    const enviar = () =>
-      updateConsentimentos(user.id, [
-        { tipo, aceito, versaoTermos: '1.0' },
-      ])
-
-    // syncConsent registra o envio antes do re-render de acceptCustom: o SyncBehavioralConsent vê a
-    // troca em andamento e não grava a mesma linha de novo.
-    const envio =
-      tipo === 'COOKIES_COMPORTAMENTAIS' ? syncConsent(user.id, aceito, enviar) : enviar()
-    aplicar(aceito)
     setSalvandoConsent(tipo)
     try {
-      await envio
+      await updateConsentimentos(user.id, [{ tipo, aceito, versaoTermos: '1.0' }])
+      if (cookies) liberarEventos()
       api.success({ title: 'Preferência salva' })
     } catch (e) {
-      aplicar(!aceito)
+      if (cookies) {
+        acceptCustom(navegadorAntes)
+        setCookiesConta(contaAntes)
+        if (contaAntes === null) desmarcarConta(user.id)
+      } else {
+        setContato(!aceito)
+      }
       api.error({ title: toApiError(e).message })
     } finally {
       setSalvandoConsent(null)
@@ -178,6 +185,8 @@ export default function ContaPage() {
       okText: 'Excluir conta',
       cancelText: 'Cancelar',
       okButtonProps: { danger: true },
+      // Enter logo ao abrir não pode excluir a conta.
+      focusable: { autoFocusButton: 'cancel' },
       centered: true,
       onOk: async () => {
         if (!user) return
@@ -251,7 +260,7 @@ export default function ContaPage() {
                         { min: 3, message: 'Nome completo deve ter no mínimo 3 caracteres' },
                       ]}
                     >
-                      <Input id="conta-nome" placeholder="Informe o nome completo" />
+                      <Input id="conta-nome" placeholder="Informe o nome completo" maxLength={255} />
                     </FormItem>
                   )}
                   <FormItem
@@ -305,11 +314,23 @@ export default function ContaPage() {
                   <Switch
                     id="conta-cookies"
                     aria-label="Cookies comportamentais"
-                    checked={canTrackBehavioral}
+                    checked={cookiesLigado}
                     loading={salvandoConsent === 'COOKIES_COMPORTAMENTAIS'}
                     onChange={(v) => void onToggleConsent('COOKIES_COMPORTAMENTAIS', v)}
                   />
                 </Flex>
+                {cookiesLigado && !canTrackBehavioral && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    title="Sua conta aceita, mas este navegador não: nada é coletado aqui."
+                    action={
+                      <Button id="conta-cookies-navegador" size="small" onClick={() => acceptCustom(true)}>
+                        Aceitar neste navegador
+                      </Button>
+                    }
+                  />
+                )}
                 <Flex justify="space-between" align="center" gap="middle">
                   <Flex vertical>
                     <Text strong>Contato proativo</Text>

@@ -97,10 +97,10 @@ public class CatalogService {
             hasScores = scoreProdutoRepository.countByVisitanteId(visitanteId) > 0;
         }
 
-        double personalWeight = rankingService.personalWeight(interactions, hasScores);
+        double personalWeight = rankingService.personalWeight(interactions, hasScores, usuarioId != null);
         Map<Long, BigDecimal> personal = rankingService.personalScores(usuarioId, visitanteId);
         Map<Long, BigDecimal> popularidade = rankingService.loadPopularidade();
-        rankingService.sortByRank(ids, personalWeight, personal, popularidade);
+        rankingService.sortByRank(ids, personalWeight, personal, popularidade, usuarioId != null);
 
         int from = (int) Math.min((long) pageIndex * size, ids.size());
         int to = Math.min(from + size, ids.size());

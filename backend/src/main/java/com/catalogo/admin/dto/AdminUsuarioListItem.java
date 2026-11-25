@@ -22,13 +22,15 @@ public record AdminUsuarioListItem(
         BigDecimal scoreMaxProduto,
         String topCategoria,
         OffsetDateTime ultimaAtividade,
+        String proximaCompra,
         boolean ativo
 ) {
     public static AdminUsuarioListItem from(
             Usuario u,
             BigDecimal scoreMax,
             String topCategoria,
-            OffsetDateTime ultimaAtividade
+            OffsetDateTime ultimaAtividade,
+            String proximaCompra
     ) {
         return new AdminUsuarioListItem(
                 u.getId(),
@@ -46,6 +48,7 @@ public record AdminUsuarioListItem(
                 scoreMax,
                 topCategoria,
                 ultimaAtividade,
+                proximaCompra,
                 u.getDeletedAt() == null
         );
     }

@@ -1,47 +1,52 @@
 /**
- * Último valor de cookies comportamentais confirmado pelo backend para cada usuário, neste navegador.
- * O consentimento é append-only: sem essa marca, cada login (ou cada troca em /conta) gravava
- * uma linha nova igual à anterior.
- *
- * A marca só vai para o localStorage depois do sucesso: se a aba fechar no meio da chamada, a
- * próxima visita envia de novo. Durante a chamada vale `emAndamento`, só em memória.
+ * Contas que já decidiram sobre cookies comportamentais, neste navegador. Depois da primeira decisão só
+ * /conta muda a conta; a escolha de cada navegador vale só nele (na dúvida, o mais restritivo dos dois).
  */
 const KEY = 'ci_consent_synced'
 
-let emAndamento: string | null = null
+/** Só em memória: uma troca em /conta durante o envio inicial não pode ser desfeita por ele. */
+const decididas = new Set<number>()
 
-function chave(usuarioId: number, aceito: boolean) {
-  return `${usuarioId}:${aceito}`
-}
-
-/** Já confirmado, ou sendo enviado agora por outro componente. */
-export function isConsentSynced(usuarioId: number, aceito: boolean): boolean {
-  const k = chave(usuarioId, aceito)
-  if (emAndamento !== null) return emAndamento === k
+export function contaJaDecidiu(usuarioId: number): boolean {
+  if (decididas.has(usuarioId)) return true
   try {
-    return window.localStorage.getItem(KEY) === k
+    return window.localStorage.getItem(KEY) === String(usuarioId)
   } catch {
     return false
   }
 }
 
-/** Executa o envio e marca como sincronizado só se ele der certo. Repassa o erro de `enviar`. */
-export async function syncConsent(
-  usuarioId: number,
-  aceito: boolean,
-  enviar: () => Promise<unknown>,
-): Promise<void> {
-  const k = chave(usuarioId, aceito)
-  emAndamento = k
+export function marcarContaDecidida(usuarioId: number): void {
+  decididas.add(usuarioId)
   try {
-    await enviar()
-    try {
-      window.localStorage.setItem(KEY, k)
-    } catch {
-      /* ignore */
-    }
-  } finally {
-    // Uma troca mais nova pode ter assumido o lugar desta.
-    if (emAndamento === k) emAndamento = null
+    window.localStorage.setItem(KEY, String(usuarioId))
+  } catch {
+    /* ignore */
   }
+}
+
+/** A primeira decisão não chegou à conta: ela continua sem decidir. */
+export function desmarcarConta(usuarioId: number): void {
+  decididas.delete(usuarioId)
+  try {
+    window.localStorage.removeItem(KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+let envioInicial: Promise<void> | null = null
+
+/** Primeira decisão a caminho da conta: um evento enviado antes dela levaria 403. */
+export function registrarEnvioInicial(envio: Promise<void>): void {
+  envioInicial = envio
+  void envio.finally(() => {
+    if (envioInicial === envio) envioInicial = null
+  })
+}
+
+export async function aguardarEnvioInicial(): Promise<void> {
+  // Um passo depois: o envio é registrado nos efeitos do mesmo render em que o evento dispara.
+  await Promise.resolve()
+  await envioInicial
 }

@@ -1,5 +1,6 @@
 package com.catalogo.admin;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.catalogo.admin.dto.AdminContaResponse;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -141,6 +143,41 @@ class AdminControllersSmokeTest {
                 .andExpect(status().isOk());
     }
 
+    /** Mesmas faixas da tela, também na prévia. */
+    @Test
+    void configForaDaFaixaDa400() throws Exception {
+        for (String peso : List.of("-1", "10", "1e9")) {
+            mockMvc.perform(patch("/api/admin/configuracao/pesos").principal(adminAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"pesos\":[{\"tipoEvento\":\"FAVORITAR\",\"peso\":" + peso + "}]}"))
+                    .andExpect(status().isBadRequest());
+        }
+        for (String par : List.of("-0.01,1", "0,1", "0.2,1", "0.01,-1", "0.01,0.9", "0.01,5", "0.01,1.51")) {
+            String[] v = par.split(",");
+            String decay = "[{\"categoriaId\":null,\"lambda\":" + v[0] + ",\"boostConversao\":" + v[1] + "}]";
+            mockMvc.perform(patch("/api/admin/configuracao/decay").principal(adminAuth())
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"items\":" + decay + "}"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(post("/api/admin/configuracao/simular").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"pesos\":[{\"tipoEvento\":\"FAVORITAR\",\"peso\":0}],\"decay\":" + decay + "}"))
+                    .andExpect(status().isBadRequest());
+        }
+        for (String extra : List.of("\"boostRecorrencia\":0.9", "\"boostRecorrencia\":1.6", "\"pausaDias\":-1", "\"pausaDias\":181")) {
+            mockMvc.perform(patch("/api/admin/configuracao/decay").principal(adminAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"items\":[{\"categoriaId\":null,\"lambda\":0.01,\"boostConversao\":1," + extra + "}]}"))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(configService, scoringService);
+        for (String par : List.of("0.001,1", "0.1,1.5")) {
+            String[] v = par.split(",");
+            mockMvc.perform(patch("/api/admin/configuracao/decay").principal(adminAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"items\":[{\"categoriaId\":null,\"lambda\":" + v[0] + ",\"boostConversao\":" + v[1] + "}]}"))
+                    .andExpect(status().isOk());
+        }
+    }
+
     @Test
     void configDecayRemoverAjusteDeCategoria() throws Exception {
         when(configService.removerDecay(7L)).thenReturn(List.of());
@@ -188,7 +225,12 @@ class AdminControllersSmokeTest {
 
     @Test
     void produtoPatchInvalidoDa400() throws Exception {
-        for (String body : List.of("{\"preco\":0}", "{\"preco\":-5}", "{\"nome\":\"\"}", "{\"nome\":\"   \"}", "{\"slug\":\"\"}")) {
+        for (String body : List.of("{\"preco\":0}", "{\"preco\":-5}", "{\"nome\":\"\"}", "{\"nome\":\"   \"}", "{\"slug\":\"\"}",
+                "{\"nome\":\"" + "x".repeat(201) + "\"}", "{\"preco\":10000000000}", "{\"preco\":1.005}",
+                "{\"slug\":\"a/b\"}", "{\"slug\":\"..\"}", "{\"slug\":\"a b\"}", "{\"slug\":\"Peça\"}", "{\"slug\":\"a--b\"}",
+                "{\"slug\":\"-a\"}", "{\"slug\":\"imagens\"}", "{\"slug\":\"" + "x".repeat(221) + "\"}",
+                "{\"imagens\":[{\"url\":\"https://x/" + "y".repeat(500) + "\"}]}",
+                "{\"imagens\":[{\"url\":\"https://x/y\",\"altText\":\"" + "z".repeat(201) + "\"}]}")) {
             mockMvc.perform(patch("/api/admin/produtos/3")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
@@ -201,7 +243,7 @@ class AdminControllersSmokeTest {
     void contaGetAndPatch() throws Exception {
         UsuarioResponse resp = UsuarioResponse.from(adminUser());
         when(contaService.get(99L)).thenReturn(resp);
-        when(contaService.patch(eq(99L), any())).thenReturn(resp);
+        when(contaService.patch(eq(99L), any())).thenReturn(new AdminContaResponse(resp, null));
 
         mockMvc.perform(get("/api/admin/conta").principal(adminAuth()))
                 .andExpect(status().isOk())

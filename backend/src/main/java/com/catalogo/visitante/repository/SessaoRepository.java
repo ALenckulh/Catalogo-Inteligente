@@ -23,4 +23,13 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
             WHERE visitante_id = :visitanteId AND usuario_id IS NULL
             """, nativeQuery = true)
     int attachUsuarioToVisitanteSessoes(@Param("usuarioId") Long usuarioId, @Param("visitanteId") Long visitanteId);
+
+    /** Exclusão da conta: o navegador e o sistema usados ajudam a identificar a pessoa. */
+    @Modifying
+    @Query("UPDATE Sessao s SET s.userAgent = null WHERE s.usuario.id = :usuarioId AND s.userAgent IS NOT NULL")
+    int limparUserAgentByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    @Modifying
+    @Query("UPDATE Sessao s SET s.userAgent = null WHERE s.visitante.id = :visitanteId AND s.usuario IS NULL")
+    int limparUserAgentDoVisitante(@Param("visitanteId") Long visitanteId);
 }

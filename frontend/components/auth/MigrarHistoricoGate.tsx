@@ -3,10 +3,9 @@
 import { useState, useSyncExternalStore } from 'react'
 import { migrarHistorico } from '@/lib/api/auth'
 import { USE_MOCK } from '@/lib/api/config'
-import { toApiError } from '@/lib/api/client'
-import { encerrarSessao, readVisitanteId } from '@/lib/api/visitanteId'
+import { encerrarSessao, esquecerVisitante, readVisitanteId } from '@/lib/api/visitanteId'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
-import { Modal, Typography } from '@/components/ui'
+import { Button, Modal, Typography } from '@/components/ui'
 
 const { Paragraph } = Typography
 const PENDING_KEY = 'ci_migrar_pending'
@@ -41,23 +40,34 @@ export function MigrarHistoricoGate() {
 
   const open = mounted && !dismissed && shouldPromptMigrar(isAuthenticated, loading)
 
-  async function finish(aceitar: boolean) {
+  async function responder(aceitar: boolean) {
     setBusy(true)
     try {
       await migrarHistorico(aceitar)
-    } catch (e) {
-      void toApiError(e)
+      // Recusou: o histórico foi descartado, e o próximo evento é de outro visitante.
+      if (!aceitar) esquecerVisitante()
+    } catch {
+      // Não respondeu de verdade: pergunta de novo no próximo login.
+      encerrarSessao()
     } finally {
-      // Sem migração, a sessão continua do visitante: o próximo evento abre uma do usuário.
-      if (!aceitar) encerrarSessao()
-      try {
-        sessionStorage.removeItem(PENDING_KEY)
-      } catch {
-        /* ignore */
-      }
       setBusy(false)
-      setDismissed(true)
+      fechar()
     }
+  }
+
+  function fechar() {
+    try {
+      sessionStorage.removeItem(PENDING_KEY)
+    } catch {
+      /* ignore */
+    }
+    setDismissed(true)
+  }
+
+  /** X ou Esc: nada é levado nem descartado. A sessão é do visitante, então o próximo evento abre uma do usuário. */
+  function decidirDepois() {
+    encerrarSessao()
+    fechar()
   }
 
   if (!mounted) return null
@@ -67,17 +77,25 @@ export function MigrarHistoricoGate() {
       title="Associar histórico de navegação?"
       open={open}
       centered
-      confirmLoading={busy}
-      okText="Sim, associar"
-      cancelText="Não associar"
-      onOk={() => void finish(true)}
-      onCancel={() => void finish(false)}
+      onCancel={decidirDepois}
       closable={!busy}
       mask={{ closable: !busy }}
+      keyboard={!busy}
+      footer={[
+        <Button key="nao" id="migrar-nao" disabled={busy} onClick={() => void responder(false)}>
+          Não associar
+        </Button>,
+        <Button key="sim" id="migrar-sim" color="primary" loading={busy} onClick={() => void responder(true)}>
+          Sim, associar
+        </Button>,
+      ]}
     >
       <Paragraph>
         Detectamos navegação anônima neste dispositivo. Associar esse histórico ao seu perfil
         melhora as recomendações (LGPD — só com o seu consentimento).
+      </Paragraph>
+      <Paragraph>
+        Se não associar, esse histórico é apagado. Para decidir depois, feche esta janela.
       </Paragraph>
     </Modal>
   )

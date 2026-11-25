@@ -10,6 +10,9 @@ export type TipoEvento =
   | 'SCROLL_DEPTH'
   | 'TEMPO_PAGINA'
 
+/** Métrica com peso na nota: os eventos e as duas que só têm peso (não são enviadas como evento). */
+export type TipoMetrica = TipoEvento | 'COMPRA' | 'RETORNO_PAGINA'
+
 export type TipoConversao = 'LEVE' | 'FORTE' | 'CONFIRMADA'
 
 export type TipoConsentimento =
@@ -151,7 +154,9 @@ export interface LeadResumo {
   telefone: string | null
   scoreMaxProduto: number
   topCategoria: string | null
-  ultimaAtividade: string
+  ultimaAtividade: string | null
+  /** Produto de maior nota não comprado nos últimos 30 dias. */
+  proximaCompra: string | null
 }
 
 export interface DashboardSeries {

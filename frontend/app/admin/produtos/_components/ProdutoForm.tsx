@@ -147,6 +147,7 @@ export function ProdutoForm({ initial }: Props) {
           <Input
             id="admin-prod-form-nome"
             placeholder="Informe o nome"
+            maxLength={200}
             onChange={(e) => {
               if (!slugTouched) {
                 form.setFieldValue('slug', slugify(e.target.value))
@@ -158,11 +159,18 @@ export function ProdutoForm({ initial }: Props) {
           name="slug"
           label="Slug"
           tooltip="URL amigável (único)"
-          rules={[{ required: true, message: 'Informe o slug' }]}
+          rules={[
+            { required: true, message: 'Informe o slug' },
+            {
+              pattern: /^(?!imagens$)[a-z0-9]+(-[a-z0-9]+)*$/,
+              message: 'Use só letras minúsculas sem acento, números e hífen',
+            },
+          ]}
         >
           <Input
             id="admin-prod-form-slug"
             placeholder="Informe o slug"
+            maxLength={220}
             onChange={() => setSlugTouched(true)}
           />
         </FormItem>
@@ -181,6 +189,7 @@ export function ProdutoForm({ initial }: Props) {
           {/* pt-BR: sem isso "1234,50" era lido como 123450 e "1.234,50" como 1,23. */}
           <InputNumber
             id="admin-prod-form-preco"
+            max={9999999999.99}
             {...precoInputProps()}
             precision={2}
             step={0.01}

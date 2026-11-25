@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.repository.TokenRevogadoRepository;
+import com.catalogo.auth.service.EmailService;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,10 @@ class AuthServiceDeletedUserTest {
     PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock
     JwtService jwtService;
+    @Mock
+    EmailService emailService;
+    @Mock
+    TokenRevogadoRepository tokenRevogadoRepository;
 
     AuthService authService;
 
@@ -43,7 +49,9 @@ class AuthServiceDeletedUserTest {
                 consentimentoRepository,
                 passwordResetTokenRepository,
                 new BCryptPasswordEncoder(),
-                jwtService
+                jwtService,
+                emailService,
+                tokenRevogadoRepository
         );
     }
 

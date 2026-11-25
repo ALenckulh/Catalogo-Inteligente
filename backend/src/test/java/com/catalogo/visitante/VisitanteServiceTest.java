@@ -1,5 +1,6 @@
 package com.catalogo.visitante;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -9,6 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.domain.TipoConsentimento;
+import com.catalogo.auth.entity.ConsentimentoLgpd;
+import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
+import com.catalogo.auth.service.ConsentimentoService;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,12 +42,15 @@ class VisitanteServiceTest {
     VisitanteRepository visitanteRepository;
     @Mock
     SessaoRepository sessaoRepository;
+    @Mock
+    ConsentimentoLgpdRepository consentimentoRepository;
 
     VisitanteService service;
 
     @BeforeEach
     void setUp() {
-        service = new VisitanteService(visitanteRepository, sessaoRepository);
+        service = new VisitanteService(
+                visitanteRepository, sessaoRepository, new ConsentimentoService(consentimentoRepository));
     }
 
     @Test
@@ -58,12 +66,13 @@ class VisitanteServiceTest {
             return s;
         });
 
-        SessaoResponse response = service.abrirSessao(new AbrirSessaoRequest(null, "fp", "mobile", "ua", "web"), null);
+        SessaoResponse response = service.abrirSessao(new AbrirSessaoRequest(null, "mobile", "ua", "web", true), null);
 
         assertEquals(20L, response.sessaoId());
         ArgumentCaptor<Visitante> cap = ArgumentCaptor.forClass(Visitante.class);
         verify(visitanteRepository).save(cap.capture());
         assertEquals(cap.getValue().getCookieId(), response.cookieId());
+        assertNotNull(cap.getValue().getAceiteCookiesEm());
     }
 
     @Test
@@ -79,13 +88,14 @@ class VisitanteServiceTest {
             return s;
         });
 
-        SessaoResponse first = service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, null), null);
-        SessaoResponse second = service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, null), null);
+        SessaoResponse first = service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, true), null);
+        SessaoResponse second = service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, true), null);
 
         assertEquals(cookie, first.cookieId());
         assertEquals(cookie, second.cookieId());
         assertEquals(99L, first.sessaoId());
         assertEquals(99L, second.sessaoId());
+        assertNotNull(existing.getAceiteCookiesEm());
         verify(visitanteRepository, org.mockito.Mockito.never()).save(any());
     }
 
@@ -95,13 +105,32 @@ class VisitanteServiceTest {
         when(visitanteRepository.findByCookieId(cookie)).thenReturn(Optional.empty());
 
         ApiException ex = assertThrows(ApiException.class, () ->
-                service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, null), null));
+                service.abrirSessao(new AbrirSessaoRequest(cookie, null, null, null, true), null));
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("INVALID_COOKIE", ex.getCode());
     }
 
+    /** Sem aceite não nasce visitante nem sessão, logado ou não. */
+    @Test
+    void semAceiteNaoAbreSessao() {
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
+                7L, TipoConsentimento.COOKIES_COMPORTAMENTAIS)).thenReturn(Optional.empty());
+        for (Boolean aceite : new Boolean[] {null, false}) {
+            for (Long usuarioId : new Long[] {null, 7L}) {
+                ApiException ex = assertThrows(ApiException.class, () ->
+                        service.abrirSessao(new AbrirSessaoRequest(null, null, null, null, aceite), usuarioId));
+                assertEquals("CONSENT_REQUIRED", ex.getCode());
+            }
+        }
+        verifyNoInteractions(visitanteRepository, sessaoRepository);
+    }
+
     @Test
     void logadoAbreSessaoDoUsuarioSemVisitante() {
+        ConsentimentoLgpd aceito = new ConsentimentoLgpd();
+        aceito.setAceito(true);
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
+                7L, TipoConsentimento.COOKIES_COMPORTAMENTAIS)).thenReturn(Optional.of(aceito));
         when(sessaoRepository.save(any(Sessao.class))).thenAnswer(inv -> {
             Sessao s = inv.getArgument(0);
             s.setId(30L);
@@ -109,7 +138,7 @@ class VisitanteServiceTest {
         });
 
         SessaoResponse response = service.abrirSessao(
-                new AbrirSessaoRequest(UUID.randomUUID(), null, "desktop", "ua", "web"), 7L);
+                new AbrirSessaoRequest(UUID.randomUUID(), "desktop", "ua", "web", null), 7L);
 
         ArgumentCaptor<Sessao> cap = ArgumentCaptor.forClass(Sessao.class);
         verify(sessaoRepository).save(cap.capture());

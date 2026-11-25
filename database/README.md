@@ -22,7 +22,7 @@ docker compose up -d postgres
 docker compose run --rm flyway migrate
 ```
 
-Na primeira execução, o Flyway aplica V001 → V017 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
+Na primeira execução, o Flyway aplica V001 → V018 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
 
 ## RabbitMQ (API / eventos)
 
@@ -54,6 +54,14 @@ docker compose logs -f postgres              # acompanha logs do banco
 docker compose down                          # para tudo (mantém os dados)
 docker compose down -v                       # para tudo E apaga os dados (recomeça do zero)
 ```
+
+## Mailpit (e-mails da recuperação de senha, opcional)
+
+```bash
+docker compose --profile tools up -d mailpit
+```
+
+O backend envia para `localhost:1025`; a caixa fica em <http://localhost:8025>. Para outro servidor SMTP, use as variáveis `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_AUTH`, `MAIL_STARTTLS` e `MAIL_FROM`. Sem servidor de e-mail, a recuperação responde igual, mas o código não chega.
 
 ## pgAdmin (opcional)
 
@@ -110,7 +118,7 @@ O script recria tudo (é seguro rodar de novo), apaga usuários e visitantes de 
 
 ```
 database/
-├── docker-compose.yml         # postgres + flyway + pgadmin
+├── docker-compose.yml         # postgres + rabbitmq + flyway + pgadmin + mailpit
 ├── .env.example               # variáveis (copiar para .env)
 └── migrations/
     ├── V001__create_enums.sql
@@ -129,7 +137,13 @@ database/
     ├── V014__imagem_arquivo.sql            # imagens de produto enviadas pelo admin (BYTEA)
     ├── V015__seed_catalogo_retifica.sql    # catálogo da Renova: peças, óleos, motores e serviços (substitui produtos do V011)
     ├── V016__usuario_anonimizado_chk.sql   # conta excluída (LGPD) pode ficar sem CPF/CNPJ e nome
-    └── V017__remove_sessao_ip_hash.sql     # remove coluna nunca usada (o sistema não coleta IP)
+    ├── V017__remove_sessao_ip_hash.sql     # remove coluna nunca usada (o sistema não coleta IP)
+    ├── V018__busca_sem_acento.sql          # extensão unaccent, usada nas buscas
+    ├── V019__metricas_so_de_peso.sql       # enum: COMPRA e RETORNO_PAGINA (só pesos)
+    ├── V020__pesos_compra_retorno_recorrencia.sql  # pesos novos, bônus de recorrência e pausa configurável
+    ├── V021__sessoes_revogadas.sql         # token_revogado e usuario.sessoes_validas_desde
+    ├── V022__visitante_aceite.sql          # aceite de cookies do visitante; remove fingerprint e ip_origem
+    └── V023__calibracao_padrao.sql         # novos pesos e meia-vida padrão (só em base ainda não ajustada)
 ```
 
 Após puxar o repositório com V012 (ou qualquer migração nova):
@@ -141,7 +155,7 @@ docker compose run --rm flyway migrate
 ## Adicionando novas migrações
 
 1. Crie um novo arquivo em `migrations/` seguindo a convenção `V{numero}__{descricao}.sql`.
-   - Exemplo: `V018__add_coluna_x_em_produto.sql`.
+   - Exemplo: `V024__add_coluna_x_em_produto.sql`.
 2. Rode `docker compose run --rm flyway migrate`.
 
 **Nunca** edite uma migração que já foi aplicada no histórico — o Flyway detecta e rejeita. Sempre faça uma nova migração para alterar o schema.
@@ -154,7 +168,7 @@ Após `flyway migrate`, conecte via psql e cheque:
 -- 7 enums
 \dT+
 
--- 19 tabelas (incl. password_reset_token a partir de V012, imagem_arquivo a partir de V014)
+-- 20 tabelas (incl. password_reset_token a partir de V012, imagem_arquivo a partir de V014, token_revogado a partir de V021)
 \dt
 
 -- Pesos de métrica populados

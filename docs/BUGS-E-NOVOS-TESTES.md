@@ -15,9 +15,9 @@ Saída da validação manual de [CHECKLIST-VALIDACAO.md](CHECKLIST-VALIDACAO.md)
 
 > **Correções de 24/11/2026:** B01–B28 foram corrigidos no código (sem commit). Na seção 2, `[x]` é o que foi conferido depois da correção, no site ou pela API. B25 a B28 foram achados durante as correções.
 >
-> **Execução da seção 3 (24/11/2026):** B29–B61 foram achados nela. **Corrigidos:** B29–B35, B43 e B57 (pacote A). Os demais estão em aberto.
+> **Execução da seção 3 (24/11/2026):** B29–B61 foram achados nela. **Todos corrigidos** (sem commit o que veio depois do lote da busca) e conferidos na 8080 em 25/11.
 >
-> **Conferência dos docs com o código (24/11/2026):** B62–B79 são divergências com a especificação, **ainda não corrigidas**; parte depende de decidir entre mudar o código ou aceitar.
+> **Conferência dos docs com o código (24/11/2026):** B62–B79 são divergências com a especificação. **Todas resolvidas em 25/11** (sem commit), junto com o B81; o que foi decidido está em "Como foram resolvidas". V019–V022 aplicadas e conferidas na 8080 em 25/11. Fica aberto só o B80.
 
 ## Resumo
 
@@ -102,10 +102,14 @@ Saída da validação manual de [CHECKLIST-VALIDACAO.md](CHECKLIST-VALIDACAO.md)
 | B77 | Baixa | LGPD | Consentimento do visitante só é conferido no front |
 | B78 | Baixa | Catálogo | Quem volta com 3 a 9 interações ainda vê a ordem misturada |
 | B79 | Baixa | Ajustes | Pequenas divergências (ver detalhe) |
+| B80 | Baixa | Configuração, dashboard | Em 320px, a tela rola na horizontal (em aberto) |
+| B81 | Baixa | LGPD / fila | Evento na fila durante a exclusão da conta fica ativo |
 
 ---
 
 ## B29 a B61: vale a pena corrigir?
+**Todos foram corrigidos em 24/11/2026.** A tabela fica como registro da decisão.
+
 **Esforço:** P = poucas linhas em 1 ou 2 arquivos; M = vários arquivos ou decisão de regra. A coluna "Vale?" é a minha recomendação para o TCC.
 
 ### Altos (7)
@@ -379,6 +383,42 @@ Testados em contêineres próprios de Postgres e RabbitMQ, com cópia dos dados.
 - **B33:** `whatsappClienteUrl` com o número do cliente; aviso para quem recusou ou nunca respondeu.
 - **B34:** `COALESCE` no lugar de `IS NULL`. **B35:** data sempre do servidor, com desempate por id.
 
+#### Como B36 a B61 foram corrigidos
+
+Testado em contêineres próprios, com cópia dos dados: cada lote antes × depois, pela API e nas telas.
+
+**Busca e aviso (B44, B51, B52, B56, B59)**
+- **B51, B52, B56:** V018 (`unaccent`) e `BuscaTexto`: cada palavra precisa aparecer, em qualquer ordem, sem acento; `%` e `_` são texto. Em usuários, número com 3 dígitos ou mais também olha CPF, CNPJ e telefone, com ou sem máscara. As listas de produtos e usuários ordenam com acento certo.
+- **B44:** ficha vazia é gravada vazia; o formulário recusa valor em branco e chave repetida; o backend tira espaços e linhas em branco.
+- **B59:** `useAppNotification` usa o `<App>` da raiz, e o aviso continua depois de navegar.
+
+**Notas (B37, B38, B39, B58)**
+- **B37:** qualquer compra vale como conversão (bônus de 30 dias, faixa de preço, pausa de 60 dias e sem zerar após 180). Os pontos seguem a partir de 3 compras; com menos, quem nunca interagiu continua sem nota.
+- **B38:** `ScoreEngine` apaga a nota que não tem mais sinal; o recálculo geral inclui quem só tem compra ou nota antiga, menos conta excluída.
+- **B39:** por produto, só o último `FAVORITAR` ou `DESFAVORITAR` conta.
+- **B58:** dia de Brasília (`Fuso`) no gráfico, no decaimento, na popularidade e na data da compra.
+- **Efeito nos dados atuais:** "Recalcular" muda 6 clientes, e nenhum muda de nível. Faixa de preço: Guarani, Pomerode, Kreutzfeld, Schmitt e Itapocu (B37). Nota de um produto e da categoria dele: Kreutzfeld e Schmitt sobem (B37), Rafael cai de 37,03 para 25,08 (B39).
+
+**API (B40, B41, B42, B46, B47, B48, B53, B55)**
+- **B40:** data futura → 400; total calculado no backend; vale ao criar e ao editar.
+- **B41:** 400, 404, 405, 406 e 415 no lugar de 500; o 500 que sobrar vai para o log. URL malformada deixou de virar 401.
+- **B42, B47:** limites das colunas nos DTOs. Peso de 0 a 9,9999, λ de 0,001 a 0,1, bônus de 1 a 2.
+- **B46:** banco fora → 503, e o front não desloga.
+- **B48:** `DadosConta` com as regras do cadastro, usada também em `/conta`, na conta do admin e na recuperação de senha. **Achado junto:** senha acima de 72 bytes dava 500 (limite do BCrypt); agora 400, e as telas limitam a 72 caracteres.
+- **B53:** 400 para evento sem sentido. Desfavoritar produto inativo continua valendo.
+- **B55:** slug só com minúsculas, números e hífen; imagem `http(s)` ou arquivo que existe.
+
+**LGPD (B36, B60)**
+- **B36:** o navegador só define a conta que nunca decidiu; depois, vale o mais restritivo. `/conta` mostra o valor da conta e avisa quando o navegador recusa. Depois de um 403, o front para de enviar até algo mudar.
+- **B60:** exportação com compras (sem as observações, que são internas) e solicitações; CSV protegido contra fórmula; reabrir limpa a data; atender `REVOGACAO_CONSENTIMENTO` recusa cookies e contato; excluir a conta apaga termos buscados e `user_agent`. As notas ficam ([08 §5.2](08-MODELO-DE-DADOS.md)).
+
+**Telas (B45, B49, B50, B54, B61)**
+- **B45:** `PageError` com "Tentar novamente" nas listas, no Dashboard e na Configuração.
+- **B49:** rótulo ligado ao `id` do campo, botão só com ícone usa o `tooltip`, "Buscar" e "Limpar" em português, sliders com nome e valor. Tudo nos componentes base.
+- **B50:** texto secundário e placeholder em `--text-neutral-subtle`. Medido em 19 telas: nenhum texto abaixo de 4,5:1.
+- **B54:** o filtro conta uma vez por mudança; a categoria só soma quando ela muda.
+- **B61:** `?page=99` vai para a última; categoria inexistente é ignorada, com aviso; sem "0 produtos" ao carregar; tipo e categoria de usuários na URL (a busca não, porque pode ter CPF); o login do admin volta à tela pedida; nome longo quebra na célula; o modal de exclusão abre em "Cancelar".
+
 #### B36 · Consentimento diverge entre navegadores (Média)
 - **Sintoma:** entrar num navegador com "Apenas essenciais" revoga o consentimento da conta. No outro navegador, `/conta` mostra "Cookies comportamentais" **ligado** e todo evento recebe 403, sem aviso.
 - **Causa:** a marca `ci_consent_synced` impede consultar o servidor de novo, e a tela mostra o valor local.
@@ -450,16 +490,41 @@ Testados em contêineres próprios de Postgres e RabbitMQ, com cópia dos dados.
 - **B60:** a exportação não traz compras nem solicitações; `ATENDIDA` → `EM_PROCESSAMENTO` mantém `atendido_em`; atender `REVOGACAO_CONSENTIMENTO` não revoga nada. Após excluir a conta, ficam as notas, o `user_agent` das sessões e os termos buscados (em eventos com soft delete).
 - **B61:** `?page=99` destaca a página 8 e não deixa clicar nela; `?categoria=99999` mostra "99999" no seletor e "Verifique sua conexão"; "0 produtos" enquanto carrega; tipo, categoria e busca de usuários não ficam na URL; login do admin não volta à tela pedida; nome longo faz a página de usuários rolar na horizontal; o modal de exclusão abre com o foco em "Excluir conta".
 
-### Divergências com a documentação (24/11/2026, não corrigidas)
+### Achados ao corrigir
+- **B80 · Configuração e Dashboard em 320px (Baixa):** em 25/11 as linhas de peso passaram a quebrar (`LinhaSlider`), e os rótulos da prévia e do gráfico encurtaram. A Configuração não rola mais em 375px, em nenhuma aba (antes até 125px a mais); em 320px, só a Duração, 8px. Ainda rola em 320px o Dashboard, que mede até 741px por causa do canvas dos gráficos. Já era assim antes; as telas públicas e as demais do admin não rolam.
+- **B81 · Evento na fila durante a exclusão (Baixa):** se o worker processa um evento depois de a conta ser excluída, ele é gravado ativo para a conta anonimizada, e o recálculo apaga as notas dela. Janela de menos de 1 segundo. **Corrigido em 25/11:** reproduzido no código antigo (357 eventos ativos em 40 exclusões); no novo, 0. O worker trava a linha do usuário e descarta o evento de conta excluída.
+
+### Divergências com a documentação (24/11/2026, resolvidas em 25/11)
+
+**Como foram resolvidas**
+
+| ID | O que ficou |
+|---|---|
+| B62, B75 | Código por e-mail (SMTP configurável; Mailpit local), fora do log, com envio que não atrasa a resposta; pedido novo anula os anteriores |
+| B63, B68 | Dashboard com os 5 clientes de maior nota (a API devolve 10); "próxima compra provável" = produto ativo de maior nota sem compra nos últimos 30 dias |
+| B64, B69 | Compra e retorno ao produto com peso próprio, fora do divisor; retorno começa em 0. A sequência de navegação segue como trabalho futuro |
+| B65 | Associar o histórico recalcula as notas da conta na hora |
+| B66 | `password-reset/confirm` em 5/min por IP e 120/min por usuário logado; o 429 saía sem CORS e a tela via "Network Error" (corrigido) |
+| B67 | Menu recolhido mostra só o símbolo |
+| B70, B76 | Colunas `fingerprint` e `ip_origem` removidas (V022) |
+| B71, B73, B74 | Teto do bônus em 1,50×; bônus de recorrência (começa em 1,00×) e pausa de 0 a 180 dias (começa em 60) na Configuração |
+| B72 | Recusar descarta o histórico anônimo; X e Esc não. Um evento que ainda esteja na fila nesse instante não é coberto |
+| B77 | Aceite do visitante gravado; sem ele, 403 na sessão e no evento |
+| B78 | Cliente logado com notas: peso pessoal mínimo de 80% e empate pela popularidade. A ordem do catálogo mudou para 19 clientes da base de demonstração; visitantes não mudam |
+| B79 | Fila `events.session` e MapStruct removidos; canal de origem real; logout encerra a sessão; comentários citam `docs/`. `EXPORTACAO` continua só mudando o status |
+
+Com os valores iniciais, nenhuma nota muda. Migrations V019 a V022. A fila `events.session` já criada fica vazia no RabbitMQ até ser apagada.
+
+**Registro original**
 
 Pontos em que o sistema não faz o que a especificação original pede (versão dos docs no commit `d25fc45`), achados ao conferir os docs com o código. Conferidos no código; o B67 foi visto em captura de tela. A compra como conversão está no B37 e a retentativa da fila no B29.
 
-**Ajustar** = sugiro corrigir o código. **Decidir** = serve corrigir o código ou aceitar o comportamento. Nos itens a decidir, 02, 04, 08 e 11 já descrevem o que existe hoje; se a escolha for mudar o código, o texto original volta.
+**Ajustar** = sugiro corrigir o código. **Decidir** = serve corrigir o código ou aceitar o comportamento. As citações de linha abaixo são do código antigo.
 
 #### B62 · Recuperação de senha sem e-mail (Média · Ajustar)
 - **O doc pede:** RF06, recuperação de senha **por e-mail**.
 - **O sistema faz:** gera o código e o escreve no log, com o e-mail da pessoa, em texto puro. Nada é enviado, então quem usa o site não consegue recuperar a senha sozinho.
-- **Onde:** [AuthService.java:203](../backend/src/main/java/com/catalogo/auth/service/AuthService.java#L203). Não há dependência de e-mail no projeto.
+- **Onde:** [AuthService.java:164](../backend/src/main/java/com/catalogo/auth/service/AuthService.java#L164). Não há dependência de e-mail no projeto.
 - **Correção sugerida:** enviar por SMTP (um servidor de teste em contêiner basta para a demonstração) e tirar o código do log. Se não der tempo, limitar o log ao perfil `dev` e manter o RF06 como Parcial.
 
 #### B63 · Leads fora do dashboard (Média · Ajustar)
@@ -470,7 +535,7 @@ Pontos em que o sistema não faz o que a especificação original pede (versão 
 #### B64 · Peso das compras (Média · Decidir)
 - **O doc pede:** 04 §9, o dono do catálogo define o peso do histórico de compras.
 - **O sistema faz:** cada compra soma o peso do **WhatsApp**. Mudar esse peso muda também o das compras.
-- **Onde:** [ScoreCalculator.java:82](../backend/src/main/java/com/catalogo/scoring/engine/ScoreCalculator.java#L82).
+- **Onde:** [ScoreCalculator.java:89](../backend/src/main/java/com/catalogo/scoring/engine/ScoreCalculator.java#L89).
 - **Sugestão:** aceitar. Um peso próprio exige novo parâmetro no banco, na API, na tela e na prévia.
 
 #### B65 · Mescla de notas na migração (Média · Decidir)
@@ -499,7 +564,7 @@ Pontos em que o sistema não faz o que a especificação original pede (versão 
 | B68 | RF21: próxima compra provável de cada cliente | Nota máxima e categoria de maior interesse | Decidir: mostrar o produto de maior nota, que já é calculado |
 | B69 | RF16 e 04 §3.1–3.2: retorno à página e sequência de navegação pontuam | Cada visita soma como visualização; a sequência não é calculada | Aceitar (trabalho futuro) |
 | B70 | RF18 e 04 §7.2: fingerprint como reserva do cookie | O front não envia e o backend não procura por ele | Aceitar: coleta menos dados pessoais |
-| B71 | 04 §4.3: bônus de 1,00× a 1,50× | A tela permite 2,00× e a API não limita (B47) | Decidir o teto junto com o B47 |
+| B71 | 04 §4.3: bônus de 1,00× a 1,50× | A tela e a API permitem até 2,00× (B47) | Decidir se o teto volta a 1,50× |
 | B72 | 04 §7.3: ao recusar, o histórico é descartado | Nada é apagado; os eventos seguem no visitante | Aceitar |
 | B73 | 04 §9.3: bônus para categoria com compra recorrente | Não existe | Aceitar (trabalho futuro) |
 | B74 | 04 §5.4: duração da pausa configurável | 60 dias fixos (`PAUSE_CONTACT_DAYS`) | Aceitar |
@@ -518,7 +583,7 @@ Pontos em que o sistema não faz o que a especificação original pede (versão 
 
 #### Docs a reler quando um bug for corrigido
 
-Estes trechos descrevem o comportamento de hoje ou citam o bug.
+Todos relidos em 25/11.
 
 | Ao corrigir | Reler |
 |---|---|
@@ -526,9 +591,7 @@ Estes trechos descrevem o comportamento de hoje ou citam o bug.
 | B30, B43 | 11 §1 e 12 §5: quem acessa cada rota |
 | B33 | 14 UC12: marcado como pendente |
 | B34 | 11 §3.9: descreve a listagem como se funcionasse |
-| B35, B36 | 02 RF28 e 08 §4.3: data e validade do consentimento |
-| B37 | 02 RF22; 04 §4.3, §8.1 e §8.2: marcados como pendentes |
-| B47, B71 | 04 §4.3 e 08 §4.16: limite do bônus |
+| B71 | 04 §4.3 e 08 §4.16: limite do bônus |
 | B62 | 02 RF06; 08 §4.18; 14 UC05 |
 | B63 | 02 RF20; 03 A2; 14 UC11 |
 
@@ -590,16 +653,36 @@ Estes trechos descrevem o comportamento de hoje ou citam o bug.
 - [x] **Dispositivo** Sessão aberta no Chrome do Windows → `desktop`; mobile e tablet (inclusive iPad) cobertos por teste automático
 - [x] **B28** Conferência na 8080, depois de reiniciar o backend e aplicar a V017 (24/11): sessão de outro usuário ou de visitante recusada; sessão aberta com login é do usuário, sem visitante; logout limpa visitante e sessão do navegador; eventos, visitantes e notas iguais antes e depois. O roteiro completo do vazamento ficou só no banco de teste, para não alterar as notas reais
 
-- [ ] **B37** Cliente com compra e sem contato: o produto comprado entra na mediana **com** conversão
-- [ ] **B37** Compra de hoje → a nota da categoria recebe o bônus configurado, igual ao contato
-- [ ] **B37** Compra + visita de 200 dias → a visita ainda pontua (`e^(−λ·dias)`); sem compra e sem contato, vale 0
-- [ ] **B37** Mesmo cliente na prévia e depois de salvar e recalcular → mesma nota e mesma categoria favorita
-- [ ] **B62** Pedir recuperação → o código chega por e-mail e não aparece no log; e-mail inexistente → mesma mensagem, nada enviado
-- [ ] **B63** Dashboard mostra os leads na mesma ordem de `/admin/usuarios` por nota, com link para o detalhe
-- [ ] **B64** e **B65** Só se a decisão for mudar o código
-- [ ] **B66** 6 chamadas seguidas a `password-reset/confirm` → 429 com `Retry-After`
-- [ ] **B67** `/admin` em 980px, 700px e 375px → menu sem texto quebrado nem sobreposto
-- [ ] **B75** Pedir o código duas vezes → o primeiro deixa de valer
+- [x] **B37** Cliente com compra e sem contato: o produto comprado entra na mediana **com** conversão
+- [x] **B37** Compra de hoje → a nota da categoria recebe o bônus configurado, igual ao contato
+- [x] **B37** Compra + visita de 200 dias → a visita ainda pontua (`e^(−λ·dias)`); sem compra e sem contato, vale 0
+- [x] **B37** Prévia e notas gravadas com a mesma distribuição de níveis (6 / 8 / 6 / 3)
+- [x] **B37–B39** Depois do recálculo, notas de produto e categoria e faixa dos 36 sujeitos iguais a uma conta feita à parte; iguais também com o servidor em UTC e em Tóquio (o código antigo em UTC diferia)
+- [x] **B38** 2 compras: sem nota, com faixa; 3 compras: nota; excluir a 3ª apaga as notas; recálculo geral apaga nota velha e mantém a de conta excluída
+- [x] **B39** 11 favoritar e 10 desfavoritar = 1 favoritar (16,13); terminar em desfavoritar = 0
+- [x] **B58** Contato às 23h30 de ontem cai em ontem com o servidor em BRT, UTC e Tóquio; 14 dias iguais ao SQL
+- [x] **B51, B52, B56** 940 buscas: nenhuma perde resultado e 8 ganham; 87 produtos em 4 formas do nome; 24 clientes por nome, documento e telefone; `%` e `_` literais; cerca de 60 ms com 2.000 registros
+- [x] **B40–B42, B46–B48, B53, B55** 175 verificações na API, 0 falhas (40 falhas no código antigo até o roteiro parar); os 87 produtos salvam sem mudança; banco parado → 503 com token, 401 só sem token
+- [x] **B36, B60** Pela API e nas telas: conta revogada em outro navegador aparece desligada, um único 403 e para; religar volta a coletar; navegador que recusa não muda a conta; falha de rede desfaz a troca. Exportação, reabertura, revogação e exclusão conferidas no banco
+- [x] **B44, B59** Na tela: valor em branco e chave repetida recusados; esvaziar a ficha grava vazia; "Produto criado" continua na lista
+- [x] **B45** Banco parado: 6 telas com "Tentar novamente", que volta a funcionar sem novo login
+- [x] **B49, B50** Rótulos e nomes em 5 telas de formulário e nos 10 sliders; contraste em 19 telas
+- [x] **B54** Filtrar, recarregar, mudar o preço, abrir ficha e voltar → 1 evento com categoria e 1 só com preço
+- [x] **B61** Os 7 itens nas telas; nome de 240 letras e e-mail de 200 sem rolagem em 1280, 640 e 320px
+- [x] **Regressão** 26 rotas × 4 papéis, B29, B32, B34, B35, B57, catálogo sem repetir nem faltar, migração e 3 recálculos simultâneos
+- [x] **B36–B61** Conferência na 8080 (25/11), só leitura: erros 4xx, buscas sem acento, documento com máscara, limites da configuração, conta e compra, eventos inválidos, gráfico de contatos igual ao SQL, login do admin volta à tela pedida. O que exige gravar (B36, B38, B39, B54, B60) foi provado só no ambiente de teste
+- [x] **B62** Pedir recuperação → o código chega por e-mail e não aparece no log; e-mail inexistente → mesma mensagem, nada enviado; SMTP fora → mesma resposta, sem esperar
+- [x] **B63, B68** Dashboard mostra os leads na mesma ordem de `/admin/usuarios` por nota, com link para o detalhe; próxima compra igual ao SQL (compra há 0 e 30 dias some, há 31 volta)
+- [x] **B64, B69, B71, B73, B74** Notas dos 36 sujeitos idênticas com os valores iniciais; cada parâmetro mexido bate com uma conta feita à parte, e a prévia com o que foi gravado
+- [x] **B65, B72, B77** Migrar já grava a nota definitiva (recalcular não muda nada); recusar descarta sem tocar o resto; X não descarta; sem aceite → 403
+- [x] **B66** 6 chamadas seguidas a `password-reset/confirm` → 429 com `Retry-After` e CORS; logado, a partir de 121 no minuto → 429
+- [x] **B67** `/admin` em 980px, 700px e 375px → menu sem texto quebrado nem sobreposto
+- [x] **B75** Pedir o código duas vezes → o primeiro deixa de valer
+- [x] **B78** Ordem do catálogo antes × depois por cliente: ninguém perde nem repete produto; quem não tem nota e os visitantes não mudam
+- [x] **B79** Logout numa aba não derruba a outra; trocar a senha derruba as outras e mantém a atual; `campaign:natal` gravado na sessão
+- [x] **B81** Mensagem na fila e 40 exclusões com eventos simultâneos → 0 eventos ativos, notas intactas, DLQ vazia
+- [x] **Regressão de 25/11** 26 rotas × 4 papéis, buscas, catálogo, LGPD, filas, 3 recálculos simultâneos; V001→V022 do zero; contraste em 11 telas
+- [x] **B62–B81** Conferência na 8080 (25/11), só leitura, 16 tabelas idênticas antes e depois: leads e próxima compra iguais ao SQL, ordem do catálogo, pesos e limites novos, prévia sem mudança, 403 sem aceite, 429 com `Retry-After` e CORS, 120/min por usuário; Dashboard, Usuários, Configuração e Sobre o projeto na tela. O que exige gravar (e-mail, B65, B72, B75, logout, B81) foi provado só no ambiente de teste
 - [x] **B29** 5 eventos inválidos → 400; 6 mensagens ruins publicadas direto na fila → DLQ, log parado e fila seguindo; banco parado por 45 s com 5 mensagens → todas gravadas ao religar, 0 na DLQ; `/produtos?categoria=99999` → 400, fila vazia
 - [x] **B30 / B43** PF e PJ em 22 rotas do admin → 403; admin em 10 rotas de cliente → 403 e continua existindo; sem token → 401; logout do admin funciona
 - [x] **B31** Duas abas (PF e PJ), inclusive com edição em andamento → a tela troca de conta, mostra os dados certos e nada é gravado na outra; login do admin ou logout na outra aba → sai
@@ -616,7 +699,7 @@ Estes trechos descrevem o comportamento de hoje ou citam o bug.
 
 Cenários que o checklist não cobre, partindo do que já foi testado. Cada item traz o resultado esperado e, depois do travessão, o observado.
 
-**Execução de 24/11/2026:** os 70 itens abertos foram testados. Depois das correções do pacote A, 58 passam e 13 seguem abertos por causa de bug (o código está no item) ou, no caso do NVDA, por teste parcial.
+**Execução de 24/11/2026:** os 70 itens abertos foram testados. Depois das correções, 70 passam; só o do NVDA segue parcial.
 
 ### 3.1 Segurança e autorização
 - [x] Token de PF ou PJ em `GET /api/admin/usuarios`, `/admin/produtos` e `/admin/configuracao/*` → 403 — 403 nas 22 rotas (B43 corrigido)
@@ -628,18 +711,18 @@ Cenários que o checklist não cobre, partindo do que já foi testado. Cada item
 - [x] `X-Visitante-Cookie-Id` inventado (UUID que não existe) em `POST /api/eventos` → 4xx, sem criar visitante "fantasma" — `400 INVALID_COOKIE`, nenhum visitante criado
 - [x] Evento com `sessaoId` de outro usuário ou visitante → recusado com `400 INVALID_SESSAO` (conferido pela API em 24/11, na 8081)
 - [x] Upload de SVG ou HTML renomeado para `.png` → 400 (magic bytes) — 400; vazio, GIF e WebP falso também; 6 MB → 413
-- [x] `GET /api/produtos/imagens/999999` → 404, sem stack trace — 404 sem stack trace (id com letras dá 500, B41)
+- [x] `GET /api/produtos/imagens/999999` → 404, sem stack trace — 404 sem stack trace; id com letras → 400 (B41 corrigido)
 - [x] Requisição com `Origin: https://site-qualquer.com` → bloqueada pelo CORS — 403, sem cabeçalho de liberação
-- [x] `q` com aspas e `%` (`' OR 1=1 --`, `100%`) → busca normal, sem erro 500 — sem 500 em 11 textos; `%` e `_` são curinga (B56)
+- [x] `q` com aspas e `%` (`' OR 1=1 --`, `100%`) → busca normal, sem erro 500 — sem 500 em 13 textos; `%` e `_` são texto (B56 corrigido)
 
 ### 3.2 Eventos e scoring
 - [x] Buscar um termo → `PESQUISA` com `metadados.termo`; abrir um resultado → `PESQUISA` com `produtoId` e `origem: resultado_pesquisa` — conferido na tela e no banco
-- [x] Filtrar por categoria e por preço → `FILTRO_APLICADO` com `categoriaId`; após recálculo, a nota da categoria em `score_categoria` sobe — soma 0,5 ÷ 3,1 × 100 na categoria; repete a cada mudança (B54)
+- [x] Filtrar por categoria e por preço → `FILTRO_APLICADO` com `categoriaId`; após recálculo, a nota da categoria em `score_categoria` sobe — soma 0,5 ÷ 3,1 × 100 na categoria, uma vez por mudança (B54 corrigido)
 - [x] Decaimento: recuar o `ocorrido_em` dos eventos de um usuário em 30, 90 e 180 dias e recalcular → a nota cai conforme a meia-vida configurada — 22 casos iguais à conta feita à parte, incluindo os limites de 7, 90, 180 e 60 dias
-- [ ] Boost de conversão: contato ou compra nos últimos 30 dias numa categoria → nota das outras peças da categoria sobe conforme o bônus (sem bônus, +50%, +100%) — contato: a nota da **categoria** sobe 1,5× e 2× como esperado (as notas dos produtos não mudam; o texto do item estava errado). Compra não dá bônus (B37)
+- [x] Boost de conversão: contato ou compra nos últimos 30 dias numa categoria → nota das outras peças da categoria sobe conforme o bônus (sem bônus, +50%, +100%) — contato: a nota da **categoria** sobe 1,5× e 2× como esperado (as notas dos produtos não mudam; o texto do item estava errado). Compra também dá (B37 corrigido)
 - [x] Ajuste de meia-vida para uma categoria → após recálculo, só os produtos dessa categoria mudam — só a categoria mudou; nenhuma outra nota de nenhum cliente
-- [ ] `DESFAVORITAR` reduz a nota do produto; favoritar e desfavoritar várias vezes não deixa a nota negativa — reduz e não fica negativa, mas o par repetido infla até 100 (B39)
-- [ ] Evento com `tipo` inválido → 400; com `produtoId` inexistente ou inativo → 4xx, sem 500 — `tipo` inválido → 400; inexistente → 400 (B29 corrigido); produto inativo → 202 (B53)
+- [x] `DESFAVORITAR` reduz a nota do produto; favoritar e desfavoritar várias vezes não deixa a nota negativa — reduz e não fica negativa; o par repetido vale pelo último estado (B39 corrigido)
+- [x] Evento com `tipo` inválido → 400; com `produtoId` inexistente ou inativo → 4xx, sem 500 — `tipo` inválido → 400; inexistente → 400 (B29 corrigido); produto inativo → 400 (B53 corrigido)
 - [x] Visitante com cookies aceitos: eventos passam pela fila `events.*` no RabbitMQ e geram `score_produto` com `visitante_id` alguns segundos depois — nota em cerca de 0,4 s, com a da categoria (B32 corrigido)
 - [x] Parar o consumidor (ou o RabbitMQ) com mensagens já publicadas, religar → a fila é processada e as notas aparecem — 5 mensagens sobreviveram ao reinício do RabbitMQ e foram processadas. Com a fila fora, `POST /eventos` dá 500 e o evento se perde (limite conhecido)
 - [x] Popularidade: produto com muitos contatos nos últimos 30 dias sobe na ordem do visitante; eventos com mais de 30 dias não contam — ordem igual à conta à parte; 500 contatos há 31 dias não contam, há 5 dias levam ao topo
@@ -652,10 +735,10 @@ Cenários que o checklist não cobre, partindo do que já foi testado. Cada item
 - [x] Faixa de preço: visitante com conversão e usuário sem conversão → após migrar, a faixa do usuário passa a ter mediana com conversão — preenchida na hora (B32 corrigido)
 
 ### 3.4 LGPD
-- [x] Revogar cookies comportamentais em `/conta` e reaceitar → uma linha por troca, e a coleta volta só depois do reaceite — uma linha por troca, 403 e volta; a data é a do servidor (B35 corrigido); entre navegadores ainda diverge (B36)
+- [x] Revogar cookies comportamentais em `/conta` e reaceitar → uma linha por troca, e a coleta volta só depois do reaceite — uma linha por troca, 403 e volta; a data é a do servidor (B35 corrigido) e a tela mostra o valor da conta (B36 corrigido)
 - [x] `POST /api/conta/solicitacoes-lgpd` com REVOGACAO_CONSENTIMENTO e CORRECAO → 201, status PENDENTE — 201 PENDENTE
 - [x] Admin: `PATCH /api/admin/solicitacoes-lgpd/{id}` para EM_PROCESSAMENTO, ATENDIDA e REJEITADA → `atendido_em` preenchido quando ATENDIDA; filtros `status` e `tipo` na listagem funcionam — `atendido_em` preenchido em ATENDIDA e REJEITADA; listagem e filtros iguais ao SQL (B34 corrigido)
-- [x] Exportação de um usuário não contém dados de outro (conferir ids de eventos e favoritos) — dois clientes conferidos; faltam as compras (B60)
+- [x] Exportação de um usuário não contém dados de outro (conferir ids de eventos e favoritos) — dois clientes conferidos, com compras e solicitações (B60 corrigido)
 - [x] Apagar `ci_visitante_id` com cookies aceitos → um visitante novo é criado e o histórico anterior não é reaproveitado — visitante e sessão novos, evento gravado
 - [x] Depois de corrigir B01: exportar antes de excluir, excluir, tentar exportar com o token antigo → 401 — 200, 200, 401
 
@@ -665,48 +748,48 @@ Cenários que o checklist não cobre, partindo do que já foi testado. Cada item
 - [x] Upload de WebP → aceito e exibido — aceito
 - [x] Nome com acentos e símbolos (`Pistão Ø 82,5 mm / 1.6`) → slug gerado sem acentos nem barras, e a URL abre a ficha — `pistao-82-5-mm-1-6`, ficha abre
 - [x] Slug igual ao de um produto **inativo** → 409 ou permitido; decidir e documentar — **decidido: 409** (o produto pode ser reativado); também com maiúsculas
-- [ ] Ficha técnica com chave vazia ou duplicada → validação ou descarte; nada de linha em branco na ficha — linha em branco e perda sem aviso (B44)
+- [x] Ficha técnica com chave vazia ou duplicada → validação ou descarte; nada de linha em branco na ficha — recusadas no formulário e descartadas no backend (B44 corrigido)
 - [x] Produto desativado some também dos destaques e da ordem personalizada de quem tinha nota nele — fora da ordem da Juliana e dos 6 destaques; ficha 404
 - [x] Imagem grande (ex.: 4000×3000) → o front comprime; conferir no Network o tamanho realmente enviado — 9,6 MB (4000×3000) → 915 KB em WebP gravados
 
 ### 3.6 Admin: usuários e compras
-- [ ] Busca por nome, e-mail e CNPJ na lista de usuários — nome e e-mail sim; CNPJ, CPF e telefone não (B52)
-- [ ] Filtros combinados (tipo PJ + nível QUENTE + categoria) → resultado consistente e a URL reflete os filtros — resultado certo; só nível e status ficam na URL (B61)
+- [x] Busca por nome, e-mail e CNPJ na lista de usuários — também CPF e telefone, com ou sem máscara (B52 corrigido)
+- [x] Filtros combinados (tipo PJ + nível QUENTE + categoria) → resultado consistente e a URL reflete os filtros — nível, status, tipo e categoria na URL; a busca não, porque pode ter CPF (B61 corrigido)
 - [x] Com mais de 20 usuários (criar alguns), a paginação da lista funciona e os filtros de status continuam corretos em todas as páginas — coberto no "Limite de 100" (2.024 clientes, 132 combinações)
-- [ ] Compra com data futura → recusada ou aceita; decidir e documentar — **decidido: recusar.** Hoje aceita (B40)
+- [x] Compra com data futura → recusada ou aceita; decidir e documentar — **decidido: recusar**, e recusa (B40 corrigido)
 - [x] Compra de produto inativo e compra para usuário inativo → regra clara, sem 500 — **decidido: aceitar produto inativo.** Usuário inativo → 404, sem 500
-- [ ] `valorTotal` diferente de `quantidade × precoUnitario` enviado pela API → recusado ou recalculado no backend — **decidido: calcular no backend.** Hoje grava o valor enviado (B40)
+- [x] `valorTotal` diferente de `quantidade × precoUnitario` enviado pela API → recusado ou recalculado no backend — **decidido: calcular no backend**, e o valor enviado é ignorado (B40 corrigido)
 - [x] Observações preenchidas aparecem ao expandir a linha da compra — aparecem ao expandir
 - [x] Botão WhatsApp de um cliente com `CONTATO_PROATIVO` recusado → definir se deve avisar ou bloquear — **decidido: avisar e confirmar** (B33 corrigido)
 
 ### 3.7 Dashboard e configuração
 - [x] Cadastrar uma conta → "Usuários ativos" +1 e "Sem interação" +1; depois do B01, excluir → volta — +1 nos dois; excluir volta
-- [x] Contato feito às 22h (horário de Brasília) cai no dia certo no gráfico de 14 dias e no KPI de 7 dias (BRT × UTC) — certo em BRT; em servidor UTC cai no dia seguinte (B58)
+- [x] Contato feito às 22h (horário de Brasília) cai no dia certo no gráfico de 14 dias e no KPI de 7 dias (BRT × UTC) — certo em qualquer fuso do servidor (B58 corrigido)
 - [x] Dois admins em abas diferentes salvando pesos diferentes → o último vence, ou há aviso de conflito — **decidido: o último vence**, que é o que acontece
 - [x] Bônus de conversão em +50% e +100% com recálculo → níveis mudam como a prévia indicou — prévia = resultado em 4 cenários (níveis e notas). O bônus muda a categoria favorita, não o nível. Com meia-vida de 7 dias a categoria favorita diferiu em 1 cliente (provável empate por arredondamento, não investigado)
 - [x] "Ver os 10 clientes que mais mudam" lista nomes e diferenças coerentes com a prévia — nomes e notas iguais ao recálculo
 
 ### 3.8 Catálogo e navegação
-- [ ] Busca sem acento e com maiúsculas (`CABECOTE`, `pistao`) encontra "Cabeçote" e "Pistão" — maiúsculas sim, sem acento não (B51)
-- [x] `?page=99` → lista vazia com aviso ou volta para a última página, sem erro — lista vazia com aviso, sem erro; paginação confusa (B61)
-- [ ] `?precoMin=-1`, `?precoMin=abc` e `?categoria=99999` na URL → filtros ignorados ou corrigidos, sem erro 500 — na tela não dá erro de servidor; na API, texto dá 500 (B41)
+- [x] Busca sem acento e com maiúsculas (`CABECOTE`, `pistao`) encontra "Cabeçote" e "Pistão" — as duas (B51 corrigido)
+- [x] `?page=99` → lista vazia com aviso ou volta para a última página, sem erro — vai para a última página (B61 corrigido)
+- [x] `?precoMin=-1`, `?precoMin=abc` e `?categoria=99999` na URL → filtros ignorados ou corrigidos, sem erro 500 — ignorados na tela, categoria com aviso (B61); na API, texto → 400 (B41 corrigido)
 - [x] Aplicar filtros, abrir uma ficha e usar o "voltar" do navegador → filtros e página mantidos — filtros e página mantidos
 - [x] Link compartilhado com filtros abre igual em outra aba anônima — igual sem login
 
 ### 3.9 Sessão
 - [x] Duas abas logadas; sair numa → a outra mostra "Entrar" na próxima ação protegida — foi para `/entrar?next=/favoritos`
-- [x] Token com expiração curta (ajustar o JWT para 1 min em dev) → ao expirar, rota protegida leva para `/entrar?next=…` e, após logar, volta para a mesma tela — testado com token vencido: volta à tela pedida. O admin não volta (B61)
+- [x] Token com expiração curta (ajustar o JWT para 1 min em dev) → ao expirar, rota protegida leva para `/entrar?next=…` e, após logar, volta para a mesma tela — testado com token vencido: volta à tela pedida, inclusive o admin (B61 corrigido)
 - [x] Logar como PF numa aba e como PJ em outra → a última sessão vale nas duas, sem dados misturados — a tela acompanha a última conta (B31 corrigido)
 
 ### 3.10 Acessibilidade
 - [x] Modais (cookies, termos, migração, exclusão, compra): o foco fica preso dentro, Esc fecha e o foco volta ao botão de origem — nos 5, o foco não vai à página de trás, Esc fecha e o foco volta
 - [x] Seletor de categoria (TreeSelect), sliders da configuração e paginação operáveis só pelo teclado — com teclas reais
-- [ ] Leitor de tela (NVDA): campos com rótulo, botões de ícone com nome (lixeira, editar, favoritar), toasts anunciados — **parcial:** não há como ouvir o NVDA aqui; a árvore de acessibilidade já mostra falhas (B49)
+- [ ] Leitor de tela (NVDA): campos com rótulo, botões de ícone com nome (lixeira, editar, favoritar), toasts anunciados — **parcial:** não há como ouvir o NVDA aqui; na árvore de acessibilidade, campos, botões e sliders têm nome (B49 corrigido); falta ouvir com o NVDA
 - [x] Zoom do navegador em 200% → sem conteúdo cortado nem rolagem horizontal nas telas públicas — 8 telas públicas sem rolagem horizontal a 640 px (200%) e a 320 px (400%)
-- [ ] Contraste dos textos cinza-claros (placeholders, "Inativo", legendas dos gráficos) atende WCAG AA — abaixo do mínimo (B50)
+- [x] Contraste dos textos cinza-claros (placeholders, "Inativo", legendas dos gráficos) atende WCAG AA — 4,5:1 ou mais em 19 telas (B50 corrigido); legenda de gráfico é imagem e não foi medida
 
 ### 3.11 Robustez
-- [ ] Postgres parado (`docker stop catalogo_postgres`) → telas mostram erro com "Tentar novamente", sem stack trace; religar e voltar — telas públicas e detalhe do usuário sim; admin não (B45); rota protegida vira 401 (B46). Religou sem reiniciar o backend
+- [x] Postgres parado (`docker stop catalogo_postgres`) → telas mostram erro com "Tentar novamente", sem stack trace; religar e voltar — todas as telas (B45) e 503 sem deslogar (B46 corrigidos). Religou sem reiniciar o backend
 - [x] Rede lenta (DevTools → Slow 3G) → estados de carregamento visíveis em catálogo, ficha, favoritos e admin, sem cliques duplicados em "Salvar" — simulada com atraso de 2,5 e 12 s no servidor: carregamento visível; "Salvar" não duplica
 - [x] Clique duplo rápido em "Criar conta", "Registrar compra" e "Salvar" → uma única requisição ou uma única linha criada — 1 requisição em cadastro, compra, produto e conta do admin
 - [x] Backend reiniciado com usuário logado → a sessão continua válida (JWT) e o rate limit é zerado (limite conhecido) — token continua válido e o limite zera

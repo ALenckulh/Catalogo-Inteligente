@@ -1,7 +1,14 @@
 package com.catalogo.lgpd.service;
 
+import com.catalogo.auth.security.JwtService;
+import com.catalogo.catalog.entity.Compra;
+import com.catalogo.catalog.repository.CompraRepository;
+import com.catalogo.lgpd.dto.ExportCompraItem;
+import com.catalogo.shared.DadosConta;
+import com.catalogo.visitante.repository.SessaoRepository;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -42,13 +49,18 @@ import com.catalogo.shared.ApiException;
 @Service
 public class ContaService {
 
+    private static final String VERSAO_TERMOS = "1.0";
+
     private final UsuarioRepository usuarioRepository;
     private final ConsentimentoLgpdRepository consentimentoRepository;
     private final SolicitacaoLgpdRepository solicitacaoRepository;
     private final FavoritoRepository favoritoRepository;
     private final EventoRepository eventoRepository;
     private final CompraAnonymizeRepository compraAnonymizeRepository;
+    private final CompraRepository compraRepository;
+    private final SessaoRepository sessaoRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     public ContaService(
             UsuarioRepository usuarioRepository,
@@ -57,7 +69,10 @@ public class ContaService {
             FavoritoRepository favoritoRepository,
             EventoRepository eventoRepository,
             CompraAnonymizeRepository compraAnonymizeRepository,
-            PasswordEncoder passwordEncoder
+            CompraRepository compraRepository,
+            SessaoRepository sessaoRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService
     ) {
         this.usuarioRepository = usuarioRepository;
         this.consentimentoRepository = consentimentoRepository;
@@ -65,15 +80,19 @@ public class ContaService {
         this.favoritoRepository = favoritoRepository;
         this.eventoRepository = eventoRepository;
         this.compraAnonymizeRepository = compraAnonymizeRepository;
+        this.compraRepository = compraRepository;
+        this.sessaoRepository = sessaoRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     @Transactional(readOnly = true)
     public ContaResponse getConta(Long usuarioId) {
         Usuario usuario = requireUsuario(usuarioId);
-        return new ContaResponse(UsuarioResponse.from(usuario), latestConsentimentos(usuarioId));
+        return new ContaResponse(UsuarioResponse.from(usuario), latestConsentimentos(usuarioId), null);
     }
 
+    /** Campo nulo = não altera; telefone ou e-mail alternativo em branco = limpa. */
     @Transactional
     public ContaResponse patchConta(Long usuarioId, PatchContaRequest request) {
         Usuario usuario = requireUsuario(usuarioId);
@@ -83,16 +102,16 @@ public class ContaService {
         }
 
         if (request.telefone() != null) {
-            usuario.setTelefone(request.telefone());
+            usuario.setTelefone(DadosConta.telefone(request.telefone()));
         }
         if (request.emailAlternativo() != null) {
-            usuario.setEmailAlternativo(request.emailAlternativo());
+            usuario.setEmailAlternativo(DadosConta.emailAlternativo(request.emailAlternativo()));
         }
         if (request.nomeCompleto() != null) {
-            usuario.setNomeCompleto(request.nomeCompleto());
+            usuario.setNomeCompleto(DadosConta.nomeCompleto(request.nomeCompleto()));
         }
         if (request.idade() != null) {
-            usuario.setIdade(request.idade());
+            usuario.setIdade(DadosConta.idade(request.idade()));
         }
 
         boolean changingPassword = request.novaSenha() != null && !request.novaSenha().isBlank();
@@ -104,11 +123,14 @@ public class ContaService {
             if (!passwordEncoder.matches(request.senhaAtual(), usuario.getSenhaHash())) {
                 throw new ApiException("INVALID_PASSWORD", "Senha atual inválida", HttpStatus.BAD_REQUEST);
             }
-            usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
+            usuario.trocarSenha(passwordEncoder.encode(DadosConta.senha(request.novaSenha())));
         }
 
         usuarioRepository.save(usuario);
-        return new ContaResponse(UsuarioResponse.from(usuario), latestConsentimentos(usuarioId));
+        return new ContaResponse(
+                UsuarioResponse.from(usuario),
+                latestConsentimentos(usuarioId),
+                changingPassword ? jwtService.generate(usuario) : null);
     }
 
     /**
@@ -162,12 +184,20 @@ public class ContaService {
         for (ExportEventoItem e : data.eventos()) {
             csvRow(sb, "evento", e.tipo().name(), e.ocorridoEm() + "|produtoId=" + e.produtoId());
         }
+        for (ExportCompraItem c : data.compras()) {
+            csvRow(sb, "compra", c.produtoNome(),
+                    c.data() + "|" + c.quantidade() + " x " + c.precoUnitario() + "|total=" + c.valorTotal());
+        }
+        for (SolicitacaoLgpdResponse s : data.solicitacoes()) {
+            csvRow(sb, "solicitacao", s.tipo().name(),
+                    s.status() + "|" + s.solicitadoEm() + "|atendida=" + s.atendidoEm() + "|" + s.observacoes());
+        }
         return sb.toString();
     }
 
     /**
-     * Portabilidade (LGPD): junta usuário, consentimentos vigentes, favoritos e eventos, e registra uma
-     * solicitacao_lgpd EXPORTACAO já ATENDIDA (a exportação é síncrona).
+     * Portabilidade (LGPD): junta usuário, consentimentos vigentes, favoritos, eventos, compras e
+     * solicitações, e registra uma solicitacao_lgpd EXPORTACAO já ATENDIDA (a exportação é síncrona).
      */
     private ExportacaoResponse buildExportAndMarkSolicitacao(Long usuarioId) {
         Usuario usuario = requireUsuario(usuarioId);
@@ -178,13 +208,22 @@ public class ContaService {
         List<ExportEventoItem> eventos = eventoRepository.findAtivosByUsuarioId(usuarioId).stream()
                 .map(this::toExportEvento)
                 .toList();
+        List<ExportCompraItem> compras = compraRepository.findByUsuarioIdAndDeletedAtIsNull(usuarioId).stream()
+                .sorted(Comparator.comparing(Compra::getDataCompra).thenComparing(Compra::getId).reversed())
+                .map(ExportCompraItem::from)
+                .toList();
+        List<SolicitacaoLgpdResponse> solicitacoes = solicitacaoRepository
+                .findByUsuario_IdOrderBySolicitadoEmDescIdDesc(usuarioId).stream()
+                .map(SolicitacaoLgpdResponse::from)
+                .toList();
 
         SolicitacaoLgpd solicitacao = newSolicitacao(usuario, TipoSolicitacaoLgpd.EXPORTACAO, "Exportação síncrona");
         solicitacao.setStatus(StatusSolicitacaoLgpd.ATENDIDA);
         solicitacao.setAtendidoEm(OffsetDateTime.now());
         solicitacaoRepository.save(solicitacao);
 
-        return new ExportacaoResponse(UsuarioResponse.from(usuario), consents, favoritoIds, eventos);
+        return new ExportacaoResponse(
+                UsuarioResponse.from(usuario), consents, favoritoIds, eventos, compras, solicitacoes);
     }
 
     @Transactional
@@ -223,9 +262,12 @@ public class ContaService {
             throw new ApiException("FORBIDDEN", "A conta do admin não pode ser excluída", HttpStatus.FORBIDDEN);
         }
         Long usuarioId = usuario.getId();
+        // Antes de apagar os eventos: espera o worker que está gravando um, e os próximos encontram a conta excluída.
+        usuarioRepository.travarParaExcluir(usuarioId);
         favoritoRepository.softDeleteByUsuarioId(usuarioId);
         eventoRepository.softDeleteByUsuarioId(usuarioId);
         compraAnonymizeRepository.softDeleteByUsuarioId(usuarioId);
+        sessaoRepository.limparUserAgentByUsuarioId(usuarioId);
 
         usuario.setDeletedAt(OffsetDateTime.now());
         usuario.setNomeCompleto(null);
@@ -238,6 +280,25 @@ public class ContaService {
         usuario.setEmailAlternativo(null);
         usuario.setIdade(null);
         usuarioRepository.save(usuario);
+    }
+
+    /** Solicitação de revogação atendida: recusa a coleta e o contato, com uma linha nova para cada um que ainda valia. */
+    @Transactional
+    public void revogarConsentimentos(Usuario usuario) {
+        List<ConsentimentoResponse> vigentes = latestConsentimentos(usuario.getId());
+        for (TipoConsentimento tipo : List.of(
+                TipoConsentimento.COOKIES_COMPORTAMENTAIS, TipoConsentimento.CONTATO_PROATIVO)) {
+            if (vigentes.stream().anyMatch(c -> c.tipo() == tipo && !c.aceito())) {
+                continue;
+            }
+            ConsentimentoLgpd c = new ConsentimentoLgpd();
+            c.setUsuario(usuario);
+            c.setTipo(tipo);
+            c.setAceito(false);
+            c.setVersaoTermos(VERSAO_TERMOS);
+            c.setAceitoEm(OffsetDateTime.now());
+            consentimentoRepository.save(c);
+        }
     }
 
     /** Consentimento vigente = linha mais recente de cada tipo (lista vem ordenada por data desc). */
@@ -280,8 +341,12 @@ public class ContaService {
                 .append('\n');
     }
 
+    /** O apóstrofo impede a planilha de executar como fórmula um texto que comece com =, +, - ou @. */
     private static String escapeCsv(String value) {
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+        if (!value.isEmpty() && "=+-@\t\r".indexOf(value.charAt(0)) >= 0) {
+            value = "'" + value;
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
             return '"' + value.replace("\"", "\"\"") + '"';
         }
         return value;

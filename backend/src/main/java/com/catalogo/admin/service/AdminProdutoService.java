@@ -1,10 +1,13 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.catalog.repository.ImagemArquivoRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -28,12 +31,20 @@ public class AdminProdutoService {
 
     private final ProdutoRepository produtoRepository;
     private final CategoriaRepository categoriaRepository;
+    private final ImagemArquivoRepository imagemArquivoRepository;
 
-    public AdminProdutoService(ProdutoRepository produtoRepository, CategoriaRepository categoriaRepository) {
+    public AdminProdutoService(
+            ProdutoRepository produtoRepository,
+            CategoriaRepository categoriaRepository,
+            ImagemArquivoRepository imagemArquivoRepository
+    ) {
         this.produtoRepository = produtoRepository;
         this.categoriaRepository = categoriaRepository;
+        this.imagemArquivoRepository = imagemArquivoRepository;
     }
 
+    private static final Pattern IMAGEM_ENVIADA = Pattern.compile("produtos/imagens/(\\d{1,18})");
+    private static final Pattern IMAGEM_EXTERNA = Pattern.compile("https?://\\S+");
     private static final Set<String> SORT_FIELDS = Set.of("nome", "slug", "preco", "updatedAt");
 
     /** @param sort "campo,asc|desc" com campo em {@link #SORT_FIELDS}; inválido ou nulo = id desc. */
@@ -158,13 +169,14 @@ public class AdminProdutoService {
         return limpa;
     }
 
-    private static void replaceImagens(Produto p, java.util.List<ProdutoInput.ImagemInput> imagens) {
+    private void replaceImagens(Produto p, java.util.List<ProdutoInput.ImagemInput> imagens) {
         p.getImagens().clear();
         short i = 0;
         for (ProdutoInput.ImagemInput img : imagens) {
             if (img.url() == null || img.url().isBlank()) {
                 continue;
             }
+            requireImagemValida(img.url());
             ProdutoImagem pi = new ProdutoImagem();
             pi.setProduto(p);
             pi.setUrl(img.url());
@@ -173,6 +185,17 @@ public class AdminProdutoService {
             pi.setCreatedAt(OffsetDateTime.now());
             p.getImagens().add(pi);
             i++;
+        }
+    }
+
+    /** Arquivo enviado ao catálogo (que exista) ou endereço http(s). */
+    private void requireImagemValida(String url) {
+        Matcher arquivo = IMAGEM_ENVIADA.matcher(url);
+        boolean valida = arquivo.matches()
+                ? imagemArquivoRepository.existsById(Long.valueOf(arquivo.group(1)))
+                : IMAGEM_EXTERNA.matcher(url).matches();
+        if (!valida) {
+            throw new ApiException("VALIDATION_ERROR", "Imagem inválida ou inexistente", HttpStatus.BAD_REQUEST);
         }
     }
 }

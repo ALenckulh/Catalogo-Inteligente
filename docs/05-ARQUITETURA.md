@@ -52,7 +52,7 @@ flowchart TB
     subgraph catalogo["Catálogo Inteligente"]
         web["Aplicação web<br/>[Contêiner: Next.js 16, React 19, Ant Design]<br/>Vitrine, conta e painel admin"]:::sistema
         api["API<br/>[Contêiner: Java 25, Spring Boot 4]<br/>REST, autenticação JWT e<br/>worker de score no mesmo processo"]:::sistema
-        fila[("Fila de eventos<br/>[Contêiner: RabbitMQ 3]<br/>5 filas de eventos e 1 fila de erros")]:::dados
+        fila[("Fila de eventos<br/>[Contêiner: RabbitMQ 3]<br/>4 filas de eventos e 1 fila de erros")]:::dados
         banco[("Banco de dados<br/>[Contêiner: PostgreSQL 16]<br/>Usuários, produtos, eventos,<br/>notas, consentimentos e imagens")]:::dados
         flyway["Migrations<br/>[Contêiner: Flyway 10]<br/>Cria e evolui o schema"]:::sistema
     end
@@ -196,10 +196,9 @@ sequenceDiagram
 | `events.product.favorite` | `FAVORITAR`, `DESFAVORITAR` | Worker de score |
 | `events.product.contact` | `CONTATO_WHATSAPP` | Worker de score |
 | `events.search` | `PESQUISA` | Worker de score |
-| `events.session` | nenhum hoje (reservada) | Worker de score |
 | `events.dlq` | mensagens rejeitadas sem requeue | — |
 
-**Falhas:** gravar o evento e recalcular a nota formam uma transação só. Se o cálculo falha, nada é gravado e a mensagem volta para a fila, que é o padrão do Spring AMQP. Retentativa com backoff não está configurada. Se o RabbitMQ estiver fora do ar, a API responde erro, o evento se perde e a navegação segue.
+**Falhas:** gravar o evento e recalcular a nota formam uma transação só. Falha passageira (banco fora, deadlock) volta para a fila; dado inválido ou mensagem malformada vai para a `events.dlq`. Evento de conta excluída é descartado. Retentativa com backoff não está configurada. Se o RabbitMQ estiver fora do ar, a API responde erro, o evento se perde e a navegação segue.
 
 ## 7. Decisões arquiteturais relevantes
 

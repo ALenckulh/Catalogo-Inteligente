@@ -1,5 +1,7 @@
 package com.catalogo.visitante.service;
 
+import com.catalogo.auth.service.ConsentimentoService;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -18,28 +20,38 @@ import com.catalogo.visitante.repository.VisitanteRepository;
 @Service
 public class VisitanteService {
 
+    private static final int USER_AGENT_MAX = 500;
+
     private final VisitanteRepository visitanteRepository;
     private final SessaoRepository sessaoRepository;
+    private final ConsentimentoService consentimentoService;
 
-    public VisitanteService(VisitanteRepository visitanteRepository, SessaoRepository sessaoRepository) {
+    public VisitanteService(
+            VisitanteRepository visitanteRepository,
+            SessaoRepository sessaoRepository,
+            ConsentimentoService consentimentoService
+    ) {
         this.visitanteRepository = visitanteRepository;
         this.sessaoRepository = sessaoRepository;
+        this.consentimentoService = consentimentoService;
     }
 
     /**
      * Sempre abre uma sessão nova: o front só chama no 1º evento da visita (30 min sem evento = outra),
-     * com aceite dos cookies comportamentais. Logado: a sessão é do usuário, sem visitante.
+     * com aceite dos cookies comportamentais; sem ele, 403. Logado: a sessão é do usuário, sem visitante.
      * Anônimo: sem cookie, cria um visitante com cookie_id (UUID); com cookie, reaproveita.
      * O front guarda o UUID e o envia em X-Visitante-Cookie-Id.
      */
     @Transactional
     public SessaoResponse abrirSessao(AbrirSessaoRequest request, Long usuarioId) {
         if (usuarioId != null) {
+            consentimentoService.exigirDoUsuario(usuarioId);
             Sessao sessao = novaSessao(request);
             sessao.setUsuario(usuarioStub(usuarioId));
             return new SessaoResponse(null, sessaoRepository.save(sessao).getId());
         }
 
+        consentimentoService.exigir(Boolean.TRUE.equals(request.aceiteCookies()));
         Visitante visitante;
         if (request.cookieId() != null) {
             visitante = visitanteRepository.findByCookieId(request.cookieId())
@@ -48,13 +60,13 @@ public class VisitanteService {
                             "Cookie de visitante inválido",
                             HttpStatus.BAD_REQUEST
                     ));
-            if (request.fingerprint() != null && !request.fingerprint().isBlank()) {
-                visitante.setFingerprint(request.fingerprint());
+            if (visitante.getAceiteCookiesEm() == null) {
+                visitante.setAceiteCookiesEm(OffsetDateTime.now());
             }
         } else {
             visitante = new Visitante();
             visitante.setCookieId(UUID.randomUUID());
-            visitante.setFingerprint(request.fingerprint());
+            visitante.setAceiteCookiesEm(OffsetDateTime.now());
             visitante = visitanteRepository.save(visitante);
         }
 
@@ -66,7 +78,11 @@ public class VisitanteService {
     private static Sessao novaSessao(AbrirSessaoRequest request) {
         Sessao sessao = new Sessao();
         sessao.setDispositivo(request.dispositivo());
-        sessao.setUserAgent(request.userAgent());
+        // O navegador escolhe o tamanho: corta em vez de recusar a visita.
+        String userAgent = request.userAgent();
+        sessao.setUserAgent(userAgent != null && userAgent.length() > USER_AGENT_MAX
+                ? userAgent.substring(0, USER_AGENT_MAX)
+                : userAgent);
         sessao.setCanalOrigem(request.canalOrigem());
         return sessao;
     }

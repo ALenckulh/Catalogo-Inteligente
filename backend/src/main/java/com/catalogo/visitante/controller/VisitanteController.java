@@ -1,5 +1,6 @@
 package com.catalogo.visitante.controller;
 
+import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,7 +24,7 @@ public class VisitanteController {
 
     @PostMapping("/sessao")
     public SessaoResponse abrirSessao(
-            @RequestBody(required = false) AbrirSessaoRequest request,
+            @Valid @RequestBody(required = false) AbrirSessaoRequest request,
             Authentication authentication
     ) {
         AbrirSessaoRequest body = request != null

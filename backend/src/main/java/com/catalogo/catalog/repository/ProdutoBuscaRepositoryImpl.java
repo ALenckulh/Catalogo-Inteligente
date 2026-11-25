@@ -29,7 +29,8 @@ class ProdutoBuscaRepositoryImpl implements ProdutoBuscaRepository {
 
     /** Textos que ordenam ignorando acento e caixa; a collation padrão do Postgres Alpine põe "Óleo" depois do Z. */
     private static final Set<String> ORDENA_EM_PT_BR = Set.of("nome", "slug");
-    private static final String PT_BR = "pt-BR-x-icu";
+    /** Com aspas: o Hibernate escreve o nome da collation como recebe. */
+    private static final String PT_BR = "\"pt-BR-x-icu\"";
 
     @PersistenceContext
     private EntityManager em;

@@ -31,13 +31,16 @@ export const antdTheme: ThemeConfig = {
     colorText:          text.neutralStrong,
     colorTextSecondary: text.neutralDefault,
     colorTextTertiary:  text.neutralSubtle,
+    colorTextPlaceholder: text.neutralSubtle,
+    // O padrão seria colorTextTertiary; ícone decorativo não precisa do contraste de texto.
+    colorIcon:          palette.neutral[600],
     colorTextDisabled:  palette.neutral[400],
 
     colorBgBase:      surface.base,
     colorBgContainer: surface.base,
     colorBgElevated:  surface.base,
     colorBgLayout:    surface.neutralSubtle,
-    colorBgMask:      'rgba(10, 10, 10, 0.45)',
+    colorBgMask:      'rgb(var(--neutral-800-rgb) / 45%)',
     // solid default = secondary (~4.9:1 com branco)
     colorBgSolid:       palette.secondary[400],
     colorBgSolidHover:  palette.secondary[500],
@@ -62,9 +65,9 @@ export const antdTheme: ThemeConfig = {
     fontSizeHeading4: typography.size.lg,
     fontSizeHeading5: typography.size.lg,
 
-    boxShadow:          '0 2px 8px 0 rgba(58, 59, 61, 0.08)',
-    boxShadowSecondary: '0 1px 2px 0 rgba(58, 59, 61, 0.07)',
-    boxShadowTertiary:  '0 4px 24px 4px rgba(58, 59, 61, 0.05)',
+    boxShadow:          'var(--shadow-drop-neutral-md)',
+    boxShadowSecondary: 'var(--shadow-drop-neutral-lg)',
+    boxShadowTertiary:  'var(--shadow-drop-neutral-sm)',
   },
   components: {
     Layout: {

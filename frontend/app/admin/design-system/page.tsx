@@ -274,7 +274,6 @@ export default function AdminDesignSystemPage() {
                   <Spin size="small" />
                 </Space>
                 <Table
-                  size="small"
                   pagination={false}
                   columns={tableColumns}
                   dataSource={TABLE_ROWS}

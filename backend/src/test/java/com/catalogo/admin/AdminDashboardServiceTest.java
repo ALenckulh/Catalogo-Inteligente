@@ -70,7 +70,7 @@ class AdminDashboardServiceTest {
         when(analyticsRepository.countLeadsScoreAlto(anyDouble())).thenReturn(0L);
         when(analyticsRepository.topLeads(anyInt())).thenReturn(List.<Object[]>of(new Object[]{
                 7L, "a@x.c", "PF", "Ana", null, new java.math.BigDecimal("88.5"), "Cat",
-                java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z")
+                java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"), "Pistão"
         }));
         when(analyticsRepository.scoreDistribution(anyDouble(), anyDouble())).thenReturn(List.of());
         when(analyticsRepository.contatosPorDia(any())).thenReturn(List.<Object[]>of(
@@ -84,6 +84,7 @@ class AdminDashboardServiceTest {
         assertEquals(1, dash.leads().size());
         assertEquals(7L, dash.leads().getFirst().usuarioId());
         assertEquals(TipoUsuario.PF, dash.leads().getFirst().tipo());
+        assertEquals("Pistão", dash.leads().getFirst().proximaCompra());
         assertEquals(1, dash.series().contatosPorDia().size());
         assertEquals(1, dash.series().leadsPorCategoria().size());
     }

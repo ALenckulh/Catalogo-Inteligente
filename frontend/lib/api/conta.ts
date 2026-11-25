@@ -1,6 +1,7 @@
 import type { ConsentimentoInput, ConsentimentoLgpd, Usuario } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
 import { mockUsuarios } from '@/lib/mocks/data'
+import { persistToken } from './auth'
 import { ApiError, apiClient } from './client'
 import { USE_MOCK } from './config'
 
@@ -12,6 +13,7 @@ export interface ContaData {
 interface ContaApiResponse {
   usuario: Usuario
   consentimentos: ConsentimentoLgpd[]
+  token?: string | null
 }
 
 export async function getConta(usuarioId: number): Promise<ContaData> {
@@ -51,6 +53,7 @@ export async function updateConta(
 ): Promise<Usuario> {
   if (!USE_MOCK) {
     const { data } = await apiClient.patch<ContaApiResponse>('/conta', patch)
+    if (data.token) persistToken(data.token)
     return data.usuario
   }
 

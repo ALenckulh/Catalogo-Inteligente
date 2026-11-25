@@ -1,5 +1,7 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.scoring.repository.ScoreProdutoRepository;
+import com.catalogo.shared.Fuso;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -11,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -63,15 +66,18 @@ public class AdminScoringService {
 
     private final EventoRepository eventoRepository;
     private final CompraRepository compraRepository;
+    private final ScoreProdutoRepository scoreProdutoRepository;
     private final ScoreEngine scoreEngine;
 
     public AdminScoringService(
             EventoRepository eventoRepository,
             CompraRepository compraRepository,
+            ScoreProdutoRepository scoreProdutoRepository,
             ScoreEngine scoreEngine
     ) {
         this.eventoRepository = eventoRepository;
         this.compraRepository = compraRepository;
+        this.scoreProdutoRepository = scoreProdutoRepository;
         this.scoreEngine = scoreEngine;
     }
 
@@ -108,17 +114,22 @@ public class AdminScoringService {
         );
     }
 
-    /** Recalcula e grava as notas de todos os clientes e visitantes com eventos. */
+    /** Recalcula e grava as notas de todos os clientes e visitantes com evento, compra ou nota já gravada. */
     @Transactional
     public int recalcularTodos() {
         // Síncrono: adequado ao volume atual. Com muitos sujeitos, publicar na fila de scoring.
         ScoringParams params = scoreEngine.carregarParams();
         int total = 0;
-        for (Long usuarioId : eventoRepository.findUsuarioIdsComEventos()) {
+        Set<Long> usuarios = new TreeSet<>(eventoRepository.findUsuarioIdsComEventos());
+        usuarios.addAll(compraRepository.findUsuarioIdsComCompras());
+        usuarios.addAll(scoreProdutoRepository.findUsuarioIdsComNota());
+        Set<Long> visitantes = new TreeSet<>(eventoRepository.findVisitanteIdsSemUsuario());
+        visitantes.addAll(scoreProdutoRepository.findVisitanteIdsComNota());
+        for (Long usuarioId : usuarios) {
             scoreEngine.recalc(usuarioId, null, params);
             total++;
         }
-        for (Long visitanteId : eventoRepository.findVisitanteIdsSemUsuario()) {
+        for (Long visitanteId : visitantes) {
             scoreEngine.recalc(null, visitanteId, params);
             total++;
         }
@@ -134,16 +145,23 @@ public class AdminScoringService {
         double boost = ScoringParams.BOOST_PADRAO;
         Map<Long, Double> lambdaCat = new HashMap<>();
         Map<Long, Double> boostCat = new HashMap<>();
+        double recorrencia = ScoringParams.BOOST_PADRAO;
+        Map<Long, Double> recorrenciaCat = new HashMap<>();
+        int pausa = ScoringParams.PAUSA_PADRAO;
         for (DecayPatchRequest.Item d : decay) {
+            double r = d.boostRecorrencia() != null ? d.boostRecorrencia().doubleValue() : ScoringParams.BOOST_PADRAO;
             if (d.categoriaId() == null) {
                 lambda = d.lambda().doubleValue();
                 boost = d.boostConversao().doubleValue();
+                recorrencia = r;
+                pausa = d.pausaDias() != null ? d.pausaDias() : ScoringParams.PAUSA_PADRAO;
             } else {
                 lambdaCat.put(d.categoriaId(), d.lambda().doubleValue());
                 boostCat.put(d.categoriaId(), d.boostConversao().doubleValue());
+                recorrenciaCat.put(d.categoriaId(), r);
             }
         }
-        return new ScoringParams(p, lambda, boost, lambdaCat, boostCat);
+        return new ScoringParams(p, lambda, boost, lambdaCat, boostCat, recorrencia, recorrenciaCat, pausa);
     }
 
     // ---------------------------------------------------------------- impacto
@@ -180,7 +198,7 @@ public class AdminScoringService {
 
         for (Cliente c : clientes) {
             List<Evento> ev = eventosPorUsuario.getOrDefault(c.id(), List.of());
-            List<Compra> co = elegiveis(comprasPorUsuario.getOrDefault(c.id(), List.of()));
+            List<Compra> co = comprasPorUsuario.getOrDefault(c.id(), List.of());
             ScoreCalculator.Resultado ra = ScoreCalculator.calcular(ev, co, atual, agora);
             ScoreCalculator.Resultado rp = ScoreCalculator.calcular(ev, co, proposta, agora);
             double na = ra.notaMaxima();
@@ -299,7 +317,7 @@ public class AdminScoringService {
             return new Precisao(null, 0, 0, Confianca.BAIXA, null, null);
         }
         OffsetDateTime corte = horarios.get((int) Math.floor(PERCENTIL_CORTE * (horarios.size() - 1)));
-        LocalDate diaCorte = corte.toLocalDate();
+        LocalDate diaCorte = Fuso.dia(corte);
 
         Map<String, List<Evento>> antes = new LinkedHashMap<>();
         Map<String, Set<Long>> convertidosDepois = new LinkedHashMap<>();
@@ -354,7 +372,7 @@ public class AdminScoringService {
 
         for (Map.Entry<String, List<Evento>> s : antes.entrySet()) {
             List<Compra> co = s.getKey().startsWith("U")
-                    ? elegiveis(comprasAntes.getOrDefault(Long.valueOf(s.getKey().substring(1)), List.of()))
+                    ? comprasAntes.getOrDefault(Long.valueOf(s.getKey().substring(1)), List.of())
                     : List.of();
             ScoreCalculator.Resultado r = ScoreCalculator.calcular(s.getValue(), co, params, corte);
             double nota = r.notaMaxima();
@@ -446,10 +464,6 @@ public class AdminScoringService {
             }
         }
         return out;
-    }
-
-    private static List<Compra> elegiveis(List<Compra> compras) {
-        return ScoreCalculator.comprasElegiveis(compras) ? compras : List.of();
     }
 
     private static Map<NivelInteresse, Long> contagemVazia() {

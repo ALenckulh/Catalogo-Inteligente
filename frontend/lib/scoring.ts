@@ -1,5 +1,5 @@
 import { palette } from '@/lib/theme/tokens'
-import type { ParametroDecay, PesoMetrica, TipoEvento } from '@/lib/types'
+import type { ParametroDecay, PesoMetrica, TipoMetrica } from '@/lib/types'
 
 /**
  * Textos e contas da tela de configuração de scoring.
@@ -13,17 +13,25 @@ interface EventoScoring {
   cor: string
   /** Soma na nota da categoria (não na de produto) e fica fora do divisor da nota de produto. */
   alvo?: 'categoria'
+  /** Soma na nota de produto sem diluir as outras métricas (compra e retorno). */
+  foraDoDivisor?: boolean
   /** Subtrai pontos (o motor usa valor −1). */
   penalidade?: boolean
   /** Vale proporcionalmente (rolagem / tempo): os pontos mostrados são o máximo. */
   proporcional?: string
 }
 
-export const EVENTOS_SCORING: Record<TipoEvento, EventoScoring> = {
+export const EVENTOS_SCORING: Record<TipoMetrica, EventoScoring> = {
   CONTATO_WHATSAPP: {
     nome: 'Chamar no WhatsApp',
     descricao: 'O cliente clicou em “Falar no WhatsApp” na página do produto. É o sinal mais forte de intenção de compra.',
     cor: palette.primary[600],
+  },
+  COMPRA: {
+    nome: 'Comprar',
+    descricao: 'Compra que você registrou para o cliente. Soma a partir de 3 compras, sem esfriar, e vale metade depois de 2 anos. Não muda o peso das outras ações.',
+    cor: palette.success[500],
+    foraDoDivisor: true,
   },
   FAVORITAR: {
     nome: 'Favoritar',
@@ -34,6 +42,12 @@ export const EVENTOS_SCORING: Record<TipoEvento, EventoScoring> = {
     nome: 'Ver um produto',
     descricao: 'O cliente abriu a página do produto. Cada visita soma.',
     cor: palette.primary[300],
+  },
+  RETORNO_PAGINA: {
+    nome: 'Voltar ao produto',
+    descricao: 'O cliente viu o mesmo produto em outra visita. Soma uma vez por visita depois da primeira, além de “Ver um produto”. Não muda o peso das outras ações.',
+    cor: palette.secondary[600],
+    foraDoDivisor: true,
   },
   TEMPO_PAGINA: {
     nome: 'Tempo na página',
@@ -67,35 +81,46 @@ export const EVENTOS_SCORING: Record<TipoEvento, EventoScoring> = {
 }
 
 /** Ordem de exibição: do sinal mais forte ao mais fraco; o de categoria por último. */
-export const ORDEM_EVENTOS: TipoEvento[] = [
+export const ORDEM_EVENTOS: TipoMetrica[] = [
   'CONTATO_WHATSAPP',
+  'COMPRA',
   'PESQUISA',
   'FAVORITAR',
   'VISUALIZACAO_PRODUTO',
+  'RETORNO_PAGINA',
   'TEMPO_PAGINA',
   'SCROLL_DEPTH',
   'DESFAVORITAR',
   'FILTRO_APLICADO',
 ]
 
-/** Valores iniciais do sistema (database/migrations/V010__seed_config.sql). */
+/** Valores iniciais do sistema (database/migrations/V010, V020 e V023). */
 export const PESOS_PADRAO: PesoMetrica[] = [
-  { tipoEvento: 'VISUALIZACAO_PRODUTO', peso: 0.2 },
-  { tipoEvento: 'FAVORITAR', peso: 0.5 },
+  { tipoEvento: 'VISUALIZACAO_PRODUTO', peso: 0.1 },
+  { tipoEvento: 'FAVORITAR', peso: 1.2 },
   { tipoEvento: 'DESFAVORITAR', peso: 0.1 },
-  { tipoEvento: 'CONTATO_WHATSAPP', peso: 1 },
-  { tipoEvento: 'PESQUISA', peso: 0.5 },
+  { tipoEvento: 'CONTATO_WHATSAPP', peso: 1.5 },
+  { tipoEvento: 'PESQUISA', peso: 0.4 },
   { tipoEvento: 'FILTRO_APLICADO', peso: 0.5 },
   { tipoEvento: 'SCROLL_DEPTH', peso: 0.3 },
-  { tipoEvento: 'TEMPO_PAGINA', peso: 0.5 },
+  { tipoEvento: 'TEMPO_PAGINA', peso: 0.2 },
+  { tipoEvento: 'COMPRA', peso: 1 },
+  { tipoEvento: 'RETORNO_PAGINA', peso: 0 },
 ]
-export const LAMBDA_PADRAO = 0.01
+/** Meia-vida de 90 dias. */
+export const LAMBDA_PADRAO = 0.0077
 export const BOOST_PADRAO = 1
+export const PAUSA_PADRAO = 60
 
-/** Divisor da nota: soma dos pesos positivos das métricas de produto (sem as de categoria). */
+function entraNoDivisor(tipo: TipoMetrica): boolean {
+  const e = EVENTOS_SCORING[tipo]
+  return e?.alvo !== 'categoria' && !e?.foraDoDivisor
+}
+
+/** Divisor da nota: soma dos pesos positivos das métricas de produto (sem as de categoria, compra e retorno). */
 export function scoreMax(pesos: PesoMetrica[]): number {
   const soma = pesos
-    .filter((p) => EVENTOS_SCORING[p.tipoEvento]?.alvo !== 'categoria' && p.peso > 0)
+    .filter((p) => entraNoDivisor(p.tipoEvento) && p.peso > 0)
     .reduce((acc, p) => acc + p.peso, 0)
   return soma > 0 ? soma : 1
 }
@@ -104,9 +129,9 @@ export function scoreMax(pesos: PesoMetrica[]): number {
  * Pontos (0–100) que uma única ocorrência de cada evento soma, sem decaimento: na nota do produto
  * ou, para eventos de categoria, na nota da categoria (mesma escala).
  */
-export function pontosPorAcao(pesos: PesoMetrica[]): Partial<Record<TipoEvento, number>> {
+export function pontosPorAcao(pesos: PesoMetrica[]): Partial<Record<TipoMetrica, number>> {
   const max = scoreMax(pesos)
-  const out: Partial<Record<TipoEvento, number>> = {}
+  const out: Partial<Record<TipoMetrica, number>> = {}
   for (const p of pesos) {
     out[p.tipoEvento] = (p.peso / max) * 100
   }
@@ -127,7 +152,7 @@ export function lambdaDeMeiaVida(dias: number): number {
 
 /**
  * Quanto uma ação ainda vale (0–1) depois de `dias`, como no `DecayCalculator`
- * (sem considerar a pausa de 60 dias após contato).
+ * (sem considerar a pausa após contato ou compra).
  */
 export function fatorDecaimento(dias: number, lambda: number, comConversao: boolean): number {
   if (dias < 7) return 1
@@ -143,6 +168,8 @@ export function decayGlobal(decay: ParametroDecay[]): ParametroDecay {
       categoriaNome: null,
       lambda: LAMBDA_PADRAO,
       boostConversao: BOOST_PADRAO,
+      boostRecorrencia: BOOST_PADRAO,
+      pausaDias: PAUSA_PADRAO,
     }
   )
 }

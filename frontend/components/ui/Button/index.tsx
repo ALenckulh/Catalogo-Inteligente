@@ -39,6 +39,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         variant={variant ?? (color === 'primary' ? 'solid' : 'outlined')}
         color={color}
         style={width !== undefined ? { width, ...style } : style}
+        // Só ícone: sem isto o leitor de tela anuncia o nome do ícone ("edit", "delete").
+        aria-label={children == null && typeof tooltip === 'string' ? tooltip : undefined}
         href={href}
         onClick={href?.startsWith('/') && !rest.target ? navigate : onClick}
         {...rest}

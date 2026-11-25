@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiClient } from './client'
-import { trackEvent } from './eventos'
+import { AUTH_TOKEN_KEY } from './config'
+import { registrarEnvioInicial } from '@/lib/consentSync'
+import { liberarEventos, trackEvent } from './eventos'
 import { garantirSessao, readSessaoId, reabrirSessao } from './visitantes'
 
 vi.mock('./config', async (original) => ({ ...(await original<object>()), USE_MOCK: false }))
@@ -40,6 +42,56 @@ describe('trackEvent', () => {
     await expect(trackEvent(evento)).rejects.toThrow()
     expect(sessoesEnviadas()).toEqual([5])
     expect(reabrirSessao).not.toHaveBeenCalled()
+  })
+
+  it('conta recusou (403): para de enviar até trocar de login ou aceitar em /conta', async () => {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, 'ana')
+    post.mockRejectedValueOnce(new ApiError('CONSENT_REQUIRED', 'x', 403))
+    await expect(trackEvent(evento)).rejects.toThrow()
+    await trackEvent(evento)
+    await trackEvent(evento, { keepalive: true })
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(garantirSessao).toHaveBeenCalledTimes(1)
+
+    window.localStorage.setItem(AUTH_TOKEN_KEY, 'bia')
+    await trackEvent(evento)
+    expect(post).toHaveBeenCalledTimes(2)
+
+    window.localStorage.setItem(AUTH_TOKEN_KEY, 'ana')
+    liberarEventos()
+    await trackEvent(evento)
+    expect(post).toHaveBeenCalledTimes(3)
+
+    window.localStorage.removeItem(AUTH_TOKEN_KEY)
+    await trackEvent(evento)
+    expect(post).toHaveBeenCalledTimes(4)
+  })
+
+  it('abrir a sessão também pode dar 403: para de tentar', async () => {
+    liberarEventos()
+    window.localStorage.setItem(AUTH_TOKEN_KEY, 'caio')
+    vi.mocked(garantirSessao).mockRejectedValueOnce(new ApiError('CONSENT_REQUIRED', 'x', 403))
+    await expect(trackEvent(evento)).rejects.toThrow()
+    await trackEvent(evento)
+    expect(garantirSessao).toHaveBeenCalledTimes(1)
+    expect(post).not.toHaveBeenCalled()
+    window.localStorage.removeItem(AUTH_TOKEN_KEY)
+  })
+
+  it('espera o consentimento inicial chegar à conta, mesmo registrado depois no mesmo render', async () => {
+    const ordem: string[] = []
+    post.mockImplementation(async () => {
+      ordem.push('evento')
+      return {}
+    })
+    const envio = trackEvent(evento)
+    registrarEnvioInicial(
+      new Promise<void>((r) => setTimeout(r, 20)).then(() => {
+        ordem.push('consentimento')
+      }),
+    )
+    await envio
+    expect(ordem).toEqual(['consentimento', 'evento'])
   })
 
   it('aba fechando (keepalive): usa a sessão salva, sem abrir outra', async () => {

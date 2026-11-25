@@ -6,6 +6,7 @@ import { EyeOutlined } from '@ant-design/icons'
 import { getDashboard } from '@/lib/api/admin'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import type { AdminDashboard } from '@/lib/types'
+import { PageError } from '@/components/layout/PageStates'
 import {
   Button,
   Card,
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui'
 import { DashboardCharts } from './_components/DashboardCharts'
 import { HelpTitle } from './_components/HelpTitle'
+import { LeadsTabela } from './_components/LeadsTabela'
 
 const { Title } = Typography
 
@@ -52,19 +54,23 @@ const KPIS: { key: KpiKey; label: string; help: string; ver?: { href: string; id
 export default function AdminDashboardPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
   const [data, setData] = useState<AdminDashboard | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [falhou, setFalhou] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     if (!isAdmin) return
     const t = window.setTimeout(() => {
+      setFalhou(false)
       void getDashboard()
         .then(setData)
-        .finally(() => setLoading(false))
+        .catch(() => setFalhou(true))
     }, 0)
     return () => window.clearTimeout(t)
-  }, [isAdmin])
+  }, [isAdmin, tentativa])
 
-  if (authLoading || !isAdmin || loading || !data) {
+  if (isAdmin && falhou) return <PageError onRetry={() => setTentativa((n) => n + 1)} />
+
+  if (authLoading || !isAdmin || !data) {
     return (
       <Flex justify="center" style={{ padding: 48 }}>
         <Spin />
@@ -98,6 +104,7 @@ export default function AdminDashboardPage() {
           ))}
         </Row>
       </Card>
+      <LeadsTabela leads={data.leads} />
       <DashboardCharts series={data.series} />
     </Flex>
   )

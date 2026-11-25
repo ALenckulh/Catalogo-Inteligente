@@ -20,12 +20,25 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
             """, nativeQuery = true)
     int attachUsuarioToVisitanteEventos(@Param("usuarioId") Long usuarioId, @Param("visitanteId") Long visitanteId);
 
+    /** Apaga também o que a pessoa digitou na busca (metadados.termo e metadados.filtros.q): texto livre pode identificar. */
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            UPDATE evento SET deleted_at = now()
-            WHERE usuario_id = :usuarioId AND deleted_at IS NULL
+            UPDATE evento
+            SET deleted_at = COALESCE(deleted_at, now()),
+                metadados = (metadados - 'termo') #- '{filtros,q}'
+            WHERE usuario_id = :usuarioId
             """, nativeQuery = true)
     int softDeleteByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    /** Visitante recusou levar o histórico: some dos cálculos e perde o texto buscado. */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE evento
+            SET deleted_at = COALESCE(deleted_at, now()),
+                metadados = (metadados - 'termo') #- '{filtros,q}'
+            WHERE visitante_id = :visitanteId AND usuario_id IS NULL
+            """, nativeQuery = true)
+    int descartarDoVisitante(@Param("visitanteId") Long visitanteId);
 
     @Query("""
             SELECT e FROM Evento e

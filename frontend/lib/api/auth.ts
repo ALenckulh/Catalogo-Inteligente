@@ -115,6 +115,12 @@ export function persistSession(session: AuthSession): void {
   persistUser(session.usuario)
 }
 
+/** Trocar a senha encerra as outras sessões; esta segue com o token novo. */
+export function persistToken(token: string): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token)
+}
+
 export function persistUser(usuario: Usuario): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(usuario))

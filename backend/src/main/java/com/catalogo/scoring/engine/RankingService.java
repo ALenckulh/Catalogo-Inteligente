@@ -13,10 +13,12 @@ import com.catalogo.scoring.entity.ScoreProduto;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
 
 /**
- * Blend personal score vs popularidade — [04 §6.2](frontend/docs/04-ESPECIFICACAO-TECNICA.md).
+ * Nota pessoal × popularidade — docs/04-ESPECIFICACAO-TECNICA.md §6.2.
  */
 @Service
 public class RankingService {
+
+    private static final double PESO_DOMINANTE = 0.8;
 
     private final ScoreProdutoRepository scoreProdutoRepository;
     private final PopularidadeGlobalService popularidadeGlobalService;
@@ -35,8 +37,14 @@ public class RankingService {
     /**
      * Cold start: quanto a nota pessoal pesa na ordem do catálogo.
      * 0–2 interações → 0 (só popularidade); 3–9 → (n−2)/8; ≥10 com score gravado → 1; ≥10 sem score → 0,8.
+     * Cliente logado que já tem notas não passa pela transição: no mínimo 0,8.
      */
-    public double personalWeight(long interactions, boolean hasPersistedScores) {
+    public double personalWeight(long interactions, boolean hasPersistedScores, boolean logado) {
+        double peso = personalWeight(interactions, hasPersistedScores);
+        return logado && hasPersistedScores ? Math.max(PESO_DOMINANTE, peso) : peso;
+    }
+
+    private static double personalWeight(long interactions, boolean hasPersistedScores) {
         if (hasPersistedScores && interactions >= 10) {
             return 1.0;
         }
@@ -47,7 +55,7 @@ public class RankingService {
             // linear 3→~0.14 … 9→~0.86 toward personal
             return (interactions - 2) / 8.0;
         }
-        return 0.8;
+        return PESO_DOMINANTE;
     }
 
     public Map<Long, BigDecimal> personalScores(Long usuarioId, Long visitanteId) {
@@ -76,12 +84,16 @@ public class RankingService {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Ordena os ids pela nota (maior primeiro); empate pelo menor id. */
+    /**
+     * Ordena os ids pela nota (maior primeiro). Empate pelo menor id; para cliente logado, antes pela popularidade:
+     * com peso 1, todos os produtos que ele nunca viu empatam em 0.
+     */
     public void sortByRank(
             List<Long> produtoIds,
             double personalWeight,
             Map<Long, BigDecimal> personal,
-            Map<Long, BigDecimal> popularidade
+            Map<Long, BigDecimal> popularidade,
+            boolean logado
     ) {
         Map<Long, BigDecimal> cache = popularidade.isEmpty()
                 ? popularidadeGlobalService.scoresByProduto()
@@ -90,10 +102,12 @@ public class RankingService {
         for (Long id : produtoIds) {
             notas.put(id, blendedScore(id, personalWeight, personal, cache));
         }
-        produtoIds.sort(Comparator
-                .comparing((Long id) -> notas.get(id))
-                .reversed()
-                .thenComparing(Comparator.naturalOrder()));
+        Comparator<Long> ordem = Comparator.comparing((Long id) -> notas.get(id)).reversed();
+        if (logado) {
+            ordem = ordem.thenComparing(
+                    (Long id) -> cache.getOrDefault(id, BigDecimal.ZERO), Comparator.reverseOrder());
+        }
+        produtoIds.sort(ordem.thenComparing(Comparator.naturalOrder()));
     }
 
     public Map<Long, BigDecimal> loadPopularidade() {

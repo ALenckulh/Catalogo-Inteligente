@@ -8,6 +8,8 @@ public record ExportacaoResponse(
         UsuarioResponse usuario,
         List<ConsentimentoResponse> consentimentos,
         List<Long> favoritosProdutoIds,
-        List<ExportEventoItem> eventos
+        List<ExportEventoItem> eventos,
+        List<ExportCompraItem> compras,
+        List<SolicitacaoLgpdResponse> solicitacoes
 ) {
 }

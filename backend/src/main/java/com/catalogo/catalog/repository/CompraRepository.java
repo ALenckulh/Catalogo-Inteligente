@@ -11,7 +11,8 @@ import com.catalogo.catalog.entity.Compra;
 
 public interface CompraRepository extends JpaRepository<Compra, Long> {
 
-    long countByUsuarioIdAndDeletedAtIsNull(Long usuarioId);
+    @Query("SELECT DISTINCT c.usuarioId FROM Compra c WHERE c.deletedAt IS NULL")
+    List<Long> findUsuarioIdsComCompras();
 
     @Query("""
             SELECT c FROM Compra c JOIN FETCH c.produto

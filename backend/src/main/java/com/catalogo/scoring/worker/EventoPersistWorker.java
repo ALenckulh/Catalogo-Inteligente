@@ -1,5 +1,6 @@
 package com.catalogo.scoring.worker;
 
+import com.catalogo.auth.repository.UsuarioRepository;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -35,30 +36,39 @@ public class EventoPersistWorker {
     private final ProdutoRepository produtoRepository;
     private final CategoriaRepository categoriaRepository;
     private final ScoreEngine scoreEngine;
+    private final UsuarioRepository usuarioRepository;
 
     public EventoPersistWorker(
             EventoRepository eventoRepository,
             ProdutoRepository produtoRepository,
             CategoriaRepository categoriaRepository,
-            ScoreEngine scoreEngine
+            ScoreEngine scoreEngine,
+            UsuarioRepository usuarioRepository
     ) {
         this.eventoRepository = eventoRepository;
         this.produtoRepository = produtoRepository;
         this.categoriaRepository = categoriaRepository;
         this.scoreEngine = scoreEngine;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @RabbitListener(queues = {
             RabbitConfig.QUEUE_PRODUCT_VIEW,
             RabbitConfig.QUEUE_PRODUCT_FAVORITE,
             RabbitConfig.QUEUE_PRODUCT_CONTACT,
-            RabbitConfig.QUEUE_SEARCH,
-            RabbitConfig.QUEUE_SESSION
+            RabbitConfig.QUEUE_SEARCH
     })
     // @Transactional: INSERT do evento e recálculo do score commitam juntos; se o recálculo falhar,
     // o evento sofre rollback e a mensagem é rejeitada (nunca fica evento gravado sem score atualizado).
     @Transactional
     public void persist(EventoMessage message) {
+        // Conta excluída com o evento ainda na fila: gravá-lo deixaria um evento ativo na conta anonimizada,
+        // e o recálculo apagaria as notas dela.
+        if (message.usuarioId() != null
+                && usuarioRepository.travarAtivoParaGravarEvento(message.usuarioId()).isEmpty()) {
+            log.info("Evento descartado: conta {} excluída", message.usuarioId());
+            return;
+        }
         Evento evento = new Evento();
         evento.setTipo(message.tipo());
 

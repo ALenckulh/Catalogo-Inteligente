@@ -15,8 +15,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Filas de eventos conforme {@code frontend/docs/12-ARQUITETURA-BACKEND.md} §6.
- * Um DirectExchange (events.exchange) roteia pela routing key para 5 filas duráveis, que sobrevivem a
+ * Filas de eventos conforme {@code docs/12-ARQUITETURA-BACKEND.md} §6.
+ * Um DirectExchange (events.exchange) roteia pela routing key para 4 filas duráveis, que sobrevivem a
  * restart do broker, mais a DLQ. Hoje um único listener (EventoPersistWorker) consome todas.
  * Desligável por catalogo.rabbit.enabled=false, que é o que os testes usam para rodar sem RabbitMQ.
  */
@@ -31,7 +31,6 @@ public class RabbitConfig {
     public static final String QUEUE_PRODUCT_FAVORITE = "events.product.favorite";
     public static final String QUEUE_PRODUCT_CONTACT = "events.product.contact";
     public static final String QUEUE_SEARCH = "events.search";
-    public static final String QUEUE_SESSION = "events.session";
 
     @Bean
     public MessageConverter jacksonMessageConverter() {
@@ -75,11 +74,6 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Queue sessionQueue() {
-        return durableWithDlq(QUEUE_SESSION);
-    }
-
-    @Bean
     public Binding productViewBinding(Queue productViewQueue, DirectExchange eventsExchange) {
         return BindingBuilder.bind(productViewQueue).to(eventsExchange).with(QUEUE_PRODUCT_VIEW);
     }
@@ -97,11 +91,6 @@ public class RabbitConfig {
     @Bean
     public Binding searchBinding(Queue searchQueue, DirectExchange eventsExchange) {
         return BindingBuilder.bind(searchQueue).to(eventsExchange).with(QUEUE_SEARCH);
-    }
-
-    @Bean
-    public Binding sessionBinding(Queue sessionQueue, DirectExchange eventsExchange) {
-        return BindingBuilder.bind(sessionQueue).to(eventsExchange).with(QUEUE_SESSION);
     }
 
     @Bean

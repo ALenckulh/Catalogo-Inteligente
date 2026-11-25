@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.catalog.repository.ImagemArquivoRepository;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,12 +39,14 @@ class AdminProdutoServiceTest {
     ProdutoRepository produtoRepository;
     @Mock
     CategoriaRepository categoriaRepository;
+    @Mock
+    ImagemArquivoRepository imagemArquivoRepository;
 
     AdminProdutoService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminProdutoService(produtoRepository, categoriaRepository);
+        service = new AdminProdutoService(produtoRepository, categoriaRepository, imagemArquivoRepository);
     }
 
     @Test
@@ -53,6 +56,9 @@ class AdminProdutoServiceTest {
         p.setNome("N");
         p.setSlug("n");
         p.setPreco(BigDecimal.TEN);
+        Categoria cat = new Categoria();
+        cat.setId(1L);
+        p.setCategoria(cat);
         p.setFichaTecnica(new LinkedHashMap<>(Map.of("Marca", "X")));
         when(produtoRepository.findByIdWithDetails(9L)).thenReturn(Optional.of(p));
 
@@ -75,6 +81,30 @@ class AdminProdutoServiceTest {
 
     private static PatchProdutoRequest patchFicha(Map<String, Object> ficha) {
         return new PatchProdutoRequest(null, null, null, null, null, null, ficha, null);
+    }
+
+    @Test
+    void imagemSoHttpOuArquivoQueExiste() {
+        Produto p = new Produto();
+        p.setId(9L);
+        Categoria cat = new Categoria();
+        cat.setId(1L);
+        p.setCategoria(cat);
+        when(produtoRepository.findByIdWithDetails(9L)).thenReturn(Optional.of(p));
+        org.mockito.Mockito.lenient().when(imagemArquivoRepository.existsById(7L)).thenReturn(true);
+
+        for (String url : List.of("produtos/imagens/8", "produtos/imagens/99999999999999999999", "javascript:alert(1)",
+                "data:image/png;base64,AA", "/etc/passwd", "produtos/imagens/7/x", "https://", "http://a b")) {
+            assertThrows(ApiException.class, () -> service.patch(9L, patchImagem(url)), url);
+        }
+        service.patch(9L, patchImagem("produtos/imagens/7"));
+        service.patch(9L, patchImagem("https://exemplo.com/foto.png"));
+        assertEquals("https://exemplo.com/foto.png", p.getImagens().iterator().next().getUrl());
+    }
+
+    private static PatchProdutoRequest patchImagem(String url) {
+        return new PatchProdutoRequest(
+                null, null, null, null, null, null, null, List.of(new ProdutoInput.ImagemInput(url, null, null)));
     }
 
     @Test

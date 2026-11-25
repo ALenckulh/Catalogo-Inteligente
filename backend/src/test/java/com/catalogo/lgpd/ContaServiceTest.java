@@ -9,7 +9,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.security.JwtService;
+import com.catalogo.catalog.entity.Compra;
+import com.catalogo.catalog.entity.Produto;
+import com.catalogo.catalog.repository.CompraRepository;
+import com.catalogo.visitante.repository.SessaoRepository;
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +68,12 @@ class ContaServiceTest {
     EventoRepository eventoRepository;
     @Mock
     CompraAnonymizeRepository compraAnonymizeRepository;
+    @Mock
+    CompraRepository compraRepository;
+    @Mock
+    SessaoRepository sessaoRepository;
+    @Mock
+    JwtService jwtService;
 
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     ContaService service;
@@ -74,7 +87,10 @@ class ContaServiceTest {
                 favoritoRepository,
                 eventoRepository,
                 compraAnonymizeRepository,
-                passwordEncoder
+                compraRepository,
+                sessaoRepository,
+                passwordEncoder,
+                jwtService
         );
     }
 
@@ -104,6 +120,20 @@ class ContaServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("INVALID_PASSWORD", ex.getCode());
         verify(usuarioRepository, never()).save(any());
+    }
+
+    /** Trocar a senha derruba as outras sessões; esta recebe um token novo. */
+    @Test
+    void trocarSenhaDevolveTokenNovo() {
+        Usuario u = usuario(1L);
+        u.setSenhaHash(passwordEncoder.encode("secret"));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(jwtService.generate(u)).thenReturn("novo");
+
+        assertNull(service.patchConta(1L, new PatchContaRequest("47999990000", null, null, null, null, null)).token());
+        assertNull(u.getSessoesValidasDesde());
+        assertEquals("novo", service.patchConta(1L, new PatchContaRequest(null, null, null, null, "secret", "nova1234")).token());
+        assertTrue(u.getSessoesValidasDesde() != null);
     }
 
     @Test
@@ -178,6 +208,58 @@ class ContaServiceTest {
     }
 
     @Test
+    void exportTrazComprasESolicitacoesESemFormulaNoCsv() {
+        Usuario u = usuario(1L);
+        u.setNomeCompleto("=HYPERLINK(\"http://x\",\"y\")");
+        u.setEmailAlternativo("@SUM(1)");
+        Produto p = new Produto();
+        p.setId(7L);
+        p.setNome("-2+3, filtro");
+        Compra c = new Compra();
+        c.setId(1L);
+        c.setProduto(p);
+        c.setQuantidade(2);
+        c.setPrecoUnitario(new BigDecimal("10.50"));
+        c.setValorTotal(new BigDecimal("21.00"));
+        c.setDataCompra(LocalDate.of(2026, 1, 15));
+        c.setObservacoes("anotação interna");
+        SolicitacaoLgpd s = new SolicitacaoLgpd();
+        s.setTipo(TipoSolicitacaoLgpd.CORRECAO);
+        s.setStatus(StatusSolicitacaoLgpd.PENDENTE);
+        s.setObservacoes("corrigir nome");
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(compraRepository.findByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(List.of(c));
+        when(solicitacaoRepository.findByUsuario_IdOrderBySolicitadoEmDescIdDesc(1L)).thenReturn(List.of(s));
+
+        var export = service.exportar(1L);
+        assertEquals("-2+3, filtro", export.compras().getFirst().produtoNome());
+        assertEquals("corrigir nome", export.solicitacoes().getFirst().observacoes());
+
+        String csv = service.exportarCsv(1L);
+        assertTrue(csv.contains("usuario,nomeCompleto,\"'=HYPERLINK(\"\"http://x\"\",\"\"y\"\")\"\n"), csv);
+        assertTrue(csv.contains("usuario,emailAlternativo,'@SUM(1)\n"), csv);
+        assertTrue(csv.contains("compra,\"'-2+3, filtro\",2026-01-15|2 x 10.50|total=21.00\n"), csv);
+        assertTrue(csv.contains("solicitacao,CORRECAO,PENDENTE|"), csv);
+        assertTrue(!csv.contains("interna"), csv);
+    }
+
+    /** Só grava o que ainda não estava recusado: o histórico não ganha linha repetida. */
+    @Test
+    void revogacaoRecusaCookiesEContato() {
+        Usuario u = usuario(1L);
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of(
+                consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, true, OffsetDateTime.now()),
+                consent(u, TipoConsentimento.CONTATO_PROATIVO, false, OffsetDateTime.now())));
+
+        service.revogarConsentimentos(u);
+
+        ArgumentCaptor<ConsentimentoLgpd> cap = ArgumentCaptor.forClass(ConsentimentoLgpd.class);
+        verify(consentimentoRepository).save(cap.capture());
+        assertEquals(TipoConsentimento.COOKIES_COMPORTAMENTAIS, cap.getValue().getTipo());
+        assertTrue(!cap.getValue().isAceito());
+    }
+
+    @Test
     void solicitacaoPendente() {
         Usuario u = usuario(1L);
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
@@ -207,9 +289,13 @@ class ContaServiceTest {
         assertNull(u.getNomeCompleto());
         assertNull(u.getCpf());
         assertNotNullDeleted(u);
+        var ordem = org.mockito.Mockito.inOrder(usuarioRepository, eventoRepository);
+        ordem.verify(usuarioRepository).travarParaExcluir(1L);
+        ordem.verify(eventoRepository).softDeleteByUsuarioId(1L);
         verify(favoritoRepository).softDeleteByUsuarioId(1L);
         verify(eventoRepository).softDeleteByUsuarioId(1L);
         verify(compraAnonymizeRepository).softDeleteByUsuarioId(1L);
+        verify(sessaoRepository).limparUserAgentByUsuarioId(1L);
     }
 
     private static void assertNotNullDeleted(Usuario u) {

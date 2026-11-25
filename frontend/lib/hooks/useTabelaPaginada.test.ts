@@ -59,6 +59,18 @@ describe('useTabelaPaginada', () => {
     expect(buscar).toHaveBeenCalledTimes(2)
   })
 
+  it('falha vira erro, e tentar de novo se recupera', async () => {
+    const buscar = servidor(5)
+    buscar.mockRejectedValueOnce(new Error('rede'))
+    const { result } = renderHook(() => useTabelaPaginada(buscar, true))
+    await waitFor(() => expect(result.current.erro).toBe(true))
+    expect(result.current.loading).toBe(false)
+
+    await act(() => result.current.reload())
+    expect(result.current.erro).toBe(false)
+    expect(result.current.items).toHaveLength(5)
+  })
+
   it('descarta resposta atrasada', async () => {
     const pendentes: ((p: Page<number>) => void)[] = []
     const buscar = vi.fn(() => new Promise<Page<number>>((resolve) => pendentes.push(resolve)))

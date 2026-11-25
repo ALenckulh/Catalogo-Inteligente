@@ -10,6 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.scoring.engine.ScoreEngine;
+import com.catalogo.scoring.repository.FaixaPrecoUsuarioRepository;
+import com.catalogo.scoring.repository.ScoreCategoriaRepository;
+import com.catalogo.scoring.repository.ScoreProdutoRepository;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,7 +26,6 @@ import org.springframework.http.HttpStatus;
 
 import com.catalogo.auth.dto.MigrarHistoricoRequest;
 import com.catalogo.eventos.repository.EventoRepository;
-import com.catalogo.scoring.repository.ScoreMigrationRepository;
 import com.catalogo.shared.ApiException;
 import com.catalogo.visitante.entity.Visitante;
 import com.catalogo.visitante.repository.SessaoRepository;
@@ -39,14 +42,21 @@ class MigracaoHistoricoServiceTest {
     @Mock
     EventoRepository eventoRepository;
     @Mock
-    ScoreMigrationRepository scoreMigrationRepository;
+    ScoreProdutoRepository scoreProdutoRepository;
+    @Mock
+    ScoreCategoriaRepository scoreCategoriaRepository;
+    @Mock
+    FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository;
+    @Mock
+    ScoreEngine scoreEngine;
 
     MigracaoHistoricoService service;
 
     @BeforeEach
     void setUp() {
         service = new MigracaoHistoricoService(
-                visitanteRepository, sessaoRepository, eventoRepository, scoreMigrationRepository
+                visitanteRepository, sessaoRepository, eventoRepository,
+                scoreProdutoRepository, scoreCategoriaRepository, faixaPrecoUsuarioRepository, scoreEngine
         );
     }
 
@@ -67,11 +77,15 @@ class MigracaoHistoricoServiceTest {
         assertNotNull(visitante.getMigradoEm());
         verify(sessaoRepository).attachUsuarioToVisitanteSessoes(1L, 9L);
         verify(eventoRepository).attachUsuarioToVisitanteEventos(1L, 9L);
-        verify(scoreMigrationRepository).reassignVisitanteToUsuario(1L, 9L);
+        verify(scoreProdutoRepository).deleteByVisitanteId(9L);
+        verify(scoreCategoriaRepository).deleteByVisitanteId(9L);
+        verify(faixaPrecoUsuarioRepository).deleteByVisitanteId(9L);
+        verify(scoreEngine).recalc(1L, null);
+        verify(eventoRepository, never()).descartarDoVisitante(any());
     }
 
     @Test
-    void aceitarFalseNoLink() {
+    void recusarDescartaOHistoricoAnonimo() {
         UUID cookie = UUID.randomUUID();
         Visitante visitante = new Visitante();
         visitante.setId(9L);
@@ -80,12 +94,16 @@ class MigracaoHistoricoServiceTest {
 
         var response = service.migrar(1L, new MigrarHistoricoRequest(false), cookie.toString());
 
-        assertEquals("Histórico de visitante não associado", response.message());
+        assertEquals("Histórico de visitante descartado", response.message());
         assertNull(visitante.getUsuario());
         assertNull(visitante.getMigradoEm());
         verify(visitanteRepository, never()).save(any());
         verify(eventoRepository, never()).attachUsuarioToVisitanteEventos(any(), any());
-        verify(scoreMigrationRepository, never()).reassignVisitanteToUsuario(any(), any());
+        verify(eventoRepository).descartarDoVisitante(9L);
+        verify(sessaoRepository).limparUserAgentDoVisitante(9L);
+        verify(scoreProdutoRepository).deleteByVisitanteId(9L);
+        verify(faixaPrecoUsuarioRepository).deleteByVisitanteId(9L);
+        verify(scoreEngine, never()).recalc(any(), any());
     }
 
     @Test
@@ -97,7 +115,7 @@ class MigracaoHistoricoServiceTest {
                 service.migrar(1L, new MigrarHistoricoRequest(true), cookie.toString()));
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("INVALID_COOKIE", ex.getCode());
-        verify(scoreMigrationRepository, never()).reassignVisitanteToUsuario(eq(1L), any());
+        verify(scoreEngine, never()).recalc(any(), any());
     }
 
     @Test

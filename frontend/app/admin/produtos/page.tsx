@@ -3,18 +3,20 @@
 import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import { listAdminProdutos, updateProduto } from '@/lib/api/admin'
-import { formatDateTime, toMoneyBRL } from '@/lib/formatters'
+import { toApiError } from '@/lib/api/client'
+import { toMoneyBRL } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import { useTabelaPaginada } from '@/lib/hooks/useTabelaPaginada'
 import type { Produto } from '@/lib/types'
+import { AtivoTag, DataCelula, TextoCelula } from '@/components/admin/celulas'
+import { PageError } from '@/components/layout/PageStates'
 import {
   Button,
   Flex,
   Input,
   Spin,
   Table,
-  Tag,
   Typography,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
@@ -38,7 +40,7 @@ export default function AdminProdutosPage() {
       listAdminProdutos({ q: q || undefined, ativo, ...params }),
     [q, ativo],
   )
-  const { items, loading, setPage, reload, onTableChange, sortOrder, pagination } =
+  const { items, loading, erro, setPage, reload, onTableChange, sortOrder, pagination } =
     useTabelaPaginada<Produto>(buscar, isAdmin)
 
   if (authLoading || !isAdmin) {
@@ -55,24 +57,28 @@ export default function AdminProdutosPage() {
       dataIndex: 'nome',
       sorter: true,
       sortOrder: sortOrder('nome'),
+      width: '33%',
+      render: (v: string) => <TextoCelula texto={v} principal />,
     },
     {
       title: 'Slug',
       dataIndex: 'slug',
       sorter: true,
       sortOrder: sortOrder('slug'),
+      render: (v: string) => <TextoCelula texto={v} />,
     },
     {
       title: 'Preço',
       dataIndex: 'preco',
       sorter: true,
       sortOrder: sortOrder('preco'),
+      width: 110,
       render: (v: number) => toMoneyBRL(v),
     },
     {
       title: 'Categoria',
       key: 'cat',
-      render: (_, row) => row.categoria?.nome ?? '—',
+      render: (_, row) => <TextoCelula texto={row.categoria?.nome} />,
     },
     {
       title: 'Ativo',
@@ -83,20 +89,21 @@ export default function AdminProdutosPage() {
         { text: 'Não', value: false },
       ],
       filteredValue: ativo === undefined ? null : [ativo],
-      render: (valor: boolean) => (
-        <Tag color={valor ? 'success' : 'default'}>{valor ? 'Ativo' : 'Inativo'}</Tag>
-      ),
+      width: 86,
+      render: (valor: boolean) => <AtivoTag ativo={valor} />,
     },
     {
       title: 'Atualizado',
       dataIndex: 'updatedAt',
       sorter: true,
       sortOrder: sortOrder('updatedAt'),
-      render: (d) => formatDateTime(d),
+      width: 116,
+      render: (d: string) => <DataCelula data={d} />,
     },
     {
       title: 'Ações',
       key: 'acoes',
+      width: 84,
       render: (_, row) => (
         <Flex gap={4}>
           <Link href={`/admin/produtos/${row.id}/editar`}>
@@ -115,10 +122,12 @@ export default function AdminProdutosPage() {
             tooltip={row.ativo ? 'Desativar' : 'Ativar'}
             id={`admin-prod-${row.id}-toggle`}
             onClick={() => {
-              void updateProduto(row.id, { ativo: !row.ativo }).then(() => {
-                api.success({ title: row.ativo ? 'Produto desativado' : 'Produto ativado' })
-                void reload()
-              })
+              void updateProduto(row.id, { ativo: !row.ativo })
+                .then(() => {
+                  api.success({ title: row.ativo ? 'Produto desativado' : 'Produto ativado' })
+                  void reload()
+                })
+                .catch((e: unknown) => api.error({ title: toApiError(e).message }))
             }}
           />
         </Flex>
@@ -148,19 +157,23 @@ export default function AdminProdutosPage() {
           setPage(1)
         }}
       />
-      <Table
-        size="small"
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={items}
-        pagination={pagination}
-        onChange={(p, filters, sorter) => {
-          const ativoFiltro = filters.ativo?.length === 1 ? (filters.ativo[0] as boolean) : undefined
-          setAtivo(ativoFiltro)
-          onTableChange(p, sorter, ativoFiltro !== ativo)
-        }}
-      />
+      {erro ? (
+        <PageError onRetry={() => void reload()} />
+      ) : (
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          pagination={pagination}
+          scroll={{ x: 900 }}
+          onChange={(p, filters, sorter) => {
+            const ativoFiltro = filters.ativo?.length === 1 ? (filters.ativo[0] as boolean) : undefined
+            setAtivo(ativoFiltro)
+            onTableChange(p, sorter, ativoFiltro !== ativo)
+          }}
+        />
+      )}
     </Flex>
   )
 }

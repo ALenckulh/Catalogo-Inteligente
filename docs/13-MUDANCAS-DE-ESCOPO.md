@@ -19,6 +19,10 @@ A numeração tem lacunas (M4, M10 a M12, M14 e M15 saíram por esse critério) 
 | M13 | Criar e remover ajuste por categoria | Lacuna | RF25 |
 | M16 | Upload de imagens guardadas no Postgres | Adição | RF23, [11](11-API-ENDPOINTS.md) |
 | M17 | Serviços de retífica no catálogo | Adição | [01](01-VISAO-GERAL.md), RF23 |
+| M18 | Compra e retorno fora do divisor; retorno começa em 0 | Regra | [04 §3 e §9](04-ESPECIFICACAO-TECNICA.md), RF16 |
+| M19 | Associar o histórico recalcula as notas | Regra | [04 §7.3](04-ESPECIFICACAO-TECNICA.md), RF19 |
+| M20 | Sem fingerprint e sem IP | Remoção | [04 §7.2](04-ESPECIFICACAO-TECNICA.md), RF18 |
+| M21 | Nova calibração padrão dos pesos e da meia-vida | Regra | [04 §3.1 e §5](04-ESPECIFICACAO-TECNICA.md), RF25 |
 
 ---
 
@@ -49,6 +53,40 @@ A numeração tem lacunas (M4, M10 a M12, M14 e M15 saíram por esse critério) 
 - **Decisão:** o divisor soma só os pesos positivos das métricas de produto. O filtro fica fora; a pesquisa, que passou a ser de produto (M1), fica dentro.
 - **Justificativa:** segue a definição da especificação. Antes, aumentar o peso do filtro reduzia todas as notas de produto.
 - **Rastreabilidade:** RF25.
+
+### M18 — Compra e retorno fora do divisor
+
+- **Especificação:** o dono do catálogo define o peso do histórico de compras, e voltar ao produto pontua.
+- **Situação anterior:** a compra usava o peso do WhatsApp, e o retorno não pontuava.
+- **Decisão:** os dois têm peso próprio, **fora do divisor** da nota. A compra começa com o peso do WhatsApp e o retorno em 0.
+- **Justificativa:** dentro do divisor, mudar um desses pesos baixaria as notas de todos os produtos. Os valores iniciais não mudam nenhuma nota; quem quiser liga o retorno na Configuração. A sequência de navegação segue como trabalho futuro.
+- **Rastreabilidade:** RF16, RF25; [08 §4.15](08-MODELO-DE-DADOS.md).
+
+### M19 — Associar o histórico recalcula as notas
+
+- **Especificação:** em conflito, média ponderada entre a nota da conta e a do visitante.
+- **Situação anterior:** ficava a maior das duas, até o próximo evento recalcular.
+- **Decisão:** os eventos passam para a conta e as notas são recalculadas na hora, com o histórico inteiro.
+- **Justificativa:** uma média de duas notas prontas valeria só até o próximo evento. O recálculo já dá a nota definitiva, e o decaimento dá mais peso ao que é recente.
+- **Rastreabilidade:** RF19; [08 §5.3](08-MODELO-DE-DADOS.md).
+
+### M20 — Sem fingerprint e sem IP
+
+- **Especificação:** fingerprint como reserva do cookie e IP no registro de consentimento.
+- **Situação anterior:** as colunas `visitante.fingerprint` e `consentimento_lgpd.ip_origem` existiam sem uso.
+- **Decisão:** as duas foram removidas (V022).
+- **Justificativa:** coletar menos dados pessoais. O identificador do navegador e o login bastam, e o consentimento tem data, versão e conta.
+- **Rastreabilidade:** RF18, RNF09; [08 §4.2 e §4.3](08-MODELO-DE-DADOS.md).
+
+### M21 — Nova calibração padrão
+
+- **Especificação:** pesos por faixa (Baixo 0,2 a Alto 1,0) e λ = 0,01.
+- **Situação anterior:** os clientes da demonstração caíam no nível pretendido, mas só navegar já levava a Quente. Ler o mesmo produto 3 vezes dava 89, e 8 dos 14 clientes Mornos e Frios virariam Quentes com uma leitura a mais.
+- **Decisão:** novos valores iniciais (V023). WhatsApp 1,5; favoritar 1,2; pesquisar 0,4; tempo 0,2; ver 0,1; meia-vida de 90 dias (λ = 0,0077). Os demais não mudam. Quem já tinha ajustado algum valor mantém os seus.
+- **Resultado:** os níveis da demonstração são os mesmos (6 Quentes, 8 Mornos, 6 Frios). Só 1 dos 14 viraria Quente com uma leitura a mais; ler 3 vezes dá 45 e olhar 5 vezes, 38; ler, favoritar e chamar no WhatsApp dá 86. A menor folga até os limites (40 e 70) passou de 2,2 para 3,7 pontos, e os níveis se mantêm por 7 dias depois da carga.
+- **Justificativa:** navegar mostra curiosidade; favoritar e chamar mostram intenção. A compra não subiu porque não esfria: com peso alto, um cliente antigo ficaria Quente para sempre.
+- **Limites:** a amostra é pequena (5 conversões no teste de precisão; a calibração nova encontra 4 antes de acontecerem, a anterior 5, as duas sem falso positivo), e o nível pretendido de cada cliente foi definido com os pesos anteriores. Os bônus ficam em 0% por falta de dado. Ler o mesmo produto 5 vezes na semana ainda dá Quente (75).
+- **Rastreabilidade:** RF25; `CalibracaoPadraoTest`.
 
 ## Configuração do score (A9)
 
@@ -86,7 +124,7 @@ A tela original era uma tabela de números (`λ 0.01`, `boost 1.00`) que só que
 ### M9 — Meia-vida como controle principal
 
 - **Especificação:** edição direta de λ.
-- **Decisão:** o ajuste é pela **meia-vida em dias** (λ = ln 2 ÷ dias). O λ continua visível, em segundo plano.
+- **Decisão:** o ajuste é pela **meia-vida em dias** (λ = ln 2 ÷ dias). O λ continua visível, em segundo plano: na dica do valor.
 - **Justificativa:** é a mesma informação em linguagem de negócio.
 - **Rastreabilidade:** RF25.
 

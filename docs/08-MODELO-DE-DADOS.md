@@ -65,7 +65,9 @@ CREATE TYPE tipo_evento AS ENUM (
   'PESQUISA',
   'FILTRO_APLICADO',
   'SCROLL_DEPTH',
-  'TEMPO_PAGINA'
+  'TEMPO_PAGINA',
+  'COMPRA',          -- só peso (V019): nunca vira evento
+  'RETORNO_PAGINA'   -- idem
 );
 
 CREATE TYPE tipo_conversao AS ENUM (
@@ -122,6 +124,7 @@ Atende [RF01, RF02, RF07](02-REQUISITOS.md).
 | `idade` | `SMALLINT` | NULL | Opcional PF |
 | `cnpj` | `CHAR(14)` | NULL, UNIQUE WHERE NOT NULL | Obrigatório se `tipo = 'PJ'` |
 | `razao_social` | `VARCHAR(255)` | NULL | Obrigatório se `tipo = 'PJ'` |
+| `sessoes_validas_desde` | `TIMESTAMPTZ` | NULL | Troca ou redefinição de senha: token emitido antes não vale (V021) |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `updated_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `deleted_at` | `TIMESTAMPTZ` | NULL | Soft delete LGPD |
@@ -142,7 +145,7 @@ Visitante anônimo identificado por um UUID guardado no navegador ([04-ESPECIFIC
 |---|---|---|---|
 | `id` | `BIGSERIAL` | PK | |
 | `cookie_id` | `UUID` | NOT NULL, UNIQUE | Identificador público; o navegador o guarda por 30 dias desde a criação e o esquece no logout |
-| `fingerprint` | `VARCHAR(255)` | NULL | Previsto como fallback; o front não envia e o backend não o usa para reconhecer o visitante |
+| `aceite_cookies_em` | `TIMESTAMPTZ` | NULL | Primeiro aceite de cookies comportamentais; sem ele, a API recusa os eventos (V022) |
 | `usuario_id` | `BIGINT` | NULL, FK `usuario(id)` ON DELETE SET NULL | Preenchido após migração de histórico |
 | `migrado_em` | `TIMESTAMPTZ` | NULL | Quando o histórico foi associado ao usuário |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | Primeira visita |
@@ -163,7 +166,6 @@ Atende [RF03, RF04, RF28, RNF09](02-REQUISITOS.md).
 | `aceito` | `BOOLEAN` | NOT NULL | |
 | `versao_termos` | `VARCHAR(20)` | NOT NULL | Ex: "1.2.0" |
 | `aceito_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | Timestamp do aceite/revogação |
-| `ip_origem` | `INET` | NULL | Prevista para auditoria; não é preenchida (o sistema não coleta IP) |
 
 **Índices:** `(usuario_id, tipo, aceito_em)`.
 
@@ -245,7 +247,7 @@ A visita começa no primeiro evento e termina após 30 min sem evento ou ao sair
 | `usuario_id` | `BIGINT` | NULL, FK `usuario(id)` ON DELETE CASCADE | Usuário autenticado, ou o que associou o histórico do visitante |
 | `dispositivo` | `VARCHAR(50)` | NULL | mobile / desktop / tablet |
 | `user_agent` | `VARCHAR(500)` | NULL | |
-| `canal_origem` | `VARCHAR(100)` | NULL | Hoje o front envia sempre `web` |
+| `canal_origem` | `VARCHAR(100)` | NULL | `direct`, `organic` (buscador), `referral` (outro site) ou `campaign:<utm_campaign>`, lido na chegada |
 | `iniciada_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `encerrada_em` | `TIMESTAMPTZ` | NULL | Última interação. Hoje só a seed preenche |
 
@@ -289,8 +291,8 @@ Atende [RF24](02-REQUISITOS.md) e [04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFIC
 | `produto_id` | `BIGINT` | NOT NULL, FK `produto(id)` ON DELETE RESTRICT | |
 | `preco_unitario` | `NUMERIC(12,2)` | NOT NULL | Preço praticado |
 | `quantidade` | `INTEGER` | NOT NULL DEFAULT 1 | |
-| `valor_total` | `NUMERIC(12,2)` | NOT NULL | Pode diferir de preço × qtde |
-| `data_compra` | `DATE` | NOT NULL | Data real da transação |
+| `valor_total` | `NUMERIC(12,2)` | NOT NULL | Preço × quantidade, calculado pelo backend |
+| `data_compra` | `DATE` | NOT NULL | Data real da transação; a API recusa data futura |
 | `registrado_por` | `BIGINT` | NOT NULL, FK `usuario(id)` | Admin que lançou |
 | `observacoes` | `TEXT` | NULL | |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
@@ -301,7 +303,7 @@ Atende [RF24](02-REQUISITOS.md) e [04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFIC
 
 ### 4.11 `score_produto`
 
-Cache do score produto×(usuário **ou** visitante). Recalculado pelo worker a cada evento; evita recomputar em toda leitura. Visitante tem o score migrado para `usuario_id` ao autenticar ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)).
+Cache do score produto×(usuário **ou** visitante). Recalculado pelo worker a cada evento; evita recomputar em toda leitura. Ao associar o histórico, a nota do visitante é apagada e a da conta é recalculada ([§5.3](#53-migração-de-histórico-de-visitante)).
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
@@ -373,20 +375,22 @@ Pesos ajustáveis das métricas de scoring. Permite ajuste sem redeploy ([RNF13]
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
 | `tipo_evento` | `tipo_evento` | PK | |
-| `peso` | `NUMERIC(5,4)` | NOT NULL | Multiplicador aplicado no score |
+| `peso` | `NUMERIC(5,4)` | NOT NULL | Multiplicador aplicado no score; a API aceita de 0 a 9,9999. `COMPRA` começa com o peso do WhatsApp e `RETORNO_PAGINA` com 0 (V020) |
 | `atualizado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `atualizado_por` | `BIGINT` | NULL, FK `usuario(id)` | Admin que ajustou |
 
 ### 4.16 `parametro_decay`
 
-Taxa de decaimento λ e boost pós-conversão por categoria (ou global com `categoria_id IS NULL`).
+Taxa de decaimento λ e bônus por categoria (ou global com `categoria_id IS NULL`), mais a duração da pausa.
 
 | Coluna | Tipo | Constraints | Descrição |
 |---|---|---|---|
 | `id` | `BIGSERIAL` | PK | |
 | `categoria_id` | `BIGINT` | NULL, FK `categoria(id)` ON DELETE CASCADE | NULL = valor global |
-| `lambda` | `NUMERIC(6,5)` | NOT NULL | Ex: 0.00500 |
-| `boost_conversao` | `NUMERIC(3,2)` | NOT NULL DEFAULT 1.00 | Multiplicador aplicado no Score de Categoria após conversão recente (1.00 = sem boost; a tela permite até 2.00; ver [04 §4.3](04-ESPECIFICACAO-TECNICA.md)) |
+| `lambda` | `NUMERIC(6,5)` | NOT NULL | Ex: 0.00500; a API aceita de 0.001 a 0.1 |
+| `boost_conversao` | `NUMERIC(3,2)` | NOT NULL DEFAULT 1.00 | Multiplicador aplicado no Score de Categoria após conversão recente (1.00 = sem boost; a tela e a API permitem até 1.50; ver [04 §4.3](04-ESPECIFICACAO-TECNICA.md)) |
+| `boost_recorrencia` | `NUMERIC(3,2)` | NOT NULL DEFAULT 1.00 | Bônus da categoria com compras em 2 ou mais datas; de 1.00 a 1.50 ([04 §9.3](04-ESPECIFICACAO-TECNICA.md)) |
+| `pausa_dias` | `SMALLINT` | NOT NULL DEFAULT 60 | Dias sem decaimento após contato ou compra, de 0 a 180; só a linha global vale ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)) |
 | `atualizado_em` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 | `atualizado_por` | `BIGINT` | NULL, FK `usuario(id)` | |
 
@@ -419,13 +423,13 @@ Tokens de redefinição de senha ([RF06](02-REQUISITOS.md), [11](11-API-ENDPOINT
 |---|---|---|---|
 | `id` | `BIGSERIAL` | PK | |
 | `usuario_id` | `BIGINT` | NOT NULL, FK `usuario(id)` ON DELETE CASCADE | |
-| `token` | `VARCHAR(64)` | NOT NULL, UNIQUE | UUID sem hífens, válido por 2 horas. Não há envio de e-mail: sai no log do backend |
+| `token` | `VARCHAR(64)` | NOT NULL, UNIQUE | UUID sem hífens, válido por 2 horas. Vai por e-mail e nunca para o log |
 | `expira_em` | `TIMESTAMPTZ` | NOT NULL | |
-| `usado_em` | `TIMESTAMPTZ` | NULL | Preenchido no confirm; reuso bloqueado |
+| `usado_em` | `TIMESTAMPTZ` | NULL | Preenchido no confirm ou quando um pedido novo anula o código; reuso bloqueado |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 
 **Índices:** `(usuario_id, created_at DESC)`.
-**Notas:** um novo pedido não invalida os tokens anteriores; cada um vale até ser usado ou expirar.
+**Notas:** um novo pedido invalida os códigos anteriores ainda não usados.
 
 ### 4.19 `imagem_arquivo`
 
@@ -440,6 +444,15 @@ Bytes das imagens de produto enviadas pelo admin (BLOB), criada na V014 ([M16](1
 | `created_at` | `TIMESTAMPTZ` | NOT NULL DEFAULT now() | |
 
 **Notas:** é imutável, por isso não tem `updated_at`: trocar a foto gera um novo id. Os arquivos órfãos (sem referência em `produto_imagem.url`) com mais de 24h são apagados por um job diário às 3h ([M16](13-MUDANCAS-DE-ESCOPO.md)).
+
+### 4.20 `token_revogado`
+
+Tokens encerrados no logout, criada na V021. O filtro JWT recusa o token cujo `jti` está aqui ([12 §5](12-ARQUITETURA-BACKEND.md)).
+
+| Coluna | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| `jti` | `UUID` | PK | Id do token |
+| `expira_em` | `TIMESTAMPTZ` | NOT NULL | Quando o próprio token venceria; depois disso um job diário às 3h10 apaga a linha |
 
 ## 5. Notas de projeto
 
@@ -461,7 +474,7 @@ Tabelas com `deleted_at`:
 Quando o usuário solicita exclusão ([RF30](02-REQUISITOS.md)) o sistema aplica **soft delete com anonimização de PII**:
 
 1. `UPDATE usuario SET deleted_at = now(), nome_completo = NULL, cpf = NULL, cnpj = NULL, razao_social = NULL, email = 'anon_' || id || '@removido.local', senha_hash = '!', telefone = NULL, email_alternativo = NULL, idade = NULL WHERE id = :id;`
-2. `UPDATE favorito SET deleted_at = now() WHERE usuario_id = :id;` e análogo para `evento`, `compra`.
+2. `UPDATE favorito SET deleted_at = now() WHERE usuario_id = :id;` e análogo para `evento`, `compra`. Nos eventos, o que a pessoa digitou na busca (`metadados.termo` e `metadados.filtros.q`) é apagado; em `sessao`, o `user_agent`.
 3. Registros agregados (`score_produto`, `score_categoria`, `faixa_preco_usuario`, `evento`, `compra`) **continuam referenciando `usuario_id`** para preservar valor estatístico; a PII já não é mais acessível por joins.
 4. Uma linha em `solicitacao_lgpd` (tipo `EXCLUSAO`) é gravada como `ATENDIDA`, com `atendido_em = now()`.
 
@@ -469,7 +482,7 @@ A estratégia preserva histórico comportamental e vendas para análise sem viol
 
 ### 5.3 Migração de histórico de visitante
 
-Ao entrar ou criar conta, se a pessoa aceitar ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)), tudo numa transação:
+Ao entrar ou criar conta, se a pessoa aceitar ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)), tudo numa transação (`MigracaoHistoricoService`):
 
 ```sql
 UPDATE visitante
@@ -488,17 +501,13 @@ UPDATE sessao
    AND usuario_id IS NULL;
 ```
 
-Os scores em cache (`score_produto`, `score_categoria` e `faixa_preco_usuario`) são mesclados em três passos por tabela (`ScoreMigrationRepository`):
+Depois, as linhas do visitante em `score_produto`, `score_categoria` e `faixa_preco_usuario` são apagadas e `ScoreEngine.recalc` recalcula as da conta com o histórico inteiro.
 
-1. `UPDATE … GREATEST`: onde os dois têm nota para o mesmo item, o usuário fica com a **maior**.
-2. `DELETE … USING`: apaga a linha do visitante que conflitava.
-3. `UPDATE`: transfere as linhas restantes para o usuário.
-
-Sem o passo 2, o passo 3 violaria o índice único parcial.
+Se a pessoa **recusar**, o que ainda é anônimo é descartado: soft delete dos eventos (sem os termos buscados), `user_agent` das sessões apagado, notas e faixa removidas. O que já tinha ido para uma conta não muda.
 
 ### 5.4 Cache de scores
 
-As tabelas `score_produto` e `score_categoria` são **cache** — não são a fonte da verdade. A fonte é a tabela `evento` + o algoritmo descrito em [04-ESPECIFICACAO-TECNICA.md §4](04-ESPECIFICACAO-TECNICA.md). O recálculo acontece a cada evento consumido pelo worker, a cada compra registrada, editada ou excluída pelo admin e no "Recalcular" da configuração ([11](11-API-ENDPOINTS.md)).
+As tabelas `score_produto` e `score_categoria` são **cache** — não são a fonte da verdade. A fonte é a tabela `evento` + o algoritmo descrito em [04-ESPECIFICACAO-TECNICA.md §4](04-ESPECIFICACAO-TECNICA.md). O recálculo acontece a cada evento consumido pelo worker, a cada compra registrada, editada ou excluída pelo admin, na migração de histórico e no "Recalcular" da configuração ([11](11-API-ENDPOINTS.md)).
 
 ### 5.5 Histórico de preços (consideração)
 

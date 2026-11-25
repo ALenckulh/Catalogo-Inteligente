@@ -1,5 +1,6 @@
 package com.catalogo.admin;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.security.JwtService;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,12 +35,14 @@ class AdminContaServiceTest {
     UsuarioRepository usuarioRepository;
     @Mock
     PasswordEncoder passwordEncoder;
+    @Mock
+    JwtService jwtService;
 
     AdminContaService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminContaService(usuarioRepository, passwordEncoder);
+        service = new AdminContaService(usuarioRepository, passwordEncoder, jwtService);
     }
 
     @Test
@@ -62,7 +66,7 @@ class AdminContaServiceTest {
         when(usuarioRepository.existsByEmailIgnoreCase("new@x.c")).thenReturn(false);
         when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        UsuarioResponse r = service.patch(1L, new PatchAdminContaRequest("new@x.c", "11999999999", null, null));
+        UsuarioResponse r = service.patch(1L, new PatchAdminContaRequest("new@x.c", "11999999999", null, null)).usuario();
         assertEquals("new@x.c", r.email());
         assertEquals("11999999999", r.telefone());
     }
@@ -113,8 +117,11 @@ class AdminContaServiceTest {
         when(passwordEncoder.encode("novaSenha1")).thenReturn("newhash");
         when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.patch(1L, new PatchAdminContaRequest(null, null, "atual", "novaSenha1"));
+        when(jwtService.generate(u)).thenReturn("novo");
+
+        assertEquals("novo", service.patch(1L, new PatchAdminContaRequest(null, null, "atual", "novaSenha1")).token());
         assertEquals("newhash", u.getSenhaHash());
+        assertNotNull(u.getSessoesValidasDesde());
     }
 
     private static Usuario admin(Long id, String email) {

@@ -15,6 +15,7 @@ public final class EventoRouting {
             case FAVORITAR, DESFAVORITAR -> RabbitConfig.QUEUE_PRODUCT_FAVORITE;
             case CONTATO_WHATSAPP -> RabbitConfig.QUEUE_PRODUCT_CONTACT;
             case PESQUISA -> RabbitConfig.QUEUE_SEARCH;
+            case COMPRA, RETORNO_PAGINA -> throw new IllegalArgumentException(tipo + " não é evento");
         };
     }
 }

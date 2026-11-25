@@ -59,7 +59,7 @@ Funcionalidades disponíveis:
 
 ### 2.3 Visitante (Não Autenticado)
 
-Usuário sem cadastro. Identificado por um UUID guardado no navegador por 30 dias, sujeito às restrições da LGPD. O fingerprint é um campo previsto que o front não envia hoje.
+Usuário sem cadastro. Identificado por um UUID guardado no navegador por 30 dias, sujeito às restrições da LGPD.
 
 Funcionalidades disponíveis:
 
@@ -83,20 +83,20 @@ Todas as métricas comportamentais só são coletadas após consentimento explí
 | Métrica | Descrição | Peso Base Sugerido |
 |---|---|---|
 | Clique na página do produto | Registro de visualização de página de produto | Baixo |
-| Favoritar produto | Intenção explícita de interesse | Médio |
+| Favoritar produto | Intenção explícita de interesse | Alto ([13 — M21](13-MUDANCAS-DE-ESCOPO.md)) |
 | Contato sobre produto visualizado | Alta intenção de compra — produto específico (CTA "Entrar em contato" na ficha) | Alto |
 | Contato sobre lista de favoritos | Alta intenção de compra — múltiplos produtos acumulados (CTA "Entrar em contato" em /favoritos; proxy do antigo "carrinho") | Alto |
 | Pesquisas do usuário | Termos buscados indicam interesse por categoria/produto — conta no produto quando o cliente abre um resultado da busca ([13 — M1](13-MUDANCAS-DE-ESCOPO.md)) | Médio |
 | Filtros aplicados | Refinamento de busca indica preferência específica — filtro por categoria soma na nota da categoria ([13 — M2](13-MUDANCAS-DE-ESCOPO.md)) | Médio |
-| Tempo ativo na página do produto | Engajamento prolongado indica interesse qualificado | Médio |
+| Tempo ativo na página do produto | Engajamento prolongado indica interesse qualificado | Baixo ([13 — M21](13-MUDANCAS-DE-ESCOPO.md)) |
 | Scroll depth | Até onde o usuário rolou a página — leitura completa indica interesse | Baixo-Médio |
-| Retorno à mesma página (multi-sessão) | Visitas repetidas indicam intenção crescente — **trabalho futuro**: cada visita soma como visualização, sem peso extra pelo retorno | Médio-Alto |
+| Retorno à mesma página (multi-sessão) | Visitas repetidas indicam intenção crescente — cada visita soma como visualização e, da segunda sessão em diante, também o peso de retorno, que começa em 0 ([13 — M18](13-MUDANCAS-DE-ESCOPO.md)) | Médio-Alto |
 | Sequência de navegação | Produtos visitados em sequência revelam relação entre itens — **trabalho futuro** (Camada 3) | Médio |
 
 ### 3.2 Métricas Contextuais
 
 - Sazonalidade — visualizações e buscas por categoria ao longo do tempo (**trabalho futuro**)
-- Tempo entre visitas — a ausência prolongada aplica decaimento; o retorno só soma os novos eventos
+- Tempo entre visitas — a ausência prolongada aplica decaimento; o retorno soma os novos eventos e o peso de retorno (§3.1)
 
 ### 3.3 Histórico de Compras (Informado pelo Vendedor)
 
@@ -150,7 +150,7 @@ Calculado como média ponderada logarítmica dos scores dos produtos pertencente
 Score(categoria) = Σ [ Score(produto_i) × log(1 + interações_i) ]  ÷  Σ [ log(1 + interações_i) ]
 ```
 
-Adicionalmente, se o usuário realizou qualquer conversão nos últimos 30 dias em produtos desta categoria, aplica-se um boost multiplicativo de 1,00× a 2,00× (persistido em `parametro_decay.boost_conversao`, ver [08 §4.16](08-MODELO-DE-DADOS.md)) sobre o Score de Categoria, pois conversão recente é o sinal de intenção mais forte disponível. **Pendente:** hoje só o contato pelo WhatsApp ativa o boost; a compra registrada soma na nota do produto, mas ainda não conta como conversão.
+Adicionalmente, se o usuário realizou qualquer conversão nos últimos 30 dias em produtos desta categoria, aplica-se um boost multiplicativo de 1,00× a 1,50× (persistido em `parametro_decay.boost_conversao`, ver [08 §4.16](08-MODELO-DE-DADOS.md)) sobre o Score de Categoria, pois conversão recente é o sinal de intenção mais forte disponível. Contato pelo WhatsApp e compra registrada ativam o boost.
 
 Atenção: o boost pós-conversão é mais adequado para categorias de reposição frequente (insumos, consumíveis). Para categorias de equipamentos ou bens duráveis, uma conversão recente pode indicar necessidade já atendida — o dono do catálogo deve reduzir o boost dessas categorias para próximo de 1,00.
 
@@ -171,7 +171,7 @@ O PPR é executado por usuário a partir dos produtos com score mais alto (nós 
 
 ### 4.5 Pesos Ajustáveis
 
-Os pesos de cada métrica são configuráveis pelo dono do catálogo, permitindo ajuste fino conforme o tipo de negócio. A compra usa o peso do contato pelo WhatsApp (ver seção 9).
+Os pesos de cada métrica são configuráveis pelo dono do catálogo, permitindo ajuste fino conforme o tipo de negócio. A compra e o retorno ao produto têm peso próprio e ficam fora do divisor da nota: ajustá-los não muda o valor das outras métricas ([13 — M18](13-MUDANCAS-DE-ESCOPO.md)).
 
 ### 4.6 Mapeamento de Outputs por Algoritmo
 
@@ -204,7 +204,8 @@ Onde λ (lambda) é a taxa de decaimento, configurável pelo dono do catálogo p
 | Valor de λ | Meia-vida aprox. | Perfil de uso |
 |---|---|---|
 | 0,005 | ~140 dias (~5 meses) | Produtos de ciclo de compra longo (máquinas, equipamentos) — recomendado para B2B |
-| 0,01 | ~70 dias (~2 meses) | Uso geral — padrão |
+| 0,0077 | 90 dias (~3 meses) | Uso geral — padrão ([13 — M21](13-MUDANCAS-DE-ESCOPO.md)) |
+| 0,01 | ~70 dias (~2 meses) | Uso geral |
 | 0,02 | ~35 dias (~1 mês) | Produtos de reposição frequente (insumos, consumíveis) |
 
 ### 5.2 Regras de Decaimento por Faixa Temporal
@@ -213,11 +214,11 @@ Onde λ (lambda) é a taxa de decaimento, configurável pelo dono do catálogo p
 |---|---|---|
 | < 7 dias | Sem decaimento | fator = 1,0 |
 | 7 a 90 dias | Decaimento gradual conforme λ configurado | fator = e^(−λ × dias) |
-| 91 a 180 dias sem conversão | Decaimento acelerado | fator = e^(−2λ × dias): com λ = 0,01, 0,16 no dia 91 e 0,03 no dia 180 |
+| 91 a 180 dias sem conversão | Decaimento acelerado | fator = e^(−2λ × dias): com λ = 0,0077, 0,25 no dia 91 e 0,06 no dia 180 |
 | > 180 dias sem conversão | Score zerado / anulado | fator = 0 |
 | Compras confirmadas | Sem decaimento | Padrão recorrente — peso mantido integral |
 | Compras > 2 anos | Peso reduzido | Reflete possível mudança de perfil |
-| Conversão recente (< 30 dias) | Decaimento pausado + boost de categoria | Boost configurado (1,00× a 2,00×) no Score de Categoria |
+| Conversão recente (< 30 dias) | Decaimento pausado + boost de categoria | Boost configurado (1,00× a 1,50×) no Score de Categoria |
 
 ### 5.3 Interação do Decaimento com as Camadas de Algoritmo
 
@@ -230,9 +231,9 @@ O decaimento exponencial é aplicado exclusivamente na Camada 2 (Regras Ponderad
 
 ### 5.4 Reinicialização do Ciclo de Decaimento
 
-O contato com o dono do catálogo pelo WhatsApp — Conversão Leve ou Forte (ver seção 8.1) — pausa o decaimento para o produto em questão. Isso é especialmente relevante no contexto B2B, onde negociações podem se estender por meses.
+O contato com o dono do catálogo pelo WhatsApp — Conversão Leve ou Forte (ver seção 8.1) — e a compra pausam o decaimento para o produto em questão. Isso é especialmente relevante no contexto B2B, onde negociações podem se estender por meses.
 
-O ciclo de decaimento só é retomado se nenhum novo contato ocorrer por 60 dias (valor fixo). Isso evita que um lead em negociação ativa seja erroneamente deprioritizado por ausência de novas interações passivas durante o processo de decisão.
+O ciclo de decaimento só é retomado se não houver novo contato nem compra durante a pausa, que o dono do catálogo configura de 0 a 180 dias (padrão 60). Isso evita que um lead em negociação ativa seja erroneamente deprioritizado por ausência de novas interações passivas durante o processo de decisão.
 
 ## 6. Fallback: Popularidade Global
 
@@ -255,7 +256,7 @@ A transição é gradual, não abrupta:
 - 3–9 interações: interpolação linear, com peso pessoal (n − 2) ÷ 8
 - 10+ interações: só o score pessoal (80% se ainda não houver nota gravada)
 
-A contagem usa todo o histórico da pessoa, não só a visita atual. Por isso, quem já tem 10 ou mais interações volta direto para a ordenação pessoal.
+A contagem usa todo o histórico da pessoa, não só a visita atual. Por isso, quem já tem 10 ou mais interações volta direto para a ordenação pessoal. O cliente logado que já tem notas também: o peso pessoal dele é de no mínimo 80%, e os empates seguem a popularidade.
 
 ## 7. Migração de Histórico de Visitante
 
@@ -265,12 +266,7 @@ Se um visitante navegar extensivamente pelo catálogo e depois criar uma conta o
 
 ### 7.2 Mecanismo de Identificação
 
-O visitante é rastreado via:
-
-- Identificador no navegador (UUID) — guardado por até 30 dias e enviado no header `X-Visitante-Cookie-Id`
-- Browser fingerprint (secundário) — previsto; o front não envia e o backend não o usa para reconhecer o visitante
-
-Se um dia for usada, a coleta do fingerprint deve ser mencionada explicitamente na Política de Privacidade e só pode ser ativada mediante consentimento de cookies (LGPD). Considere usar apenas o cookie como identificador primário para simplificar a conformidade.
+O visitante é rastreado só pelo identificador do navegador (UUID), guardado por até 30 dias e enviado no header `X-Visitante-Cookie-Id`. Não há fingerprint ([13 — M20](13-MUDANCAS-DE-ESCOPO.md)). O aceite de cookies fica gravado no visitante: sem ele, o backend não abre sessão nem recebe eventos.
 
 ### 7.3 Lógica de Migração
 
@@ -278,11 +274,12 @@ Se um dia for usada, a coleta do fingerprint deve ser mencionada explicitamente 
 - Se existir, exibe uma notificação ao usuário informando que o histórico de navegação será associado ao perfil (transparência LGPD)
 - Usuário confirma ou rejeita a migração
 - Se confirmado: histórico é migrado e associado ao perfil permanente
-- Se rejeitado: o histórico não é associado à conta (nada é apagado)
+- Se rejeitado: o histórico anônimo é descartado — eventos com soft delete e sem os termos buscados, notas e faixa de preço apagadas, e o navegador esquece o visitante
+- Se fechar o aviso (X ou Esc): nada muda, e a pergunta volta no próximo login
 
 Situação especial — conflito de histórico:
 
-- Se o usuário já possui nota para o mesmo produto ou categoria, fica a **maior** das duas. Eventos e sessões do visitante passam para o usuário.
+- Eventos e sessões do visitante passam para o usuário, as notas do visitante são apagadas e as do usuário são **recalculadas** com o histórico inteiro, na mesma transação ([13 — M19](13-MUDANCAS-DE-ESCOPO.md)).
 
 ## 8. Faixa de Preço — Interesse com e sem Conversão
 
@@ -294,13 +291,13 @@ A faixa de preço ideal do usuário não deve ser calculada apenas com base nos 
 |---|---|
 | Clicou em 'Entrar em contato' na ficha de um produto | Conversão Leve |
 | Clicou em 'Entrar em contato' a partir da lista de favoritos (acumulando múltiplos produtos de interesse) | Conversão Forte |
-| Compra registrada pelo dono do catálogo | Conversão Confirmada. **Pendente:** soma na nota do produto, mas ainda não conta na faixa de preço, no boost nem no decaimento |
+| Compra registrada pelo dono do catálogo | Conversão Confirmada. Vale desde a primeira compra, na faixa de preço, no boost e no decaimento; os pontos na nota só a partir da terceira (§9.2) |
 | Visualizou, favoritou, mas nunca contatou | Interesse sem Conversão |
 | Visualizou repetidamente mas nunca favoritou nem contatou | Interesse Fraco / Possível Barreira de Preço |
 
 ### 8.2 Cálculo da Faixa de Preço
 
-- Faixa com conversão: mediana dos preços dos produtos que geraram conversão (leve, forte ou confirmada). **Pendente:** hoje só leve e forte contam
+- Faixa com conversão: mediana dos preços dos produtos que geraram conversão (leve, forte ou confirmada)
 - Faixa sem conversão: mediana dos preços dos produtos com interesse mas sem conversão
 - Se a faixa sem conversão for sistematicamente acima da faixa com conversão: sinalizar ao dono do catálogo que o usuário pode ter sensibilidade a preço
 - Exibir ao dono do catálogo as duas faixas separadamente com indicador visual de gap
@@ -311,7 +308,7 @@ Esta distinção é especialmente valiosa para B2B, onde o produto certo na faix
 
 O dono do catálogo pode registrar manualmente o histórico de compras de cada cliente. Esta é uma das métricas de maior valor preditivo do sistema.
 
-Cada compra soma na nota do produto o **peso do contato pelo WhatsApp**, que o dono do catálogo configura. A compra não tem peso próprio.
+Cada compra soma na nota do produto o **peso da compra**, que o dono do catálogo configura. Ele começa igual ao do contato pelo WhatsApp e fica fora do divisor ([13 — M18](13-MUDANCAS-DE-ESCOPO.md)).
 
 ### 9.1 Dados Registrados por Linha de Compra
 
@@ -326,13 +323,13 @@ Cada submissão do formulário cria uma linha em `compra`, representando **um pr
 
 ### 9.2 Threshold Mínimo de Registros
 
-Com menos de 3 registros de compra para um determinado cliente, as compras não entram na nota dele. Isso evita distorções causadas por amostras muito pequenas com peso elevado.
+Com menos de 3 registros de compra para um determinado cliente, as compras não somam pontos na nota dele (a compra continua valendo como conversão, §8.1). Isso evita distorções causadas por amostras muito pequenas com peso elevado.
 
 ### 9.3 Decaimento no Histórico de Compras
 
 - Compras confirmadas NÃO sofrem decaimento de score, pois representam padrão real de comportamento
 - Compras com mais de 2 anos valem metade, para refletir possível mudança de perfil do comprador
-- Bônus para categorias com compras recorrentes: **trabalho futuro**
+- Categorias com compras em 2 ou mais datas (e o mínimo de 3 compras do §9.2) recebem um bônus configurável de 1,00× a 1,50×, que começa em 1,00×
 
 ## 10. LGPD, Cookies e Privacidade
 
@@ -374,11 +371,11 @@ O sistema deve prever mecanismos para atender os direitos previstos na LGPD:
 | Histórico de compras com menos de 3 registros | Métrica anulada automaticamente (peso = 0%). Não distorce score. |
 | Produto visualizado repetidamente mas nunca convertido | Sinalizar possível barreira de preço. Exibir na faixa 'interesse sem conversão'. |
 | Score de produto muito antigo (> 6 meses sem ação) | Sem conversão, o fator é 0 após 180 dias; com conversão, segue o decaimento exponencial. |
-| Usuário que favorita muitos produtos sem nunca contatar | Favoritação sozinha tem peso médio. Score não dispara sem outros sinais de conversão. |
+| Usuário que favorita muitos produtos sem nunca contatar | Favoritar sozinho não chega a Quente: olhar e favoritar é Frio; ler e favoritar, Morno. O score só dispara com outros sinais. |
 | Vendedor com zero registros de histórico de compras | Métrica de histórico completamente anulada. Score baseado 100% em comportamento. |
-| Dois usuários com o mesmo dispositivo/rede | O sistema não usa fingerprint para identificar. Vale o identificador do navegador e o login. |
+| Dois usuários com o mesmo dispositivo/rede | Vale o identificador do navegador e o login. |
 | Usuário revoga consentimento de cookies após acumular histórico | Parar coleta imediatamente. Histórico existente é mantido para fins estatísticos; para apagá-lo, o usuário deve excluir a conta ([08 §5.2](08-MODELO-DE-DADOS.md)). |
-| Lead B2B em negociação ativa sem novas interações passivas | Decay pausado enquanto houver contato nos últimos 60 dias. Ver seção 5.4. |
+| Lead B2B em negociação ativa sem novas interações passivas | Decay pausado enquanto houver contato ou compra dentro da pausa configurada (60 dias por padrão). Ver seção 5.4. |
 | Boost pós-conversão em categoria de bens duráveis | Dono do catálogo deve reduzir `parametro_decay.boost_conversao` para próximo de 1,00 nessas categorias, onde conversão recente indica necessidade já atendida. |
 | Camada 3 (PPR) não implementada | Trabalho futuro. As Camadas 1 e 2 são suficientes para catálogos B2B pequenos. |
 

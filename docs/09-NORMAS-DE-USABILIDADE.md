@@ -7,8 +7,8 @@ Referência de desenvolvimento + checklist de code review. Lista as decisões de
 ## 1. Uso de componentes
 
 **Prioridade:**
-1. Wrapper em `@/components/ui/*` (Button, Input, Form, Card, Select).
-2. Componente antd re-exportado em `@/components/ui` (Tag, Modal, Table, …).
+1. Wrapper em `@/components/ui/*` (Button, Input, Form, Card, Select, Table).
+2. Componente antd re-exportado em `@/components/ui` (Tag, Modal, …).
 3. Componente antd importado direto de `antd` — só se o barrel não expor.
 4. HTML "cru" — apenas para **landmarks semânticos** (`<main>`, `<section aria-labelledby>`, `<nav>`, `<footer>` quando não houver `Layout.Footer`) e `<a>` de skip-link.
 
@@ -78,7 +78,7 @@ Toda cor usada em TSX/CSS deve vir de um token:
 - **TSX inline style:** `color: 'var(--primary)'` **ou** `color: palette.primary[400]` importando `@/lib/theme/tokens`.
 - **ThemeConfig do antd:** já mapeia os tokens — para `colorPrimary` etc. não é preciso prop custom.
 
-❌ Nunca hardcode `#3D6F94`, `#F5F5F5`, `rgba(...)` em componente.
+❌ Nunca hardcode `#3D6F94`, `#F5F5F5`, `rgba(...)` em componente. O ESLint acusa (só `lib/theme/` fica de fora).
 
 ### 2.1 Grafia do projeto
 
@@ -86,7 +86,7 @@ Sempre **Catálogo Inteligente** (com acento no "a" e "C" + "I" maiúsculos). "c
 
 ### 2.2 Primária só em ação
 
-Cor primária (`--primary`) representa affordance — reserve para elementos interativos (botão principal, link, badge de status ativo). Em texto puro use `--text-neutral-*`; para destaque secundário, `--secondary`.
+Cor primária (`--primary`) representa affordance — reserve para elementos interativos (botão principal, link, badge de status ativo). Em texto puro use `--text-neutral-*` (todos com contraste AA de 4,5:1; o placeholder usa `--text-neutral-subtle`); para destaque secundário, `--secondary`.
 
 ## 3. Confirmação de deleção
 
@@ -137,7 +137,10 @@ Em `notification`/`Alert`/`message` que exibam **apenas um ícone** (sem texto a
 ## 6. Tabelas
 
 - **Filtro + ordenação** em toda coluna de dados tabulares (`sorter`, `filters`/`filterDropdown`).
-- `size="small"` em telas internas (admin dashboard).
+- O wrapper `Table` já vem com `size="small"` e `tableLayout="fixed"`.
+- **Largura:** coluna curta (nota, data, status, ações) declara `width`; a de texto longo fica sem, para receber a sobra, ou usa porcentagem. Tabela com muitas colunas define `scroll.x`.
+- **Altura da linha:** texto longo usa `TextoCelula` (12px, uma linha, com a dica do texto inteiro). A coluna que identifica a linha usa `principal` (14px). Duas linhas (`linhas={2}`) só quando outra coluna já ocupa duas. A linha não passa de 54px, fora as que têm campos.
+- Células repetidas ficam em `components/admin/celulas.tsx`: `TextoCelula`, `NotaCelula`, `AtivoTag` e `DataCelula` (data, com a hora na dica).
 - `pagination` com `pageSize` razoável (10/20/50).
 - "Nenhum registro" via `Empty` — não via string crua "No data".
 
@@ -160,7 +163,7 @@ Default `bordered`. **Preenchida** só em status crítico (erro grave, bloqueio)
 
 ## 8. Botões e ícones
 
-- **Só ícone** (tabela / toolbar densa): obrigatório `tooltip` (prop do wrapper) ou `aria-label`. Preferência em células de ação.
+- **Só ícone** (tabela / toolbar densa): obrigatório `tooltip` (prop do wrapper, que também vira o `aria-label`) ou `aria-label`. Preferência em células de ação.
 - **CTA / secundário de formulário:** texto + `icon` quando houver ícone semântico claro. Não omita o verbo ("Salvar", "Cancelar").
 
 ```tsx
@@ -218,7 +221,7 @@ Campo bloqueado deve ter `placeholder` descritivo + `tooltip` no `FormItem` com 
 
 ### 13.1 Tooltip no FormItem
 
-`FormItem` **sempre** com `tooltip` explicando o campo (contexto / aceite / origem do dado). Isso é lido por screen readers e aparece com o ícone de interrogação.
+`FormItem` (o de `@/components/ui`) liga o rótulo ao `id` do campo. **Sempre** com `tooltip` explicando o campo (contexto / aceite / origem do dado). Isso é lido por screen readers e aparece com o ícone de interrogação.
 
 **Exceção:** `FormItem` sem `label` (checkbox de aceite) não renderiza `tooltip`. Nesse caso, o próprio texto do checkbox explica, com link para o documento (§20).
 
@@ -271,9 +274,7 @@ Toda rota com conteúdo principal expõe `<a href="#main-content" className="ski
 
 ### Hook canônico
 
-`useAppNotification` em `@/lib/hooks/useAppNotification` — expõe `api` + `contextHolder`. Montar o `contextHolder` dentro do componente que usa.
-
-Feedback que precisa sobreviver a um redirect (ex.: "Conta criada") usa `message` de `App.useApp()`: o `contextHolder` da página desmonta junto com ela.
+`useAppNotification` em `@/lib/hooks/useAppNotification` — expõe `api`, que usa o `<App>` da raiz: o aviso continua depois de um redirect (ex.: "Produto criado"). Não há `contextHolder` para montar.
 
 ## 16. Layout e grade
 

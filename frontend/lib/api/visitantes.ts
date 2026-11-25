@@ -1,4 +1,5 @@
 import { delay } from '@/lib/mocks/delay'
+import { CANAL_DA_CHEGADA } from './canalOrigem'
 import { apiClient, toApiError } from './client'
 import { SESSAO_ATIVA_EM_KEY, SESSAO_ID_KEY, USE_MOCK } from './config'
 import { persistVisitanteId, readVisitanteId } from './visitanteId'
@@ -58,7 +59,9 @@ async function postSessao(cookieId?: string | null): Promise<SessaoVisitante> {
       cookieId: cookieId || undefined,
       dispositivo: typeof navigator !== 'undefined' ? dispositivo() : undefined,
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-      canalOrigem: 'web',
+      canalOrigem: CANAL_DA_CHEGADA,
+      // A sessão só abre no primeiro evento, e evento só sai com o aceite (useTrackEvent).
+      aceiteCookies: true,
     },
   )
   return data

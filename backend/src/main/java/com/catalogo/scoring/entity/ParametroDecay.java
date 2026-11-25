@@ -1,5 +1,6 @@
 package com.catalogo.scoring.entity;
 
+import com.catalogo.scoring.engine.ScoringParams;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -26,6 +27,13 @@ public class ParametroDecay {
 
     @Column(name = "boost_conversao", nullable = false, precision = 3, scale = 2)
     private BigDecimal boostConversao = BigDecimal.ONE;
+
+    @Column(name = "boost_recorrencia", nullable = false, precision = 3, scale = 2)
+    private BigDecimal boostRecorrencia = BigDecimal.ONE;
+
+    /** Só vale na linha global. */
+    @Column(name = "pausa_dias", nullable = false)
+    private Short pausaDias = ScoringParams.PAUSA_PADRAO;
 
     @Column(name = "atualizado_em", nullable = false)
     private OffsetDateTime atualizadoEm = OffsetDateTime.now();
@@ -63,6 +71,22 @@ public class ParametroDecay {
 
     public void setBoostConversao(BigDecimal boostConversao) {
         this.boostConversao = boostConversao;
+    }
+
+    public BigDecimal getBoostRecorrencia() {
+        return boostRecorrencia;
+    }
+
+    public void setBoostRecorrencia(BigDecimal boostRecorrencia) {
+        this.boostRecorrencia = boostRecorrencia;
+    }
+
+    public Short getPausaDias() {
+        return pausaDias;
+    }
+
+    public void setPausaDias(Short pausaDias) {
+        this.pausaDias = pausaDias;
     }
 
     public OffsetDateTime getAtualizadoEm() {

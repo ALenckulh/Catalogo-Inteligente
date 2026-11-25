@@ -42,6 +42,19 @@ class RateLimitFilterTest {
         assertEquals(429, ultimo);
     }
 
+    @Test
+    void confirmarSenhaTambemTemLimite() throws Exception {
+        RateLimitFilter filter = new RateLimitFilter();
+        int ultimo = 0;
+        for (int i = 0; i < 6; i++) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/password-reset/confirm");
+            request.setRemoteAddr("10.0.0.9");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilter(request, response, new MockFilterChain());
+            assertEquals(i < 5 ? 200 : 429, response.getStatus());
+        }
+    }
+
     /** A rota é pública e insere linhas: sem limite, um script enche visitante e sessao. */
     @Test
     void aberturaDeSessaoPermite30PorMinutoPorIp() throws Exception {

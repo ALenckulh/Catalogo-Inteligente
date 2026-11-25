@@ -67,7 +67,8 @@ public class AdminConfigService {
             if (p.getCategoriaId() != null) {
                 nome = categoriaRepository.findById(p.getCategoriaId()).map(c -> c.getNome()).orElse(null);
             }
-            out.add(new ParametroDecayResponse(p.getCategoriaId(), nome, p.getLambda(), p.getBoostConversao()));
+            out.add(new ParametroDecayResponse(p.getCategoriaId(), nome, p.getLambda(), p.getBoostConversao(),
+                    p.getBoostRecorrencia(), p.getPausaDias()));
         }
         return out;
     }
@@ -88,6 +89,12 @@ public class AdminConfigService {
             }
             p.setLambda(item.lambda());
             p.setBoostConversao(item.boostConversao());
+            if (item.boostRecorrencia() != null) {
+                p.setBoostRecorrencia(item.boostRecorrencia());
+            }
+            if (item.pausaDias() != null) {
+                p.setPausaDias(item.pausaDias());
+            }
             p.setAtualizadoEm(OffsetDateTime.now());
             p.setAtualizadoPor(adminId);
             parametroDecayRepository.save(p);

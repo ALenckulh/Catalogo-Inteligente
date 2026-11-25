@@ -54,7 +54,7 @@ function NivelTag({ nota }: { nota: number }) {
 function ValorDasAcoes({ pesos }: { pesos: PesoMetrica[] }) {
   const pontos = pontosPorAcao(pesos)
   const tipos = ORDEM_EVENTOS.filter(
-    (t) => EVENTOS_SCORING[t].alvo !== 'categoria' && pesos.some((p) => p.tipoEvento === t),
+    (t) => EVENTOS_SCORING[t].alvo !== 'categoria' && pesos.some((p) => p.tipoEvento === t && p.peso > 0),
   )
   return (
     <Flex vertical gap="middle">
@@ -76,8 +76,8 @@ function ValorDasAcoes({ pesos }: { pesos: PesoMetrica[] }) {
         ))}
       </Flex>
       <Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>
-        A nota de um produto vai de 0 a 100. Compras registradas no cliente contam como um contato pelo WhatsApp quando
-        ele tem 3 compras ou mais (e valem metade depois de 2 anos).
+        A nota de um produto vai de 0 a 100. Compras registradas no cliente somam pontos quando ele tem 3 compras ou mais
+        (e valem metade depois de 2 anos).
       </Text>
     </Flex>
   )
@@ -115,7 +115,7 @@ function Exemplo({ pesos }: { pesos: PesoMetrica[] }) {
 }
 
 function Esfriamento({ decay }: { decay: ParametroDecay[] }) {
-  const { lambda } = decayGlobal(decay)
+  const { lambda, pausaDias } = decayGlobal(decay)
   return (
     <Flex vertical gap="middle">
       <Paragraph style={{ margin: 0 }}>
@@ -135,12 +135,14 @@ function Esfriamento({ decay }: { decay: ParametroDecay[] }) {
           </Col>
         ))}
       </Row>
-      <Alert
-        type="info"
-        showIcon
-        title="Depois de um contato pelo WhatsApp, o interesse não esfria por 60 dias"
-        description="A negociação continua por telefone ou WhatsApp, fora do site. O cliente não perde a nota só porque parou de navegar."
-      />
+      {pausaDias > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          title={`Depois de um contato ou compra, o interesse não esfria por ${pausaDias} dias`}
+          description="A negociação continua por telefone ou WhatsApp, fora do site. O cliente não perde a nota só porque parou de navegar."
+        />
+      )}
     </Flex>
   )
 }

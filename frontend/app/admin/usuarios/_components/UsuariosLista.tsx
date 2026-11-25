@@ -5,17 +5,14 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { listAdminUsuarios } from '@/lib/api/admin'
 import { listCategorias } from '@/lib/api/categorias'
-import { formatDateTime } from '@/lib/formatters'
+import { formatTelefone } from '@/lib/formatters'
+import { telefoneForMask } from '@/lib/validators'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import { useTabelaPaginada } from '@/lib/hooks/useTabelaPaginada'
 import type { AdminUsuarioListItem, Categoria } from '@/lib/types'
-import {
-  NIVEIS_INTERESSE,
-  isNivelInteresse,
-  nivelDoScore,
-  type NivelInteresse,
-} from '@/lib/nivelInteresse'
-import { NivelInteresseIcon } from '@/components/admin/NivelInteresseIcon'
+import { NIVEIS_INTERESSE, isNivelInteresse, type NivelInteresse } from '@/lib/nivelInteresse'
+import { PageError } from '@/components/layout/PageStates'
+import { AtivoTag, DataCelula, NotaCelula, TextoCelula } from '@/components/admin/celulas'
 import {
   Button,
   Flex,
@@ -28,8 +25,14 @@ import {
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
 import { EyeOutlined } from '@ant-design/icons'
+import { HelpTitle } from '../../_components/HelpTitle'
 
 const { Title } = Typography
+
+const TIPOS = ['PF', 'PJ'] as const
+
+/** O contato já ocupa duas linhas (e-mail e telefone): os outros textos podem usar as mesmas duas. */
+const duasLinhas = (v: string | null | undefined) => <TextoCelula texto={v} linhas={2} />
 
 function statusDaUrl(v: string | null): boolean | undefined {
   if (v === 'ativo') return true
@@ -45,37 +48,39 @@ export function UsuariosLista() {
   const nivel: NivelInteresse | undefined = isNivelInteresse(nivelUrl) ? nivelUrl : undefined
   const ativo = statusDaUrl(searchParams.get('status'))
 
-  /** Mantém `nivel` e `status` na URL para que o filtro possa ser compartilhado (ex.: link do dashboard). */
-  function atualizarUrl(next: { nivel?: NivelInteresse | null; ativo?: boolean | null }) {
+  const tipoUrl = searchParams.get('tipo')
+  const tipo = TIPOS.find((t) => t === tipoUrl)
+  const categoria = searchParams.get('categoria') ?? undefined
+
+  /**
+   * Filtros na URL, para o link poder ser compartilhado (ex.: o do dashboard) e voltar do detalhe não perdê-los.
+   * A busca fica de fora: pode ter CPF ou telefone, e a URL vai para o histórico e para os logs.
+   */
+  function atualizarUrl(next: Partial<Record<'nivel' | 'status' | 'tipo' | 'categoria', string | null>>) {
     const params = new URLSearchParams(searchParams.toString())
-    if (next.nivel !== undefined) {
-      if (next.nivel) params.set('nivel', next.nivel)
-      else params.delete('nivel')
-    }
-    if (next.ativo !== undefined) {
-      if (next.ativo === null) params.delete('status')
-      else params.set('status', next.ativo ? 'ativo' : 'inativo')
+    for (const [chave, valor] of Object.entries(next)) {
+      if (valor) params.set(chave, valor)
+      else params.delete(chave)
     }
     const qs = params.toString()
     router.replace(qs ? `/admin/usuarios?${qs}` : '/admin/usuarios', { scroll: false })
   }
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [q, setQ] = useState('')
-  /** Um estado só para o Select de tipo e o filtro da coluna Tipo. */
-  const [tipo, setTipo] = useState<string | undefined>()
-  const [categoria, setCategoria] = useState<string | undefined>()
 
   const buscar = useCallback(
     (params: { page: number; limit: number; sort?: string }) =>
       listAdminUsuarios({ q: q || undefined, tipo, categoria, nivel, ativo, ...params }),
     [q, tipo, categoria, nivel, ativo],
   )
-  const { items, loading, setPage, onTableChange, sortOrder, pagination } =
+  const { items, loading, erro, setPage, reload, onTableChange, sortOrder, pagination } =
     useTabelaPaginada<AdminUsuarioListItem>(buscar, isAdmin)
 
   useEffect(() => {
     if (!isAdmin) return
-    void listCategorias().then(setCategorias)
+    void listCategorias()
+      .then(setCategorias)
+      .catch(() => setCategorias([]))
   }, [isAdmin])
 
   if (authLoading || !isAdmin) {
@@ -92,11 +97,13 @@ export function UsuariosLista() {
       dataIndex: 'nome',
       sorter: true,
       sortOrder: sortOrder('nome'),
-      render: (_, row) => row.nomeCompleto ?? row.razaoSocial ?? '—',
+      width: '15%',
+      render: (_, row) => <TextoCelula texto={row.nomeCompleto ?? row.razaoSocial} linhas={2} principal />,
     },
     {
       title: 'Tipo',
       dataIndex: 'tipo',
+      width: 68,
       filters: [
         { text: 'PF', value: 'PF' },
         { text: 'PJ', value: 'PJ' },
@@ -106,58 +113,69 @@ export function UsuariosLista() {
       render: (t) => <Tag>{t}</Tag>,
     },
     {
-      title: 'E-mail',
+      title: 'Contato',
       dataIndex: 'email',
       sorter: true,
       sortOrder: sortOrder('email'),
-    },
-    {
-      title: 'Telefone',
-      dataIndex: 'telefone',
-      render: (t) => t ?? '—',
+      width: '19%',
+      render: (email: string, row) => (
+        <>
+          <TextoCelula texto={email} />
+          {row.telefone && <TextoCelula texto={formatTelefone(telefoneForMask(row.telefone))} type="secondary" />}
+        </>
+      ),
     },
     {
       title: 'Status',
       dataIndex: 'ativo',
+      width: 86,
       filters: [
         { text: 'Ativo', value: true },
         { text: 'Inativo', value: false },
       ],
       filterMultiple: false,
       filteredValue: ativo === undefined ? null : [ativo],
-      render: (valor: boolean) => (
-        <Tag color={valor ? 'success' : 'default'}>{valor ? 'Ativo' : 'Inativo'}</Tag>
-      ),
+      render: (valor: boolean) => <AtivoTag ativo={valor} />,
     },
     {
       title: 'Score máx.',
       dataIndex: 'scoreMaxProduto',
+      width: 84,
       sorter: true,
       sortOrder: sortOrder('scoreMaxProduto'),
-      render: (v: number | null) => (
-        <Flex gap={8} align="center">
-          <NivelInteresseIcon nivel={nivelDoScore(v)} />
-          <span>{v ?? '—'}</span>
-        </Flex>
-      ),
+      render: (v: number | null) => <NotaCelula nota={v} />,
     },
     {
       title: 'Top categoria',
       dataIndex: 'topCategoria',
       sorter: true,
       sortOrder: sortOrder('topCategoria'),
-      render: (v: string | null) => v ?? '—',
+      render: duasLinhas,
+    },
+    {
+      title: (
+        <HelpTitle
+          label="Próxima compra provável"
+          help="Produto de maior nota que o cliente não comprou nos últimos 30 dias."
+        />
+      ),
+      dataIndex: 'proximaCompra',
+      // Uma fatia do total, e não a sobra: é o texto mais longo e o cabeçalho precisa de duas linhas inteiras.
+      width: '15%',
+      render: duasLinhas,
     },
     {
       title: 'Última atividade',
       dataIndex: 'ultimaAtividade',
       sorter: true,
       sortOrder: sortOrder('ultimaAtividade'),
-      render: (d: string | null) => (d ? formatDateTime(d) : '—'),
+      width: 96,
+      render: (d: string | null) => <DataCelula data={d} />,
     },
     {
       title: 'Ações',
       key: 'acoes',
+      width: 62,
       render: (_, row) => (
         <Link href={`/admin/usuarios/${row.id}`}>
           <Button
@@ -199,7 +217,7 @@ export function UsuariosLista() {
           ]}
           value={tipo}
           onChange={(v: string | null | undefined) => {
-            setTipo(v ?? undefined)
+            atualizarUrl({ tipo: v ?? null })
             setPage(1)
           }}
         />
@@ -208,9 +226,10 @@ export function UsuariosLista() {
           allowClear
           placeholder="Selecione a categoria"
           style={{ minWidth: 180 }}
+          value={categoria}
           options={categorias.map((c) => ({ value: c.nome, label: c.nome }))}
           onChange={(v: string | null | undefined) => {
-            setCategoria(v ?? undefined)
+            atualizarUrl({ categoria: v ?? null })
             setPage(1)
           }}
         />
@@ -230,21 +249,28 @@ export function UsuariosLista() {
           }}
         />
       </Flex>
-      <Table
-        size="small"
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={items}
-        pagination={pagination}
-        onChange={(p, filters, sorter) => {
-          const tipoFiltro = filters.tipo?.[0] as string | undefined
-          const ativoFiltro = filters.ativo?.[0] as boolean | undefined
-          setTipo(tipoFiltro)
-          if (ativoFiltro !== ativo) atualizarUrl({ ativo: ativoFiltro ?? null })
-          onTableChange(p, sorter, tipoFiltro !== tipo || ativoFiltro !== ativo)
-        }}
-      />
+      {erro ? (
+        <PageError onRetry={() => void reload()} />
+      ) : (
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          pagination={pagination}
+          scroll={{ x: 970 }}
+          onChange={(p, filters, sorter) => {
+            const tipoFiltro = filters.tipo?.[0] as string | undefined
+            const ativoFiltro = filters.ativo?.[0] as boolean | undefined
+            const mudou = tipoFiltro !== tipo || ativoFiltro !== ativo
+            if (mudou) {
+              const status = ativoFiltro === undefined ? null : ativoFiltro ? 'ativo' : 'inativo'
+              atualizarUrl({ tipo: tipoFiltro ?? null, status })
+            }
+            onTableChange(p, sorter, mudou)
+          }}
+        />
+      )}
     </Flex>
   )
 }

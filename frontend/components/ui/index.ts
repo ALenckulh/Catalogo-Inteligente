@@ -16,10 +16,13 @@ export type { AlertProps } from './Alert'
 export { Image } from './Image'
 export type { ImageProps } from './Image'
 
+export { Table } from './Table'
+export type { TableProps } from './Table'
+
 export { Upload } from './Upload'
 export type { UploadProps } from './Upload'
 
-export { Select, PageableSelect, usePageableSelect } from './Select'
+export { Select, PageableSelect, usePageableSelect, LIMPAR } from './Select'
 export type { SelectProps, PageableSelectProps, PageableSelectPage } from './Select'
 
 import {
@@ -52,7 +55,6 @@ import {
   Statistic,
   Steps,
   Switch,
-  Table,
   Tabs,
   Tag,
   Timeline,
@@ -95,7 +97,6 @@ export {
   Statistic,
   Steps,
   Switch,
-  Table,
   Tabs,
   Tag,
   Timeline,
@@ -105,5 +106,3 @@ export {
   message,
   notification,
 }
-
-export type { TableProps } from 'antd'

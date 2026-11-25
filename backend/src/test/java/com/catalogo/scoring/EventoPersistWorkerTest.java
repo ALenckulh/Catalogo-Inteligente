@@ -1,14 +1,18 @@
 package com.catalogo.scoring;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.entity.Usuario;
+import com.catalogo.auth.repository.UsuarioRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,12 +42,15 @@ class EventoPersistWorkerTest {
     CategoriaRepository categoriaRepository;
     @Mock
     ScoreEngine scoreEngine;
+    @Mock
+    UsuarioRepository usuarioRepository;
 
     EventoPersistWorker worker;
 
     @BeforeEach
     void setUp() {
-        worker = new EventoPersistWorker(eventoRepository, produtoRepository, categoriaRepository, scoreEngine);
+        worker = new EventoPersistWorker(
+                eventoRepository, produtoRepository, categoriaRepository, scoreEngine, usuarioRepository);
     }
 
     @Test
@@ -63,6 +70,7 @@ class EventoPersistWorkerTest {
                 OffsetDateTime.now()
         );
 
+        when(usuarioRepository.travarAtivoParaGravarEvento(9L)).thenReturn(Optional.of(new Usuario()));
         Produto produto = new Produto();
         Categoria categoria = new Categoria();
         when(produtoRepository.getReferenceById(3L)).thenReturn(produto);
@@ -76,5 +84,25 @@ class EventoPersistWorkerTest {
         assertSame(produto, cap.getValue().getProduto());
         assertSame(categoria, cap.getValue().getCategoria());
         verify(scoreEngine).recalc(eq(9L), isNull());
+    }
+
+    /** Gravar deixaria um evento ativo na conta anonimizada e apagaria as notas dela. */
+    @Test
+    void eventoDeContaExcluidaEDescartado() {
+        when(usuarioRepository.travarAtivoParaGravarEvento(9L)).thenReturn(Optional.empty());
+
+        worker.persist(new EventoMessage(
+                TipoEvento.PESQUISA, 1L, 9L, null, null, null, null, Map.of(), OffsetDateTime.now()));
+
+        verifyNoInteractions(eventoRepository, scoreEngine);
+    }
+
+    @Test
+    void eventoDeVisitanteNaoConsultaUsuario() {
+        worker.persist(new EventoMessage(
+                TipoEvento.PESQUISA, 1L, null, 5L, null, null, null, Map.of(), OffsetDateTime.now()));
+
+        verifyNoInteractions(usuarioRepository);
+        verify(scoreEngine).recalc(isNull(), eq(5L));
     }
 }

@@ -9,8 +9,8 @@ import jakarta.validation.constraints.Size;
 
 public record SignupRequest(
         @NotNull TipoUsuario tipo,
-        @NotBlank @Email String email,
-        @NotBlank @Size(min = 6, max = 100) String senha,
+        @NotBlank @Email @Size(max = 255, message = "deve ter no máximo 255 caracteres") String email,
+        @NotBlank String senha,
         String telefone,
         String emailAlternativo,
         String cpf,

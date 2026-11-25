@@ -61,6 +61,19 @@ services:
     networks:
       - catalogo_net
 
+  mailpit:
+    # Caixa de e-mail de teste: SMTP na 1025, tela em http://localhost:8025. Nada sai para a internet.
+    image: axllent/mailpit:latest
+    container_name: catalogo_mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - catalogo_net
+    profiles:
+      - tools
+
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: catalogo_pgadmin

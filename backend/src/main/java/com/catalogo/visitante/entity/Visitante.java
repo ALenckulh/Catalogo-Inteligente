@@ -32,7 +32,9 @@ public class Visitante {
     @Column(name = "cookie_id", nullable = false, unique = true)
     private UUID cookieId;
 
-    private String fingerprint;
+    /** Quando o visitante aceitou os cookies comportamentais. */
+    @Column(name = "aceite_cookies_em")
+    private OffsetDateTime aceiteCookiesEm;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
@@ -65,12 +67,12 @@ public class Visitante {
         this.cookieId = cookieId;
     }
 
-    public String getFingerprint() {
-        return fingerprint;
+    public OffsetDateTime getAceiteCookiesEm() {
+        return aceiteCookiesEm;
     }
 
-    public void setFingerprint(String fingerprint) {
-        this.fingerprint = fingerprint;
+    public void setAceiteCookiesEm(OffsetDateTime aceiteCookiesEm) {
+        this.aceiteCookiesEm = aceiteCookiesEm;
     }
 
     public Usuario getUsuario() {

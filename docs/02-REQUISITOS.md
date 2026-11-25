@@ -18,7 +18,7 @@ Os casos de uso estão em [14-CASOS-DE-USO.md](14-CASOS-DE-USO.md). A coluna **S
 | RF03 | O cadastro deve obrigar aceite dos Termos de Uso e Política de Privacidade (LGPD). | Implementado |
 | RF04 | O consentimento para rastreamento comportamental deve ser separado do aceite do cadastro e opcional, oferecido no banner de cookies e revogável em Conta. | Implementado |
 | RF05 | O sistema deve permitir login de usuários cadastrados (PF, PJ, Admin). | Implementado |
-| RF06 | O sistema deve oferecer fluxo de recuperação de senha por e-mail. | Parcial: as duas etapas funcionam, mas o código não é enviado por e-mail (sai no log do backend) |
+| RF06 | O sistema deve oferecer fluxo de recuperação de senha por e-mail. | Implementado: código por e-mail, válido por 2 horas (SMTP configurável; Mailpit no ambiente local) |
 | RF07 | O cadastro de administradores é feito exclusivamente pela equipe de TI (sem auto-signup). | Implementado |
 
 ### 1.2 Catálogo e navegação (consumidor)
@@ -38,10 +38,10 @@ Os casos de uso estão em [14-CASOS-DE-USO.md](14-CASOS-DE-USO.md). A coluna **S
 | ID | Requisito | Situação |
 |---|---|---|
 | RF15 | O sistema deve coletar eventos de visualização de página de produto. | Implementado |
-| RF16 | O sistema deve coletar tempo ativo em página, scroll depth e sequência de navegação. | Parcial: tempo ativo e scroll são coletados; a sequência de navegação não é calculada |
+| RF16 | O sistema deve coletar tempo ativo em página, scroll depth e sequência de navegação. | Parcial: tempo ativo e scroll são coletados, e o retorno ao produto pode pontuar; a sequência de navegação não é calculada |
 | RF17 | O sistema deve registrar favoritação, pesquisas e filtros aplicados. | Implementado |
-| RF18 | Para visitantes anônimos, a coleta deve usar cookie de sessão como identificador primário (persistido por 30 dias) e browser fingerprint como fallback secundário caso o cookie seja apagado ([04 §7.2](04-ESPECIFICACAO-TECNICA.md)). | Parcial: o identificador de 30 dias funciona; o fingerprint não é enviado nem usado para reconhecer o visitante |
-| RF19 | Ao criar conta/login, o sistema deve oferecer migração do histórico de visitante ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)). | Implementado: em conflito, fica a maior nota de cada produto ou categoria |
+| RF18 | Para visitantes anônimos, a coleta deve usar um identificador guardado no navegador por 30 dias ([04 §7.2](04-ESPECIFICACAO-TECNICA.md)), sem fingerprint ([13 — M20](13-MUDANCAS-DE-ESCOPO.md)). | Implementado |
+| RF19 | Ao criar conta/login, o sistema deve oferecer migração do histórico de visitante ([04-ESPECIFICACAO-TECNICA.md §7](04-ESPECIFICACAO-TECNICA.md)). | Implementado: aceitar recalcula as notas da conta com o histórico inteiro; recusar descarta o histórico anônimo |
 
 ### 1.4 Área administrativa
 
@@ -49,9 +49,9 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 | ID | Requisito | Situação |
 |---|---|---|
-| RF20 | O sistema deve oferecer um dashboard com KPIs gerais e lista de leads priorizados por score. | Parcial: KPIs e gráficos no dashboard; os leads por score ficam em Usuários (o KPI "Clientes com alto interesse" abre a lista filtrada) |
-| RF21 | O dono do catálogo deve visualizar lista de usuários com score, categorias de interesse e próxima compra provável. | Parcial: mostra nota máxima e categoria de maior interesse; não há campo de próxima compra provável |
-| RF22 | O dono do catálogo deve acessar visão detalhada de um usuário com scores por produto/categoria, faixas de preço com e sem conversão, e histórico de compras. | Parcial: a faixa de preço ainda não trata a compra registrada como conversão |
+| RF20 | O sistema deve oferecer um dashboard com KPIs gerais e lista de leads priorizados por score. | Implementado: KPIs, os 5 clientes com maior nota e gráficos |
+| RF21 | O dono do catálogo deve visualizar lista de usuários com score, categorias de interesse e próxima compra provável. | Implementado: a próxima compra provável é o produto ativo de maior nota que o cliente não comprou nos últimos 30 dias |
+| RF22 | O dono do catálogo deve acessar visão detalhada de um usuário com scores por produto/categoria, faixas de preço com e sem conversão, e histórico de compras. | Implementado |
 | RF23 | O dono do catálogo deve gerenciar o catálogo (CRUD de produtos). | Implementado |
 | RF24 | O dono do catálogo deve registrar manualmente histórico de compras por cliente ([04-ESPECIFICACAO-TECNICA.md §9](04-ESPECIFICACAO-TECNICA.md)). | Implementado |
 | RF25 | O dono do catálogo deve configurar pesos de métricas, taxa de decaimento (λ) e boost pós-conversão por categoria. | Implementado |

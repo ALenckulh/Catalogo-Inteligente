@@ -3,6 +3,7 @@ package com.catalogo.catalog;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -76,7 +77,7 @@ class CatalogServiceTest {
         Categoria child = categoria(2L, root);
         when(categoriaRepository.findAll()).thenReturn(List.of(root, child));
         when(produtoRepository.searchIds(isNull(), eq(Set.of(1L, 2L)), isNull(), isNull())).thenReturn(List.of());
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
@@ -90,7 +91,7 @@ class CatalogServiceTest {
         when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull()))
                 .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L));
         stubCarregamento(cat);
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
@@ -106,7 +107,7 @@ class CatalogServiceTest {
         when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull()))
                 .thenReturn(LongStream.rangeClosed(1, 150).boxed().toList());
         stubCarregamento(cat);
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
         // Ranking simulado: maior id primeiro. O repositório devolve a página em ordem crescente.
@@ -114,7 +115,7 @@ class CatalogServiceTest {
             List<Long> ids = inv.getArgument(0);
             ids.sort(Comparator.reverseOrder());
             return null;
-        }).when(rankingService).sortByRank(any(), anyDouble(), any(), any());
+        }).when(rankingService).sortByRank(any(), anyDouble(), any(), any(), anyBoolean());
 
         var primeira = catalogService.listProdutos(null, null, null, null, 0, 12, false);
         var ultima = catalogService.listProdutos(null, null, null, null, 12, 12, false);
@@ -128,7 +129,7 @@ class CatalogServiceTest {
     @Test
     void paginaAlemDoFimVemVaziaComTotal() {
         when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of(1L, 2L));
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
@@ -142,12 +143,12 @@ class CatalogServiceTest {
         when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of());
         when(eventoRepository.countByUsuario_IdAndDeletedAtIsNull(1L)).thenReturn(12L);
         when(scoreProdutoRepository.countByUsuarioId(1L)).thenReturn(3L);
-        when(rankingService.personalWeight(12L, true)).thenReturn(1.0);
+        when(rankingService.personalWeight(12L, true, true)).thenReturn(1.0);
         when(rankingService.personalScores(1L, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
         catalogService.listProdutos(null, null, null, null, 0, 20, false, 1L, null);
-        org.mockito.Mockito.verify(rankingService).personalWeight(12L, true);
+        org.mockito.Mockito.verify(rankingService).personalWeight(12L, true, true);
     }
 
     @Test

@@ -39,16 +39,17 @@ Promova de co-locado para global **só** quando a segunda rota precisar — não
 
 ### 4.1 Hooks de UI
 
-Envolvem um recurso visual do antd que precisa de `contextHolder`. Exemplo canônico:
+Envolvem um recurso visual do antd. Exemplo canônico:
 
 ```ts
 // lib/hooks/useAppNotification.ts
 'use client'
-import { notification } from 'antd'
+import { App } from '@/components/ui'
 
+/** Avisos do <App> da raiz: continuam na tela depois de navegar. */
 export function useAppNotification() {
-  const [api, contextHolder] = notification.useNotification()
-  return { api, contextHolder }
+  const { notification: api } = App.useApp()
+  return { api }
 }
 ```
 
@@ -59,19 +60,14 @@ Uso:
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 
 function MinhaTela() {
-  const { api, contextHolder } = useAppNotification()
-  return (
-    <>
-      {contextHolder}
-      <Button onClick={() => api.success({ message: 'Salvo!' })}>Salvar</Button>
-    </>
-  )
+  const { api } = useAppNotification()
+  return <Button onClick={() => api.success({ title: 'Salvo!' })}>Salvar</Button>
 }
 ```
 
 ### 4.2 Hooks de acesso
 
-Exigem um estado para a tela existir. `useRequireAdmin` redireciona para `/admin/entrar` quem não é admin; `useTrackEvent` devolve uma função que só envia evento com consentimento.
+Exigem um estado para a tela existir. `useRequireAdmin` redireciona para `/admin/entrar?next=…` quem não é admin; `useTrackEvent` devolve uma função que só envia evento com consentimento.
 
 ### 4.3 Hooks de dados
 

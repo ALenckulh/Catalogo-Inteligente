@@ -1,6 +1,7 @@
 package com.catalogo.admin.repository;
 
 import com.catalogo.shared.BuscaTexto;
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -67,7 +68,8 @@ public class AdminAnalyticsRepository {
                        u.telefone,
                        mx.max_score,
                        tc.cat_nome,
-                       ua.ultima
+                       ua.ultima,
+                       pc.produto_nome
                 FROM usuario u
                 JOIN (
                     SELECT usuario_id, MAX(valor) AS max_score
@@ -88,10 +90,12 @@ public class AdminAnalyticsRepository {
                     FROM evento e
                     WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
                 ) ua ON TRUE
+                """ + PROXIMA_COMPRA + """
                 WHERE u.deleted_at IS NULL
                 ORDER BY mx.max_score DESC, u.id
                 LIMIT 50
                 """)
+                .setParameter("compradoDesde", Fuso.hoje().minusDays(DIAS_SEM_COMPRAR))
                 .getResultList()
                 .stream()
                 .filter(row -> {
@@ -134,7 +138,7 @@ public class AdminAnalyticsRepository {
     }
 
     /**
-     * Contatos WhatsApp por dia desde {@code since} até hoje, com zero nos dias sem contato.
+     * Contatos WhatsApp por dia (de Brasília) desde {@code since} até hoje, com zero nos dias sem contato.
      * generate_series cria uma linha para cada dia do período e o LEFT JOIN com evento conta os contatos;
      * assim dia sem contato aparece com 0 em vez de sumir do gráfico.
      */
@@ -142,11 +146,11 @@ public class AdminAnalyticsRepository {
     public List<Object[]> contatosPorDia(OffsetDateTime since) {
         return em.createNativeQuery("""
                 SELECT CAST(d AS date) AS dia, COUNT(e.id)
-                FROM generate_series(CAST(CAST(:since AS date) AS timestamp),
-                                     CAST(CURRENT_DATE AS timestamp),
+                FROM generate_series(CAST(:inicio AS timestamp),
+                                     CAST(:fim AS timestamp),
                                      interval '1 day') AS d
                 LEFT JOIN evento e
-                       ON CAST(e.ocorrido_em AS date) = CAST(d AS date)
+                       ON CAST(e.ocorrido_em AT TIME ZONE :fuso AS date) = CAST(d AS date)
                       AND e.ocorrido_em >= :since
                       AND e.deleted_at IS NULL
                       AND e.tipo = 'CONTATO_WHATSAPP'
@@ -154,6 +158,9 @@ public class AdminAnalyticsRepository {
                 ORDER BY d
                 """)
                 .setParameter("since", since)
+                .setParameter("inicio", Fuso.dia(since))
+                .setParameter("fim", Fuso.hoje())
+                .setParameter("fuso", Fuso.ZONA.getId())
                 .getResultList();
     }
 
@@ -182,6 +189,27 @@ public class AdminAnalyticsRepository {
                 .getResultList();
     }
 
+    /**
+     * Próxima compra provável: produto ativo de maior nota que o cliente não comprou nos últimos 30 dias
+     * (a compra aumenta a nota; depois disso, a reposição volta a ser provável).
+     */
+    private static final String PROXIMA_COMPRA = """
+
+                LEFT JOIN LATERAL (
+                    SELECT p.nome AS produto_nome
+                    FROM score_produto sp
+                    JOIN produto p ON p.id = sp.produto_id
+                    WHERE sp.usuario_id = u.id AND sp.valor > 0 AND p.ativo
+                      AND NOT EXISTS (
+                          SELECT 1 FROM compra c
+                          WHERE c.usuario_id = u.id AND c.produto_id = p.id
+                            AND c.deleted_at IS NULL AND c.data_compra >= :compradoDesde)
+                    ORDER BY sp.valor DESC, p.id
+                    LIMIT 1
+                ) pc ON TRUE
+                """;
+    private static final int DIAS_SEM_COMPRAR = 30;
+
     /** Filtros da lista de clientes; nulo = sem filtro. */
     public record FiltroUsuarios(
             TipoUsuario tipo,
@@ -206,18 +234,19 @@ public class AdminAnalyticsRepository {
     );
 
     /**
-     * Página de clientes: [id, nota máxima, top categoria, última atividade]. Uma consulta só; os LATERAL
-     * calculam os três valores por cliente, para que filtro, ordenação e paginação rodem no banco.
+     * Página de clientes: [id, nota máxima, top categoria, última atividade, próxima compra]. Uma consulta só; os LATERAL
+     * calculam os valores por cliente, para que filtro, ordenação e paginação rodem no banco.
      *
      * @param sort "campo,asc|desc" com campo em {@link #ORDENACAO_USUARIOS}; inválido ou nulo = id desc.
      */
     @SuppressWarnings("unchecked")
     public List<Object[]> usuarios(FiltroUsuarios filtro, String sort, int limit, long offset) {
         Map<String, Object> params = new HashMap<>();
-        String sql = "SELECT u.id, mx.max_score, tc.cat_nome, ua.ultima"
-                + fromUsuarios(filtro, params)
+        String sql = "SELECT u.id, mx.max_score, tc.cat_nome, ua.ultima, pc.produto_nome"
+                + fromUsuarios(PROXIMA_COMPRA, filtro, params)
                 + " ORDER BY " + orderByUsuarios(sort)
                 + " LIMIT :limit OFFSET :offset";
+        params.put("compradoDesde", Fuso.hoje().minusDays(DIAS_SEM_COMPRAR));
         params.put("limit", limit);
         params.put("offset", offset);
         return comParametros(sql, params).getResultList();
@@ -225,7 +254,7 @@ public class AdminAnalyticsRepository {
 
     public long countUsuarios(FiltroUsuarios filtro) {
         Map<String, Object> params = new HashMap<>();
-        String sql = "SELECT COUNT(*)" + fromUsuarios(filtro, params);
+        String sql = "SELECT COUNT(*)" + fromUsuarios("", filtro, params);
         return ((Number) comParametros(sql, params).getSingleResult()).longValue();
     }
 
@@ -236,7 +265,7 @@ public class AdminAnalyticsRepository {
     }
 
     /** Só entra no SQL o filtro preenchido: parâmetro nulo sem tipo quebra em query nativa no Postgres. */
-    private static String fromUsuarios(FiltroUsuarios f, Map<String, Object> params) {
+    private static String fromUsuarios(String joins, FiltroUsuarios f, Map<String, Object> params) {
         StringBuilder sql = new StringBuilder("""
 
                 FROM usuario u
@@ -258,8 +287,8 @@ public class AdminAnalyticsRepository {
                     FROM evento e
                     WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
                 ) ua ON TRUE
-                WHERE u.tipo <> 'ADMIN'
                 """);
+        sql.append(joins).append(" WHERE u.tipo <> 'ADMIN'");
         if (f.tipo() != null) {
             // Nome de enum Java, nunca texto do cliente; como parâmetro exigiria cast para tipo_usuario.
             sql.append(" AND u.tipo = '").append(f.tipo().name()).append("'");

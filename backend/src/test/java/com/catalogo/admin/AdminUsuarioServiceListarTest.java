@@ -63,8 +63,8 @@ class AdminUsuarioServiceListarTest {
     void mantemOrdemDaConsultaETotalDoBanco() {
         Instant agora = Instant.parse("2026-11-24T12:00:00Z");
         when(analyticsRepository.usuarios(any(), any(), anyInt(), anyLong())).thenReturn(List.of(
-                new Object[] {9L, new BigDecimal("81.50"), "Motores", agora},
-                new Object[] {3L, null, null, null}
+                new Object[] {9L, new BigDecimal("81.50"), "Motores", agora, "Pistão"},
+                new Object[] {3L, null, null, null, null}
         ));
         when(analyticsRepository.countUsuarios(any())).thenReturn(150L);
         when(usuarioRepository.findAllById(List.of(9L, 3L))).thenReturn(List.of(usuario(3L), usuario(9L)));
@@ -75,7 +75,9 @@ class AdminUsuarioServiceListarTest {
         assertEquals(List.of(9L, 3L), page.items().stream().map(AdminUsuarioListItem::id).toList());
         assertEquals("Motores", page.items().get(0).topCategoria());
         assertEquals(agora.atOffset(ZoneOffset.UTC), page.items().get(0).ultimaAtividade());
+        assertEquals("Pistão", page.items().get(0).proximaCompra());
         assertNull(page.items().get(1).scoreMaxProduto());
+        assertNull(page.items().get(1).proximaCompra());
         verify(analyticsRepository).usuarios(any(), eq("nome,asc"), eq(20), eq(40L));
     }
 

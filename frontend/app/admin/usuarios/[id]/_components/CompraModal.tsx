@@ -74,7 +74,6 @@ export function CompraModal({ open, usuarioId, compra, onClose, onSaved }: Props
       produtoId: v.produtoId,
       precoUnitario: v.precoUnitario,
       quantidade: v.quantidade,
-      valorTotal: Math.round(v.precoUnitario * v.quantidade * 100) / 100,
       data: v.data.format('YYYY-MM-DD'),
       observacoes: v.observacoes?.trim() || null,
     }
@@ -146,6 +145,7 @@ export function CompraModal({ open, usuarioId, compra, onClose, onSaved }: Props
               <InputNumber
                 id="admin-compra-preco"
                 min={0.01}
+                max={9999999999.99}
                 step={0.01}
                 precision={2}
                 {...precoInputProps()}

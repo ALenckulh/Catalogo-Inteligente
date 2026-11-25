@@ -221,6 +221,7 @@ export const mockDashboard: AdminDashboard = {
       scoreMaxProduto: 87.5,
       topCategoria: 'Malhas',
       ultimaAtividade: '2026-03-20T10:30:00.000Z',
+      proximaCompra: 'Malha PV Premium',
     },
     {
       usuarioId: 2,
@@ -231,6 +232,7 @@ export const mockDashboard: AdminDashboard = {
       scoreMaxProduto: 72.0,
       topCategoria: 'Aviamentos',
       ultimaAtividade: '2026-03-19T16:00:00.000Z',
+      proximaCompra: null,
     },
   ],
   series: {
@@ -304,10 +306,12 @@ export const mockPesos: PesoMetrica[] = [
   { tipoEvento: 'FILTRO_APLICADO', peso: 1 },
   { tipoEvento: 'SCROLL_DEPTH', peso: 0.5 },
   { tipoEvento: 'TEMPO_PAGINA', peso: 0.8 },
+  { tipoEvento: 'COMPRA', peso: 5 },
+  { tipoEvento: 'RETORNO_PAGINA', peso: 0 },
 ]
 
 export const mockDecay: ParametroDecay[] = [
-  { categoriaId: null, categoriaNome: null, lambda: 0.05, boostConversao: 1.2 },
-  { categoriaId: 1, categoriaNome: 'Tecidos', lambda: 0.04, boostConversao: 1.15 },
-  { categoriaId: 2, categoriaNome: 'Aviamentos', lambda: 0.06, boostConversao: 1.1 },
+  { categoriaId: null, categoriaNome: null, lambda: 0.05, boostConversao: 1.2, boostRecorrencia: 1, pausaDias: 60 },
+  { categoriaId: 1, categoriaNome: 'Tecidos', lambda: 0.04, boostConversao: 1.15, boostRecorrencia: 1, pausaDias: 60 },
+  { categoriaId: 2, categoriaNome: 'Aviamentos', lambda: 0.06, boostConversao: 1.1, boostRecorrencia: 1, pausaDias: 60 },
 ]

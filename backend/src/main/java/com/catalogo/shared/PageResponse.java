@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 
 /**
- * Envelope de lista paginada alinhado a {@code frontend/docs/11-API-ENDPOINTS.md}.
+ * Envelope de lista paginada alinhado a {@code docs/11-API-ENDPOINTS.md}.
  */
 public record PageResponse<T>(
         List<T> items,

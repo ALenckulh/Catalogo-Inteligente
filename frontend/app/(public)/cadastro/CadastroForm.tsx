@@ -122,7 +122,7 @@ export function CadastroForm() {
           tooltip="Pessoa jurídica (CNPJ) ou física (CPF)"
           rules={[{ required: true, message: 'Selecione o tipo de conta' }]}
         >
-          <Radio.Group id="cadastro-tipo">
+          <Radio.Group id="cadastro-tipo" aria-label="Tipo de conta">
             <Radio value="PJ">Pessoa jurídica</Radio>
             <Radio value="PF">Pessoa física</Radio>
           </Radio.Group>
@@ -147,7 +147,7 @@ export function CadastroForm() {
                     },
                   ]}
                 >
-                  <Input id="cadastro-razao" placeholder="Informe a razão social" />
+                  <Input id="cadastro-razao" placeholder="Informe a razão social" maxLength={255} />
                 </FormItem>
               </Col>
               <Col xs={24} sm={12}>
@@ -196,7 +196,7 @@ export function CadastroForm() {
                     },
                   ]}
                 >
-                  <Input id="cadastro-nome" placeholder="Informe o nome completo" />
+                  <Input id="cadastro-nome" placeholder="Informe o nome completo" maxLength={255} />
                 </FormItem>
               </Col>
               <Col xs={24} sm={12}>
@@ -248,6 +248,7 @@ export function CadastroForm() {
               rules={[
                 { required: true, message: 'Informe a senha' },
                 { min: 6, message: 'A senha deve ter no mínimo 6 caracteres' },
+                { max: 72, message: 'A senha deve ter no máximo 72 caracteres' },
               ]}
             >
               <Input.Password

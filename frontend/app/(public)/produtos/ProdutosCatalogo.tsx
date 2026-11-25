@@ -4,13 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FilterOutlined } from '@ant-design/icons'
 import { listCategorias } from '@/lib/api/categorias'
+import { toApiError } from '@/lib/api/client'
 import { listProdutos } from '@/lib/api/produtos'
+import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
+import { registrarFiltro } from '@/lib/filtroEnviado'
 import { precoInputProps } from '@/lib/formatters'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
 import type { Categoria, Produto } from '@/lib/types'
 import { ProdutoCard } from '@/components/ProdutoCard'
 import { PageError } from '@/components/layout/PageStates'
 import {
+  Alert,
   Button,
   Col,
   Drawer,
@@ -18,6 +22,7 @@ import {
   Flex,
   Input,
   InputNumber,
+  LIMPAR,
   Pagination,
   Row,
   Spin,
@@ -96,7 +101,7 @@ function FiltrosPanel({
         <TreeSelect
           id={`${idPrefix}-categoria`}
           aria-label="Categoria"
-          allowClear
+          allowClear={LIMPAR}
           treeDefaultExpandAll
           // A lista virtual assume linha de altura fixa e cortava rótulos que quebram em duas linhas.
           virtual={false}
@@ -147,17 +152,23 @@ export function ProdutosCatalogo() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const track = useTrackEvent()
+  const { canTrackBehavioral } = useCookieConsent()
 
   // A URL é a única fonte de verdade dos filtros (normas §20).
   const q = searchParams.get('q') ?? ''
-  const categoriaId = parseNum(searchParams.get('categoria'))
+  const categoriaUrl = parseNum(searchParams.get('categoria'))
+  /** Categoria que a API não conhece (link antigo): some do filtro em vez de virar erro de tela. */
+  const [categoriaIgnorada, setCategoriaIgnorada] = useState<number>()
+  const categoriaInexistente = categoriaUrl !== undefined && categoriaUrl === categoriaIgnorada
+  const categoriaId = categoriaInexistente ? undefined : categoriaUrl
   const precoMin = parseNum(searchParams.get('precoMin'))
   const precoMax = parseNum(searchParams.get('precoMax'))
-  const page = Math.max(1, parseNum(searchParams.get('page')) ?? 1)
+  const page = Math.min(1_000_000, Math.max(1, Math.floor(parseNum(searchParams.get('page')) ?? 1)))
 
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [items, setItems] = useState<Produto[]>([])
-  const [total, setTotal] = useState(0)
+  /** null até a primeira resposta: "0 produtos" enquanto carrega era falso. */
+  const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [falhou, setFalhou] = useState(false)
   const [tentativa, setTentativa] = useState(0)
@@ -183,63 +194,6 @@ export function ProdutosCatalogo() {
       .catch(() => setCategorias([]))
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const t = window.setTimeout(() => {
-      setLoading(true)
-      setFalhou(false)
-      listProdutos({
-        q: q || undefined,
-        categoria: categoriaId,
-        precoMin,
-        precoMax,
-        page,
-        limit: PAGE_SIZE,
-      })
-        .then((res) => {
-          if (cancelled) return
-          setItems(res.items)
-          setTotal(res.total)
-        })
-        .catch(() => {
-          if (!cancelled) setFalhou(true)
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false)
-        })
-    }, 0)
-    return () => {
-      cancelled = true
-      window.clearTimeout(t)
-    }
-  }, [q, categoriaId, precoMin, precoMax, page, tentativa])
-
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      if (
-        categoriaId !== undefined ||
-        q ||
-        precoMin !== undefined ||
-        precoMax !== undefined
-      ) {
-        track({
-          tipo: 'FILTRO_APLICADO',
-          // Filtrar por categoria indica interesse nela: o motor soma na nota da categoria.
-          categoriaId: categoriaId ?? undefined,
-          metadados: {
-            filtros: {
-              categoria_id: categoriaId ?? null,
-              q: q || null,
-              precoMin: precoMin ?? null,
-              precoMax: precoMax ?? null,
-            },
-          },
-        })
-      }
-    }, 300)
-    return () => window.clearTimeout(t)
-  }, [categoriaId, q, precoMin, precoMax, track])
-
   const aplicar = useCallback(
     (next: Partial<Filtros>) => {
       const f: Filtros = { q, categoria: categoriaId, precoMin, precoMax, page: 1, ...next }
@@ -254,6 +208,70 @@ export function ProdutosCatalogo() {
     },
     [router, q, categoriaId, precoMin, precoMax],
   )
+
+  useEffect(() => {
+    let cancelled = false
+    async function carregar() {
+      setLoading(true)
+      setFalhou(false)
+      try {
+        const res = await listProdutos({
+          q: q || undefined,
+          categoria: categoriaId,
+          precoMin,
+          precoMax,
+          page,
+          limit: PAGE_SIZE,
+        })
+        if (cancelled) return
+        // Página além do fim (link antigo, ?page=99): vai para a última.
+        const ultima = Math.ceil(res.total / PAGE_SIZE)
+        if (ultima > 0 && page > ultima) {
+          aplicar({ page: ultima })
+          return
+        }
+        setItems(res.items)
+        setTotal(res.total)
+      } catch (e) {
+        if (cancelled) return
+        if (categoriaId !== undefined && [400, 404].includes(toApiError(e).status)) {
+          setCategoriaIgnorada(categoriaId)
+          return
+        }
+        setFalhou(true)
+      }
+      setLoading(false)
+    }
+    const t = window.setTimeout(() => void carregar(), 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [q, categoriaId, precoMin, precoMax, page, tentativa, aplicar])
+
+  useEffect(() => {
+    // Sem aceite não registra: se a pessoa aceitar depois, o filtro em uso ainda conta.
+    if (!canTrackBehavioral) return
+    const t = window.setTimeout(() => {
+      const filtros = {
+        categoria: categoriaId ?? null,
+        q: q || null,
+        precoMin: precoMin ?? null,
+        precoMax: precoMax ?? null,
+      }
+      const { enviar, categoriaMudou } = registrarFiltro(filtros)
+      if (!enviar) return
+      track({
+        tipo: 'FILTRO_APLICADO',
+        // Filtrar por categoria indica interesse nela: o motor soma na nota da categoria.
+        categoriaId: categoriaMudou ? categoriaId : undefined,
+        metadados: {
+          filtros: { categoria_id: filtros.categoria, q: filtros.q, precoMin: filtros.precoMin, precoMax: filtros.precoMax },
+        },
+      })
+    }, 300)
+    return () => window.clearTimeout(t)
+  }, [categoriaId, q, precoMin, precoMax, track, canTrackBehavioral])
 
   useEffect(() => {
     const key = faixaKey(preco)
@@ -295,7 +313,7 @@ export function ProdutosCatalogo() {
           </Title>
           {!falhou && (
             <Text type="secondary" aria-live="polite">
-              {total} {total === 1 ? 'produto' : 'produtos'}
+              {total !== null && `${total} ${total === 1 ? 'produto' : 'produtos'}`}
             </Text>
           )}
           {temFiltro && (loading || items.length > 0) && (
@@ -325,6 +343,10 @@ export function ProdutosCatalogo() {
           />
         </Flex>
       </Flex>
+
+      {categoriaInexistente && (
+        <Alert type="warning" showIcon title="A categoria deste link não existe mais. Mostrando todas." />
+      )}
 
       <Row gutter={[24, 24]}>
         <Col xs={0} lg={6}>
@@ -374,7 +396,7 @@ export function ProdutosCatalogo() {
                 )}
               </Spin>
 
-              {total > PAGE_SIZE && (
+              {total !== null && total > PAGE_SIZE && (
                 <Pagination
                   current={page}
                   pageSize={PAGE_SIZE}
@@ -400,7 +422,7 @@ export function ProdutosCatalogo() {
         size={300}
         footer={
           <Button id="produtos-ver-resultados" color="primary" block onClick={() => setDrawerOpen(false)}>
-            Ver {total} {total === 1 ? 'produto' : 'produtos'}
+            {total === null ? 'Ver produtos' : `Ver ${total} ${total === 1 ? 'produto' : 'produtos'}`}
           </Button>
         }
       >

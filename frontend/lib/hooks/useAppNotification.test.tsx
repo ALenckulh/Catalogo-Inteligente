@@ -1,8 +1,8 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { App } from 'antd'
 import { useState } from 'react'
 import { afterEach, expect, it } from 'vitest'
+import { App } from '@/components/ui'
 import { useAppNotification } from './useAppNotification'
 
 afterEach(cleanup)

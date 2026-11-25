@@ -33,6 +33,7 @@ export function useTabelaPaginada<T>(
   const [items, setItems] = useState<T[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(false)
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState<Ordenacao | null>(null)
   const seq = useRef(0)
@@ -41,6 +42,7 @@ export function useTabelaPaginada<T>(
     // Respostas fora de ordem (cliques rápidos em ordenar/filtrar) são descartadas.
     const id = ++seq.current
     setLoading(true)
+    setErro(false)
     try {
       const res = await buscar({
         page,
@@ -55,6 +57,8 @@ export function useTabelaPaginada<T>(
         return
       }
       setItems(res.items)
+    } catch {
+      if (id === seq.current) setErro(true)
     } finally {
       if (id === seq.current) setLoading(false)
     }
@@ -89,6 +93,8 @@ export function useTabelaPaginada<T>(
   return {
     items,
     loading,
+    /** A última busca falhou: a tela mostra PageError com `reload` em vez da tabela. */
+    erro,
     setPage,
     reload,
     onTableChange,

@@ -1,11 +1,15 @@
 package com.catalogo.auth.service;
 
+import com.catalogo.auth.entity.TokenRevogado;
+import com.catalogo.auth.repository.TokenRevogadoRepository;
+import com.catalogo.shared.DadosConta;
+import io.jsonwebtoken.Claims;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +36,6 @@ import com.catalogo.shared.Documentos;
 @Service
 public class AuthService {
 
-    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final String TERMOS_VERSAO = "1.0";
     /** Mesma mensagem para e-mail inexistente e senha errada: não revela quais e-mails estão cadastrados. */
     private static final String AUTH_FAIL = "Credenciais inválidas";
@@ -42,19 +45,25 @@ public class AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final EmailService emailService;
+    private final TokenRevogadoRepository tokenRevogadoRepository;
 
     public AuthService(
             UsuarioRepository usuarioRepository,
             ConsentimentoLgpdRepository consentimentoRepository,
             PasswordResetTokenRepository passwordResetTokenRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService
+            JwtService jwtService,
+            EmailService emailService,
+            TokenRevogadoRepository tokenRevogadoRepository
     ) {
         this.usuarioRepository = usuarioRepository;
         this.consentimentoRepository = consentimentoRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.emailService = emailService;
+        this.tokenRevogadoRepository = tokenRevogadoRepository;
     }
 
     /**
@@ -74,23 +83,18 @@ public class AuthService {
             throw new ApiException("EMAIL_EXISTS", "E-mail já cadastrado", HttpStatus.CONFLICT);
         }
 
-        String telefone = normalizeTelefone(request.telefone());
-        String emailAlt = normalizeEmailAlternativo(request.emailAlternativo());
+        String telefone = DadosConta.telefone(request.telefone());
+        String emailAlt = DadosConta.emailAlternativo(request.emailAlternativo());
 
         Usuario usuario = new Usuario();
         usuario.setTipo(request.tipo());
         usuario.setEmail(request.email().trim().toLowerCase());
-        usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
+        usuario.setSenhaHash(passwordEncoder.encode(DadosConta.senha(request.senha())));
         usuario.setTelefone(telefone);
         usuario.setEmailAlternativo(emailAlt);
 
         if (request.tipo() == TipoUsuario.PF) {
-            if (request.nomeCompleto() == null || request.nomeCompleto().isBlank()) {
-                throw new ApiException("VALIDATION_ERROR", "Nome completo é obrigatório", HttpStatus.BAD_REQUEST);
-            }
-            if (request.nomeCompleto().trim().length() < 3) {
-                throw new ApiException("VALIDATION_ERROR", "Nome completo deve ter no mínimo 3 caracteres", HttpStatus.BAD_REQUEST);
-            }
+            String nome = DadosConta.nomeCompleto(request.nomeCompleto());
             String cpf = Documentos.onlyDigits(request.cpf());
             if (!Documentos.isValidCpf(cpf)) {
                 throw new ApiException("VALIDATION_ERROR", "CPF inválido", HttpStatus.BAD_REQUEST);
@@ -98,20 +102,11 @@ public class AuthService {
             if (usuarioRepository.existsByCpf(cpf)) {
                 throw new ApiException("CPF_EXISTS", "CPF já cadastrado", HttpStatus.CONFLICT);
             }
-            Short idade = request.idade();
-            if (idade != null && (idade < 18 || idade > 120)) {
-                throw new ApiException("VALIDATION_ERROR", "Idade deve ser um número entre 18 e 120", HttpStatus.BAD_REQUEST);
-            }
             usuario.setCpf(cpf);
-            usuario.setNomeCompleto(request.nomeCompleto().trim());
-            usuario.setIdade(idade);
+            usuario.setNomeCompleto(nome);
+            usuario.setIdade(DadosConta.idade(request.idade()));
         } else if (request.tipo() == TipoUsuario.PJ) {
-            if (request.razaoSocial() == null || request.razaoSocial().isBlank()) {
-                throw new ApiException("VALIDATION_ERROR", "Razão social é obrigatória", HttpStatus.BAD_REQUEST);
-            }
-            if (request.razaoSocial().trim().length() < 2) {
-                throw new ApiException("VALIDATION_ERROR", "Razão social deve ter no mínimo 2 caracteres", HttpStatus.BAD_REQUEST);
-            }
+            String razaoSocial = DadosConta.razaoSocial(request.razaoSocial());
             String cnpj = Documentos.onlyDigits(request.cnpj());
             if (!Documentos.isValidCnpj(cnpj)) {
                 throw new ApiException("VALIDATION_ERROR", "CNPJ inválido", HttpStatus.BAD_REQUEST);
@@ -120,7 +115,7 @@ public class AuthService {
                 throw new ApiException("CNPJ_EXISTS", "CNPJ já cadastrado", HttpStatus.CONFLICT);
             }
             usuario.setCnpj(cnpj);
-            usuario.setRazaoSocial(request.razaoSocial().trim());
+            usuario.setRazaoSocial(razaoSocial);
         }
 
         usuario = usuarioRepository.save(usuario);
@@ -134,32 +129,6 @@ public class AuthService {
         }
 
         return session(usuario);
-    }
-
-    private static String normalizeTelefone(String raw) {
-        String digits = Documentos.onlyDigits(raw);
-        if (digits == null || digits.isBlank()) {
-            return null;
-        }
-        int len = digits.length();
-        boolean ok = len == 10 || len == 11
-                || ((len == 12 || len == 13) && digits.startsWith("55"));
-        if (!ok) {
-            throw new ApiException("VALIDATION_ERROR", "Telefone inválido", HttpStatus.BAD_REQUEST);
-        }
-        return digits;
-    }
-
-    private static String normalizeEmailAlternativo(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        String email = raw.trim().toLowerCase();
-        int at = email.indexOf('@');
-        if (at <= 0 || at != email.lastIndexOf('@') || at == email.length() - 1 || !email.substring(at).contains(".")) {
-            throw new ApiException("VALIDATION_ERROR", "E-mail alternativo inválido", HttpStatus.BAD_REQUEST);
-        }
-        return email;
     }
 
     /**
@@ -188,24 +157,26 @@ public class AuthService {
     }
 
     /**
-     * Recuperação de senha, etapa 1: gera um token aleatório (UUID sem hífens) válido por 2 h.
+     * Recuperação de senha, etapa 1: gera um token aleatório (UUID sem hífens) válido por 2 h, anula os anteriores
+     * e o envia por e-mail.
      * Responde a mesma mensagem exista ou não o e-mail, para não revelar cadastros.
      */
     @Transactional
     public MessageResponse requestPasswordReset(PasswordResetRequest request) {
         usuarioRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email().trim()).ifPresent(usuario -> {
+            passwordResetTokenRepository.invalidarPendentes(usuario.getId(), OffsetDateTime.now());
             PasswordResetToken reset = new PasswordResetToken();
             reset.setUsuario(usuario);
             reset.setToken(UUID.randomUUID().toString().replace("-", ""));
             reset.setExpiraEm(OffsetDateTime.now().plusHours(2));
             reset.setCreatedAt(OffsetDateTime.now());
             passwordResetTokenRepository.save(reset);
-            log.info("password-reset token for {}: {}", usuario.getEmail(), reset.getToken());
+            emailService.enviarCodigoDeSenha(usuario.getEmail(), reset.getToken());
         });
         return new MessageResponse("Se o e-mail existir, enviaremos instruções de recuperação");
     }
 
-    /** Etapa 2: recusa token já usado (usado_em) ou expirado; troca a senha e marca o token como usado. */
+    /** Etapa 2: recusa token já usado (usado_em) ou expirado; troca a senha, encerra as sessões e marca o token como usado. */
     @Transactional
     public MessageResponse confirmPasswordReset(PasswordResetConfirmRequest request) {
         PasswordResetToken reset = passwordResetTokenRepository.findByToken(request.token())
@@ -214,9 +185,27 @@ public class AuthService {
             throw new ApiException("INVALID_TOKEN", "Token inválido ou expirado", HttpStatus.BAD_REQUEST);
         }
         Usuario usuario = reset.getUsuario();
-        usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
+        usuario.trocarSenha(passwordEncoder.encode(DadosConta.senha(request.novaSenha())));
         reset.setUsadoEm(OffsetDateTime.now());
         return new MessageResponse("Senha atualizada");
+    }
+
+    /** Encerra só este token; token antigo, sem jti, vale até vencer. */
+    @Transactional
+    public MessageResponse logout(String token) {
+        Claims claims = jwtService.parse(token);
+        if (claims.getId() != null) {
+            tokenRevogadoRepository.save(new TokenRevogado(
+                    UUID.fromString(claims.getId()),
+                    claims.getExpiration().toInstant().atOffset(ZoneOffset.UTC)));
+        }
+        return new MessageResponse("Logout realizado");
+    }
+
+    @Scheduled(cron = "0 10 3 * * *")
+    @Transactional
+    public void apagarTokensVencidos() {
+        tokenRevogadoRepository.apagarVencidos(OffsetDateTime.now());
     }
 
     private Usuario findForLogin(String email) {

@@ -350,8 +350,8 @@ CREATE TEMP TABLE vis ON COMMIT DROP AS
 SELECT v, nextval(pg_get_serial_sequence('visitante', 'id')) AS visitante_id
 FROM generate_series(1, 15) v;
 
-INSERT INTO visitante (id, fingerprint, created_at, updated_at)
-SELECT visitante_id, 'demo', now() - interval '30 days', now() - interval '30 days' FROM vis;
+INSERT INTO visitante (id, aceite_cookies_em, created_at, updated_at)
+SELECT visitante_id, now() - interval '30 days', now() - interval '30 days', now() - interval '30 days' FROM vis;
 
 -- ---------------------------------------------------------------------------
 -- Sessões (persona: uma por chave + dia; visitante: 1 a 3) e ações a expandir
@@ -490,7 +490,7 @@ COMMIT;
 
 -- Resumo (as notas só aparecem depois do recálculo).
 SELECT (SELECT count(*) FROM usuario WHERE tipo <> 'ADMIN') AS clientes,
-       (SELECT count(*) FROM visitante WHERE fingerprint = 'demo') AS visitantes,
+       (SELECT count(*) FROM visitante WHERE usuario_id IS NULL) AS visitantes,
        (SELECT count(*) FROM sessao) AS sessoes,
        (SELECT count(*) FROM evento) AS eventos,
        (SELECT count(*) FROM favorito) AS favoritos,

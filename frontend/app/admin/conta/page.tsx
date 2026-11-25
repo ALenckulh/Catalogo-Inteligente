@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { updateAdminConta } from '@/lib/api/admin'
 import { toApiError } from '@/lib/api/client'
+import { isValidTelefone } from '@/lib/validators'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
@@ -22,7 +23,8 @@ import { LogoutOutlined, SaveOutlined } from '@ant-design/icons'
 const { Title, Paragraph } = Typography
 
 export default function AdminContaPage() {
-  const { isAdmin, loading: authLoading } = useRequireAdmin()
+  const [saindo, setSaindo] = useState(false)
+  const { isAdmin, loading: authLoading } = useRequireAdmin(!saindo)
   const { user, logout, updateUser } = useCurrentUser()
   const { api } = useAppNotification()
   const [form] = Form.useForm()
@@ -57,9 +59,11 @@ export default function AdminContaPage() {
 
   /** useRequireAdmin leva para /admin/entrar assim que a sessão acaba. */
   async function sair() {
+    setSaindo(true)
     try {
       await logout()
     } catch (e) {
+      setSaindo(false)
       api.error({ title: toApiError(e).message })
     }
   }
@@ -88,7 +92,17 @@ export default function AdminContaPage() {
         >
           <Input id="admin-conta-email" placeholder="Informe o e-mail" />
         </FormItem>
-        <FormItem name="telefone" label="Telefone" tooltip="Contato do admin">
+        <FormItem
+          name="telefone"
+          label="Telefone"
+          tooltip="Contato do admin"
+          rules={[
+            {
+              validator: (_, v) =>
+                isValidTelefone(v) ? Promise.resolve() : Promise.reject(new Error('Telefone inválido')),
+            },
+          ]}
+        >
           <Input id="admin-conta-telefone" placeholder="Informe o telefone" />
         </FormItem>
         <FormItem
@@ -111,7 +125,10 @@ export default function AdminContaPage() {
           name="novaSenha"
           label="Nova senha"
           tooltip="Deixe em branco para manter"
-          rules={[{ min: 6, message: 'A nova senha deve ter pelo menos 6 caracteres' }]}
+          rules={[
+            { min: 6, message: 'A nova senha deve ter pelo menos 6 caracteres' },
+            { max: 72, message: 'A senha deve ter no máximo 72 caracteres' },
+          ]}
         >
           {/* new-password: o navegador não preenche sozinho, o que trocaria a senha ao salvar. */}
           <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" autoComplete="new-password" />

@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.service.ConsentimentoService;
+import com.catalogo.eventos.domain.TipoConversao;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,8 +69,10 @@ class EventoServiceTest {
     @BeforeEach
     void setUp() {
         service = new EventoService(
-                visitanteService, consentimentoRepository, produtoRepository, categoriaRepository, eventoPublisher);
-        lenient().when(produtoRepository.existsById(9L)).thenReturn(true);
+                visitanteService, new ConsentimentoService(consentimentoRepository), produtoRepository, categoriaRepository,
+                eventoPublisher);
+        lenient().when(produtoRepository.existsByIdAndAtivoTrue(9L)).thenReturn(true);
+        lenient().when(produtoRepository.existsById(6L)).thenReturn(true); // inativo
     }
 
     /** aceitar pode criar sessão (resolveOrCreateForUsuario): transação somente leitura dava 500. */
@@ -125,6 +130,17 @@ class EventoServiceTest {
     }
 
     @Test
+    void visitanteSemAceite403() {
+        UUID cookie = UUID.randomUUID();
+        when(visitanteService.requireByCookie(cookie)).thenReturn(new Visitante());
+
+        ApiException ex = assertThrows(ApiException.class, () ->
+                service.aceitar(req(TipoEvento.PESQUISA), null, cookie.toString()));
+        assertEquals("CONSENT_REQUIRED", ex.getCode());
+        verify(eventoPublisher, never()).publish(any());
+    }
+
+    @Test
     void malformedCookieHeader400() {
         ApiException ex = assertThrows(ApiException.class, () ->
                 service.aceitar(req(TipoEvento.PESQUISA), null, "not-uuid"));
@@ -137,6 +153,7 @@ class EventoServiceTest {
         Visitante v = new Visitante();
         v.setId(3L);
         v.setCookieId(cookie);
+        v.setAceiteCookiesEm(OffsetDateTime.now());
         Sessao sessao = new Sessao();
         sessao.setId(8L);
         when(visitanteService.requireByCookie(cookie)).thenReturn(v);
@@ -161,6 +178,43 @@ class EventoServiceTest {
         verifyNoInteractions(visitanteService, eventoPublisher);
     }
 
+    @Test
+    void eventoSemSentido400() {
+        for (TipoEvento tipo : TipoEvento.values()) {
+            boolean livre = tipo == TipoEvento.PESQUISA || tipo == TipoEvento.FILTRO_APLICADO;
+            if (!livre) {
+                assertRecusado(new EventoRequest(tipo, null, null, null, null, null));
+            }
+            if (tipo != TipoEvento.CONTATO_WHATSAPP) {
+                assertRecusado(new EventoRequest(tipo, 9L, null, TipoConversao.LEVE, null, null));
+            }
+            assertRecusado(new EventoRequest(tipo, 9L, null, TipoConversao.CONFIRMADA, null, null));
+            assertRecusado(new EventoRequest(tipo, 6L, null, null, null, null));
+            assertRecusado(new EventoRequest(tipo, 9L, null, null, Map.of("x", "y".repeat(10_000)), null));
+        }
+        assertRecusado(req(TipoEvento.FAVORITAR));
+        assertRecusado(req(TipoEvento.DESFAVORITAR));
+        verifyNoInteractions(visitanteService, eventoPublisher);
+    }
+
+    /** Produto que saiu do catálogo ainda pode sair dos favoritos de quem está logado. */
+    @Test
+    void desfavoritarInativoPassa() {
+        ConsentimentoLgpd c = new ConsentimentoLgpd();
+        c.setAceito(true);
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
+                1L, TipoConsentimento.COOKIES_COMPORTAMENTAIS)).thenReturn(Optional.of(c));
+        Sessao sessao = new Sessao();
+        sessao.setId(50L);
+        when(visitanteService.resolveOrCreateForUsuario(1L, null)).thenReturn(sessao);
+
+        service.aceitar(new EventoRequest(TipoEvento.DESFAVORITAR, 6L, null, null, null, null), auth(), null);
+        ApiException ex = assertThrows(ApiException.class, () -> service.aceitar(
+                new EventoRequest(TipoEvento.FAVORITAR, 6L, null, null, null, null), auth(), null));
+        assertEquals("VALIDATION_ERROR", ex.getCode());
+        verify(eventoPublisher).publish(any());
+    }
+
     private void assertRecusado(EventoRequest request) {
         ApiException ex = assertThrows(ApiException.class, () ->
                 service.aceitar(request, null, UUID.randomUUID().toString()));
@@ -173,6 +227,7 @@ class EventoServiceTest {
         UUID cookie = UUID.randomUUID();
         Visitante v = new Visitante();
         v.setId(3L);
+        v.setAceiteCookiesEm(OffsetDateTime.now());
         Sessao sessao = new Sessao();
         sessao.setId(8L);
         when(visitanteService.requireByCookie(cookie)).thenReturn(v);

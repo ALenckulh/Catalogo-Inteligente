@@ -1,5 +1,7 @@
 package com.catalogo.auth;
 
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,6 +11,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.entity.TokenRevogado;
+import com.catalogo.auth.repository.TokenRevogadoRepository;
+import com.catalogo.auth.service.EmailService;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +51,10 @@ class AuthServiceTest {
     PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock
     JwtService jwtService;
+    @Mock
+    EmailService emailService;
+    @Mock
+    TokenRevogadoRepository tokenRevogadoRepository;
 
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     AuthService authService;
@@ -57,7 +66,9 @@ class AuthServiceTest {
                 consentimentoRepository,
                 passwordResetTokenRepository,
                 passwordEncoder,
-                jwtService
+                jwtService,
+                emailService,
+                tokenRevogadoRepository
         );
     }
 
@@ -81,6 +92,50 @@ class AuthServiceTest {
         assertEquals("tok", session.token());
         assertEquals("pf@test.local", session.usuario().email());
         verify(consentimentoRepository, org.mockito.Mockito.atLeast(2)).save(any());
+    }
+
+    @Test
+    void pedidoNovoAnulaOsAnterioresEEnviaOCodigoPorEmail() {
+        Usuario u = new Usuario();
+        u.setId(7L);
+        u.setEmail("ana@x.c");
+        when(usuarioRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("ana@x.c")).thenReturn(Optional.of(u));
+
+        authService.requestPasswordReset(new PasswordResetRequest("ana@x.c"));
+
+        ArgumentCaptor<PasswordResetToken> cap = ArgumentCaptor.forClass(PasswordResetToken.class);
+        var ordem = org.mockito.Mockito.inOrder(passwordResetTokenRepository, emailService);
+        ordem.verify(passwordResetTokenRepository).invalidarPendentes(eq(7L), any());
+        ordem.verify(passwordResetTokenRepository).save(cap.capture());
+        ordem.verify(emailService).enviarCodigoDeSenha("ana@x.c", cap.getValue().getToken());
+    }
+
+    @Test
+    void emailInexistenteNaoEnviaNada() {
+        when(usuarioRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("x@x.c")).thenReturn(Optional.empty());
+        authService.requestPasswordReset(new PasswordResetRequest("x@x.c"));
+        verifyNoInteractions(emailService, passwordResetTokenRepository);
+    }
+
+    /** Só o token que saiu é revogado; token antigo, sem jti, não tem como. */
+    @Test
+    void logoutRevogaOToken() {
+        JwtService real = new JwtService("test-only-catalogo-jwt-secret-key-32b!!", 3_600_000L);
+        Usuario u = new Usuario();
+        u.setId(7L);
+        u.setTipo(TipoUsuario.PF);
+        u.setEmail("ana@x.c");
+        var claims = real.parse(real.generate(u));
+        when(jwtService.parse("tok")).thenReturn(claims);
+        when(jwtService.parse("antigo")).thenReturn(io.jsonwebtoken.Jwts.claims().subject("7").build());
+
+        authService.logout("tok");
+        authService.logout("antigo");
+
+        ArgumentCaptor<TokenRevogado> cap = ArgumentCaptor.forClass(TokenRevogado.class);
+        verify(tokenRevogadoRepository).save(cap.capture());
+        assertEquals(claims.getId(), cap.getValue().getJti().toString());
+        assertEquals(claims.getExpiration().toInstant(), cap.getValue().getExpiraEm().toInstant());
     }
 
     @Test

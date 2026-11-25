@@ -57,16 +57,23 @@ public class AdminSolicitacaoLgpdService {
             throw new ApiException("VALIDATION_ERROR", "Status inválido", HttpStatus.BAD_REQUEST);
         }
 
+        boolean mudou = s.getStatus() != novo;
         s.setStatus(novo);
         if (request.observacoes() != null) {
             s.setObservacoes(request.observacoes());
         }
-        if (novo == StatusSolicitacaoLgpd.ATENDIDA || novo == StatusSolicitacaoLgpd.REJEITADA) {
-            s.setAtendidoEm(OffsetDateTime.now());
+        if (mudou) {
+            // Reaberta (EM_PROCESSAMENTO) não tem data de atendimento.
+            boolean encerrada = novo == StatusSolicitacaoLgpd.ATENDIDA || novo == StatusSolicitacaoLgpd.REJEITADA;
+            s.setAtendidoEm(encerrada ? OffsetDateTime.now() : null);
         }
 
         if (novo == StatusSolicitacaoLgpd.ATENDIDA && s.getTipo() == TipoSolicitacaoLgpd.EXCLUSAO) {
             contaService.anonymizeUsuario(s.getUsuario());
+        }
+        if (mudou && novo == StatusSolicitacaoLgpd.ATENDIDA
+                && s.getTipo() == TipoSolicitacaoLgpd.REVOGACAO_CONSENTIMENTO) {
+            contaService.revogarConsentimentos(s.getUsuario());
         }
 
         return AdminSolicitacaoLgpdItem.from(solicitacaoRepository.save(s));

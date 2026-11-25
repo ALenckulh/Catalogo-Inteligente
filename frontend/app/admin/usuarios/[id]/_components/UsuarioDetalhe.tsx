@@ -11,6 +11,7 @@ import { formatDate, formatTelefone, toMoney, toMoneyBRL } from '@/lib/formatter
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
 import type { AdminUsuarioDetalhe, Compra } from '@/lib/types'
+import { TextoCelula } from '@/components/admin/celulas'
 import { PageError, PageLoading } from '@/components/layout/PageStates'
 import {
   Alert,
@@ -24,7 +25,6 @@ import {
   Row,
   Table,
   Tabs,
-  Tooltip,
   Typography,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
@@ -38,6 +38,16 @@ const isAba = (v: string | null): v is Aba => ABAS.includes(v as Aba)
 
 type ScoreProduto = AdminUsuarioDetalhe['scoresProduto'][number]
 type ScoreCategoria = AdminUsuarioDetalhe['scoresCategoria'][number]
+
+const COLUNA_NOTA = {
+  title: 'Nota',
+  dataIndex: 'valor',
+  align: 'right',
+  width: 96,
+  defaultSortOrder: 'descend',
+  sorter: (a: { valor: number }, b: { valor: number }) => a.valor - b.valor,
+  render: (v: number) => toMoney(v),
+} as const
 
 export function UsuarioDetalhe() {
   const params = useParams<{ id: string }>()
@@ -115,19 +125,10 @@ export function UsuarioDetalhe() {
     {
       title: 'Produto',
       dataIndex: 'produtoNome',
-      ellipsis: { showTitle: false },
       sorter: (a, b) => a.produtoNome.localeCompare(b.produtoNome),
-      render: (v: string) => <Tooltip title={v}>{v}</Tooltip>,
+      render: (v: string) => <TextoCelula texto={v} />,
     },
-    {
-      title: 'Nota',
-      dataIndex: 'valor',
-      align: 'right',
-      width: 96,
-      defaultSortOrder: 'descend',
-      sorter: (a, b) => a.valor - b.valor,
-      render: (v: number) => toMoney(v),
-    },
+    COLUNA_NOTA,
   ]
 
   const scoreCategoriaCols: TableProps<ScoreCategoria>['columns'] = [
@@ -135,25 +136,17 @@ export function UsuarioDetalhe() {
       title: 'Categoria',
       dataIndex: 'categoriaNome',
       sorter: (a, b) => a.categoriaNome.localeCompare(b.categoriaNome),
+      render: (v: string) => <TextoCelula texto={v} />,
     },
-    {
-      title: 'Nota',
-      dataIndex: 'valor',
-      align: 'right',
-      width: 96,
-      defaultSortOrder: 'descend',
-      sorter: (a, b) => a.valor - b.valor,
-      render: (v: number) => toMoney(v),
-    },
+    COLUNA_NOTA,
   ]
 
   const compraCols: TableProps<Compra>['columns'] = [
     {
       title: 'Produto',
       dataIndex: 'produtoNome',
-      ellipsis: { showTitle: false },
       sorter: (a, b) => (a.produtoNome ?? '').localeCompare(b.produtoNome ?? ''),
-      render: (v?: string) => <Tooltip title={v}>{v ?? '—'}</Tooltip>,
+      render: (v?: string) => <TextoCelula texto={v} />,
     },
     {
       title: 'Qtd',
@@ -166,6 +159,7 @@ export function UsuarioDetalhe() {
       title: 'Preço unit.',
       dataIndex: 'precoUnitario',
       align: 'right',
+      width: 124,
       sorter: (a, b) => a.precoUnitario - b.precoUnitario,
       render: (v: number) => toMoneyBRL(v),
     },
@@ -173,6 +167,7 @@ export function UsuarioDetalhe() {
       title: 'Total',
       dataIndex: 'valorTotal',
       align: 'right',
+      width: 124,
       sorter: (a, b) => a.valorTotal - b.valorTotal,
       render: (v: number) => toMoneyBRL(v),
     },
@@ -239,7 +234,7 @@ export function UsuarioDetalhe() {
           <Alert
             type="info"
             showIcon
-            title="Com menos de 3 compras, o histórico de compras ainda não influencia a nota deste cliente."
+            title="Com menos de 3 compras, elas ainda não somam pontos na nota. Já valem para o bônus da categoria, a faixa de preço e a duração do interesse."
           />
         )}
         <Flex justify="space-between" align="center" wrap gap="small">
@@ -251,11 +246,10 @@ export function UsuarioDetalhe() {
           </Button>
         </Flex>
         <Table
-          size="small"
           rowKey="id"
           columns={compraCols}
           dataSource={compras}
-          scroll={{ x: 640 }}
+          scroll={{ x: 760 }}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           expandable={{
             rowExpandable: (r) => !!r.observacoes,
@@ -268,10 +262,11 @@ export function UsuarioDetalhe() {
   return (
     <Flex vertical gap="middle">
       <Breadcrumb
+        className="quebra-texto"
         items={[{ title: <Link href="/admin/usuarios">Usuários</Link> }, { title: nome }]}
       />
       <Flex justify="space-between" align="center" wrap gap="middle">
-        <Flex vertical gap={4} style={{ minWidth: 0 }}>
+        <Flex vertical gap={4} className="quebra-texto" style={{ minWidth: 0 }}>
           <Title level={1} style={{ margin: 0 }} id="admin-user-detail-title">
             {nome}
           </Title>
@@ -312,7 +307,6 @@ export function UsuarioDetalhe() {
               <Row gutter={[24, 24]}>
                 <Col xs={24} lg={12}>
                   <Table
-                    size="small"
                     rowKey="produtoId"
                     title={() => <Text strong>Por produto</Text>}
                     columns={scoreProdutoCols}
@@ -323,7 +317,6 @@ export function UsuarioDetalhe() {
                 </Col>
                 <Col xs={24} lg={12}>
                   <Table
-                    size="small"
                     rowKey="categoriaId"
                     title={() => <Text strong>Por categoria</Text>}
                     columns={scoreCategoriaCols}

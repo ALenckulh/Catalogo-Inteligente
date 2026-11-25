@@ -1,5 +1,6 @@
 package com.catalogo.admin;
 
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,6 +37,7 @@ import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.security.UsuarioPrincipal;
 import com.catalogo.shared.GlobalExceptionHandler;
 import com.catalogo.shared.PageResponse;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUsuarioControllerTest {
@@ -102,7 +106,6 @@ class AdminUsuarioControllerTest {
                                   "produtoId":2,
                                   "precoUnitario":10,
                                   "quantidade":1,
-                                  "valorTotal":10,
                                   "data":"2026-01-15"
                                 }
                                 """))
@@ -125,12 +128,57 @@ class AdminUsuarioControllerTest {
                                   "produtoId":2,
                                   "precoUnitario":10,
                                   "quantidade":2,
-                                  "valorTotal":20,
                                   "data":"2026-01-15"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.quantidade").value(2));
+    }
+
+    @Test
+    void compraForaDosLimitesDa400() throws Exception {
+        for (String campo : List.of(
+                "\"precoUnitario\":10000000000", "\"precoUnitario\":1.005", "\"precoUnitario\":0",
+                "\"quantidade\":0", "\"quantidade\":99999999999", "\"data\":\"31/12/2026\"",
+                "\"observacoes\":\"" + "x".repeat(501) + "\"")) {
+            mockMvc.perform(post("/api/admin/usuarios/5/compras")
+                            .principal(adminAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"produtoId\":2,\"precoUnitario\":10,\"quantidade\":1,\"data\":\"2026-01-15\"," + campo + "}"))
+                    .andExpect(status().isBadRequest());
+        }
+        verify(usuarioService, never()).registrarCompra(any(), any(), any());
+    }
+
+    /** Erro de quem chama não é 500. */
+    @Test
+    void parametroRotaEMetodoErrados() throws Exception {
+        for (String url : List.of("?page=abc", "?limit=1.5", "?ativo=talvez", "?nivel=GELADO", "?scoreMin=x", "/abc")) {
+            mockMvc.perform(get("/api/admin/usuarios" + url).principal(adminAuth()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+        mockMvc.perform(put("/api/admin/usuarios").principal(adminAuth()))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+        mockMvc.perform(post("/api/admin/usuarios/5/compras").principal(adminAuth())
+                        .contentType(MediaType.TEXT_PLAIN).content("x"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
+    void dadoRecusadoPeloBancoEBancoFora() throws Exception {
+        when(usuarioService.detalhe(1L)).thenThrow(new DataIntegrityViolationException("x", new SQLException("longo", "22001")));
+        when(usuarioService.detalhe(2L)).thenThrow(new DataIntegrityViolationException("x", new SQLException("dup", "23505")));
+        when(usuarioService.detalhe(3L)).thenThrow(new CannotCreateTransactionException("fora"));
+        when(usuarioService.detalhe(4L)).thenThrow(new IllegalStateException("segredo"));
+
+        mockMvc.perform(get("/api/admin/usuarios/1")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/admin/usuarios/2")).andExpect(status().isConflict());
+        mockMvc.perform(get("/api/admin/usuarios/3")).andExpect(status().isServiceUnavailable());
+        mockMvc.perform(get("/api/admin/usuarios/4"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Erro interno"));
     }
 
     @Test

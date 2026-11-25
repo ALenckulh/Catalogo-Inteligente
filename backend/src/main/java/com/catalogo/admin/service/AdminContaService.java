@@ -1,5 +1,8 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.admin.dto.AdminContaResponse;
+import com.catalogo.auth.security.JwtService;
+import com.catalogo.shared.DadosConta;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -16,10 +19,16 @@ public class AdminContaService {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    public AdminContaService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
+    public AdminContaService(
+            UsuarioRepository usuarioRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService
+    ) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     @Transactional(readOnly = true)
@@ -28,7 +37,7 @@ public class AdminContaService {
     }
 
     @Transactional
-    public UsuarioResponse patch(Long adminId, PatchAdminContaRequest request) {
+    public AdminContaResponse patch(Long adminId, PatchAdminContaRequest request) {
         Usuario u = requireAdmin(adminId);
         if (request.email() != null && !request.email().isBlank()) {
             String email = request.email().trim().toLowerCase();
@@ -39,16 +48,18 @@ public class AdminContaService {
         }
         // null = não altera; string vazia = limpa o telefone.
         if (request.telefone() != null) {
-            u.setTelefone(request.telefone().isBlank() ? null : request.telefone().trim());
+            u.setTelefone(DadosConta.telefone(request.telefone()));
         }
-        if (request.novaSenha() != null && !request.novaSenha().isBlank()) {
+        boolean trocaSenha = request.novaSenha() != null && !request.novaSenha().isBlank();
+        if (trocaSenha) {
             // 400, não 401: o front trata 401 como sessão expirada e deslogaria o admin.
             if (request.senhaAtual() == null || !passwordEncoder.matches(request.senhaAtual(), u.getSenhaHash())) {
                 throw new ApiException("INVALID_PASSWORD", "Senha atual inválida", HttpStatus.BAD_REQUEST);
             }
-            u.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
+            u.trocarSenha(passwordEncoder.encode(DadosConta.senha(request.novaSenha())));
         }
-        return UsuarioResponse.from(usuarioRepository.save(u));
+        u = usuarioRepository.save(u);
+        return new AdminContaResponse(UsuarioResponse.from(u), trocaSenha ? jwtService.generate(u) : null);
     }
 
     private Usuario requireAdmin(Long id) {
