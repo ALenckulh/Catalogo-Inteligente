@@ -16,6 +16,7 @@ import { formatCnpj, formatCpf, formatTelefone } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
+import { syncConsent } from '@/lib/consentSync'
 import { isValidTelefone, normalizeTelefone, telefoneForMask } from '@/lib/validators'
 import type { ConsentimentoLgpd, Usuario } from '@/lib/types'
 import { PageError, PageLoading } from '@/components/layout/PageStates'
@@ -41,7 +42,7 @@ type TipoConsentimento = ConsentimentoLgpd['tipo']
 
 export default function ContaPage() {
   const router = useRouter()
-  const { user, isAuthenticated, loading: authLoading, logout } = useCurrentUser()
+  const { user, isAuthenticated, loading: authLoading, logout, updateUser } = useCurrentUser()
   const { acceptCustom, canTrackBehavioral } = useCookieConsent()
   const { modal } = App.useApp()
   const { api, contextHolder } = useAppNotification()
@@ -68,16 +69,13 @@ export default function ContaPage() {
     const t = window.setTimeout(() => {
       setLoading(true)
       setFalhou(false)
+      setError(null)
+      setContato(false)
       getConta(user.id)
         .then((data) => {
+          // Os campos do Form vêm de `initialValues`: o <Form> só monta depois do loading, e chamar
+          // form.setFieldsValue antes disso gerava o warning "useForm is not connected".
           setConta(data.usuario)
-          form.setFieldsValue({
-            telefone: data.usuario.telefone
-              ? formatTelefone(telefoneForMask(data.usuario.telefone))
-              : '',
-            emailAlternativo: data.usuario.emailAlternativo ?? '',
-            nomeCompleto: data.usuario.nomeCompleto ?? '',
-          })
           const contatoConsent = data.consentimentos.find((c) => c.tipo === 'CONTATO_PROATIVO')
           if (contatoConsent) setContato(contatoConsent.aceito)
         })
@@ -85,7 +83,9 @@ export default function ContaPage() {
         .finally(() => setLoading(false))
     }, 0)
     return () => window.clearTimeout(t)
-  }, [user, form, tentativa])
+  // Só o id: depois de salvar, updateUser troca o objeto `user` e não deve recarregar a conta.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, tentativa])
 
   async function onSave(values: {
     telefone?: string
@@ -102,6 +102,7 @@ export default function ContaPage() {
         nomeCompleto: values.nomeCompleto || null,
       })
       setConta(updated)
+      updateUser(updated)
       api.success({ title: 'Dados salvos' })
     } catch (e) {
       setError(toApiError(e).message)
@@ -121,12 +122,19 @@ export default function ContaPage() {
       }
     }
 
+    const enviar = () =>
+      updateConsentimentos(user.id, [
+        { tipo, aceito, versaoTermos: '1.0' },
+      ])
+
+    // syncConsent registra o envio antes do re-render de acceptCustom: o SyncBehavioralConsent vê a
+    // troca em andamento e não grava a mesma linha de novo.
+    const envio =
+      tipo === 'COOKIES_COMPORTAMENTAIS' ? syncConsent(user.id, aceito, enviar) : enviar()
     aplicar(aceito)
     setSalvandoConsent(tipo)
     try {
-      await updateConsentimentos(user.id, [
-        { tipo, aceito, versaoTermos: '1.0', aceitoEm: new Date().toISOString() },
-      ])
+      await envio
       api.success({ title: 'Preferência salva' })
     } catch (e) {
       aplicar(!aceito)
@@ -136,13 +144,13 @@ export default function ContaPage() {
     }
   }
 
-  async function onExport() {
+  async function onExport(formato: 'json' | 'csv') {
     try {
-      const blob = await exportarConta('json')
+      const blob = await exportarConta(formato)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'meus-dados-catalogo.json'
+      a.download = `meus-dados-catalogo.${formato}`
       a.click()
       URL.revokeObjectURL(url)
       api.success({ title: 'Exportação baixada' })
@@ -173,12 +181,18 @@ export default function ContaPage() {
       centered: true,
       onOk: async () => {
         if (!user) return
+        // Antes do DELETE: a partir daqui o guarda de auth não pode mandar para /entrar?next=/conta.
+        saindo.current = true
         try {
           await requestAccountDeletion(user.id)
-          await sair()
         } catch (e) {
+          saindo.current = false
           api.error({ title: toApiError(e).message })
+          return
         }
+        // O token da conta excluída já dá 401 no logout, e o interceptor limpa a sessão local.
+        await logout().catch(() => undefined)
+        router.replace('/')
       },
     })
   }
@@ -215,7 +229,19 @@ export default function ContaPage() {
               <Flex vertical gap="middle">
                 {error && <Alert type="error" showIcon title={error} />}
                 <Descriptions size="small" column={1} items={identificacao} />
-                <Form form={form} layout="vertical" onFinish={onSave} requiredMark={false}>
+                <Form
+                  form={form}
+                  layout="vertical"
+                  onFinish={onSave}
+                  requiredMark={false}
+                  // A conta pode trocar (login em outra aba): sem isto, os valores da anterior ficariam no form.
+                  preserve={false}
+                  initialValues={{
+                    telefone: conta.telefone ? formatTelefone(telefoneForMask(conta.telefone)) : '',
+                    emailAlternativo: conta.emailAlternativo ?? '',
+                    nomeCompleto: conta.nomeCompleto ?? '',
+                  }}
+                >
                   {conta.tipo === 'PF' && (
                     <FormItem
                       name="nomeCompleto"
@@ -307,8 +333,11 @@ export default function ContaPage() {
                     Baixe uma cópia dos seus dados ou solicite a exclusão da conta.
                   </Text>
                   <Flex gap="small" wrap="wrap">
-                    <Button id="conta-exportar" onClick={() => void onExport()}>
-                      Exportar meus dados
+                    <Button id="conta-exportar" onClick={() => void onExport('json')}>
+                      Exportar meus dados (JSON)
+                    </Button>
+                    <Button id="conta-exportar-csv" onClick={() => void onExport('csv')}>
+                      Exportar em CSV
                     </Button>
                     <Button id="conta-excluir" color="danger" onClick={onDeleteAccount}>
                       Solicitar exclusão da conta

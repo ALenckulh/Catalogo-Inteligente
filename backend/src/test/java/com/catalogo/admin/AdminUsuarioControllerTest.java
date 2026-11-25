@@ -53,7 +53,7 @@ class AdminUsuarioControllerTest {
 
     @Test
     void listOkWithAdminPrincipal() throws Exception {
-        when(usuarioService.listar(any(), any(), any(), any(), any(), any(), any()))
+        when(usuarioService.listar(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/admin/usuarios").principal(adminAuth()))
@@ -63,13 +63,28 @@ class AdminUsuarioControllerTest {
 
     @Test
     void listRepassaFiltroDeNivel() throws Exception {
-        when(usuarioService.listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any()))
+        when(usuarioService.listar(
+                any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/admin/usuarios").param("nivel", "QUENTE").principal(adminAuth()))
                 .andExpect(status().isOk());
 
-        verify(usuarioService).listar(any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any());
+        verify(usuarioService).listar(
+                any(), any(), any(), eq(NivelInteresse.QUENTE), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void listRepassaStatusPaginaEOrdenacao() throws Exception {
+        when(usuarioService.listar(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new PageResponse<>(List.of(), 2, 20, 0));
+
+        mockMvc.perform(get("/api/admin/usuarios")
+                        .param("ativo", "false").param("page", "2").param("limit", "20").param("sort", "nome,desc")
+                        .principal(adminAuth()))
+                .andExpect(status().isOk());
+
+        verify(usuarioService).listar(null, null, null, null, null, false, 2, 20, "nome,desc");
     }
 
     @Test

@@ -5,6 +5,7 @@ import { palette } from '@/lib/theme/tokens'
 import type { ButtonColor, ButtonVariant, TableProps } from '@/components/ui'
 import {
   Alert,
+  App,
   Badge,
   Button,
   Card,
@@ -20,7 +21,6 @@ import {
   Tabs,
   Tag,
   Typography,
-  message,
 } from '@/components/ui'
 
 const { Title, Text, Paragraph } = Typography
@@ -95,6 +95,7 @@ function SwatchRow({
 }
 
 export default function AdminDesignSystemPage() {
+  const { message } = App.useApp()
   const { isAdmin, loading: authLoading } = useRequireAdmin()
 
   if (authLoading || !isAdmin) {

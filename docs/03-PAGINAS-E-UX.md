@@ -65,7 +65,7 @@ Cadastro de admins feito pela TI; sem auto-signup. Rota separada da área públi
 | A1 | Login admin | `/admin/entrar` | Sem link na área pública |
 | A2 | Dashboard | `/admin` | KPIs + leads priorizados por score |
 | A3 | Lista de usuários | `/admin/usuarios` | Filtros, score, próxima compra, categorias |
-| A4 | Detalhe de usuário | `/admin/usuarios/[id]` | Scores, faixas de preço, histórico, registrar compra |
+| A4 | Detalhe de usuário | `/admin/usuarios/[id]` | Notas de interesse, faixas de preço, histórico, registrar/editar/excluir compra |
 | A5 | Catálogo admin | `/admin/produtos` | Lista com busca e CRUD |
 | A6 | Cadastro de produto | `/admin/produtos/novo` | Formulário de criação |
 | A7 | Edição de produto | `/admin/produtos/[id]/editar` | Reutiliza formulário de criação |
@@ -128,10 +128,10 @@ Mapa das métricas de interesse ([04 §3](04-ESPECIFICACAO-TECNICA.md)) para enu
 | Contato sobre lista de favoritos | `CONTATO_WHATSAPP` + `conversao=FORTE` | 7 | Clique CTA “Entrar em contato” em item de `/favoritos` (favoritos = proxy do antigo "carrinho") | `produto_id` |
 | Pesquisas | `PESQUISA` | 5, header | Submit / Enter ou botão busca em `/produtos` ou no header (termo não vazio; debounce se digitação contínua). **E** clique num produto do resultado com termo ativo | `metadados.termo`; no clique também `produtoId` e `metadados.origem = "resultado_pesquisa"` (soma no produto — [13 M1](13-MUDANCAS-DE-ESCOPO.md)) |
 | Filtros aplicados | `FILTRO_APLICADO` | 5 | Aplicar/alterar categoria, termo `q` ou faixa de preço (debounce ~300ms após mudança estável) | `metadados.filtros` (`categoria_id`, `q`, `precoMin`, `precoMax`); com categoria, também `categoriaId` (soma na nota da categoria — [13 M2](13-MUDANCAS-DE-ESCOPO.md)) |
-| Tempo ativo na página | `TEMPO_PAGINA` | 6 | Heartbeat enquanto aba visível (`visibilitychange`); flush no unmount | `metadados.segundos_ativos`, `produto_id` |
+| Tempo ativo na página | `TEMPO_PAGINA` | 6 | Heartbeat enquanto aba visível (`visibilitychange`); um envio por visita, no `pagehide` (recarregar/fechar, `fetch` com `keepalive`) ou no unmount | `metadados.segundos_ativos`, `produto_id` |
 | Scroll depth | `SCROLL_DEPTH` | 6 | Cruzar marcos 25/50/75/100% do documento (uma vez por marco por visita à página) | `metadados.pct`, `produto_id` |
-| Retorno multi-sessão | *derivado* (N× `VISUALIZACAO_PRODUTO` em sessões distintas) | 6 | Sem evento extra no cliente | Worker/scoring conta revisitas |
-| Sequência de navegação | *derivado* (ordem de `VISUALIZACAO_PRODUTO` na `sessao`) | 6 (+ 1/5 só navegam) | Sem evento extra; cada view na ficha entra na sequência | Camada 3 / arestas ([04 §3.1](04-ESPECIFICACAO-TECNICA.md)) |
+| Retorno multi-sessão | *derivado* (N× `VISUALIZACAO_PRODUTO` em sessões distintas) | 6 | Sem evento extra no cliente | Cada visita soma como visualização; peso extra pelo retorno é trabalho futuro |
+| Sequência de navegação | *derivado* (ordem de `VISUALIZACAO_PRODUTO` na `sessao`) | 6 (+ 1/5 só navegam) | Sem evento extra | Trabalho futuro: Camada 3 / arestas ([04 §3.1](04-ESPECIFICACAO-TECNICA.md)) |
 | Sazonalidade / tempo entre visitas | *contextual* via `sessao` + timestamps | — | Abertura de sessão (já existente); sem UI dedicada | Backend |
 | Histórico de compras | tabela `compra` (não `tipo_evento`) | A4 | Submit do form “Registrar compra” | RF24; se &lt; 3 compras do cliente, peso = 0 ([04 §9](04-ESPECIFICACAO-TECNICA.md)) |
 
@@ -148,9 +148,9 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Apresentar produtos e categorias com maior probabilidade de interesse, sem saturar a tela. |
 | **Rota / auth** | Pública. Visitante e autenticado (PF/PJ). |
 | **Layout** | Header + hero curto (título + 1 frase + CTA “Ver catálogo”) + seção “Destaques” (grid de `ProdutoCard`) + seção “Categorias em evidência” + footer. Sem stats, badges de urgência ou overlays. |
-| **Conteúdo e campos** | Card produto via `ProdutoCard` (§4.0). Destaques: `GET` com `destaque=true`, **`limit=4`**. Categorias: só raiz (`parent_id` null); cada `Tag` navega para `/produtos?categoria={id}`. Autenticado: ordenação por `score_produto.valor`. Visitante: Popularidade Global ([04 §6](04-ESPECIFICACAO-TECNICA.md)). |
+| **Conteúdo e campos** | Card produto via `ProdutoCard` (§4.0). Destaques: `GET` com `destaque=true`, **`limit=6`**. Categorias: só raiz (`parent_id` null); cada `Tag` navega para `/produtos?categoria={id}`. Autenticado: ordenação por `score_produto.valor`. Visitante: Popularidade Global ([04 §6](04-ESPECIFICACAO-TECNICA.md)). |
 | **Componentes** | `Layout`, `ProdutoCard`, `Typography`, `Tag` (categoria), `Empty`, `Spin`, `Button` (ver catálogo), `Row`/`Col`. |
-| **APIs** | `GET /api/produtos?limit=4&destaque=true`; `GET /api/categorias`. |
+| **APIs** | `GET /api/produtos?limit=6&destaque=true`; `GET /api/categorias`. |
 | **Eventos / triggers** | Sem telemetria própria. Clique no card → só navega para `/produtos/[slug]`; `VISUALIZACAO_PRODUTO` dispara na tela 6. Contribui indiretamente à sequência de navegação quando a ficha abre. Ver §4.0.1. |
 | **Estados** | Hero não espera a API. Loading: Spin só nas seções de dados. Erro: `PageError` com retry. Empty destaques: “Nenhum produto disponível”. Empty categorias: “Nenhuma categoria cadastrada”. Sem consentimento: mesma UI, ordenação só global. |
 | **Rastreabilidade** | RF08, RF09, RNF01, RNF12 |
@@ -176,11 +176,11 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Criar conta PF ou PJ com consentimentos LGPD. |
 | **Rota / auth** | Pública. Autenticado → `/`. |
 | **Layout** | `Card` (640px), duas colunas a partir de 576px; `Radio` PJ/PF no topo (inicia em PJ); identificação → e-mail/senha → telefone; `Collapse` “Mais dados (opcional)”; checkbox de aceite; submit; link “Já tem conta? Entrar” → `/entrar` (preserva `next`). |
-| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6 no mock), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade; o texto abre `Modal` com abas dos dois documentos e botões Fechar / “Li e aceito” (marca o checkbox). Cookies comportamentais não têm campo: seguem a escolha do banner. Contato proativo inicia desligado. Os dois vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta`. Tooltips nos campos com label. |
+| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade; o texto abre `Modal` com abas dos dois documentos e botões Fechar / “Li e aceito” (marca o checkbox). Cookies comportamentais não têm campo: seguem a escolha do banner. Contato proativo inicia desligado. Os dois vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta`. Tooltips nos campos com label. |
 | **Componentes** | `Card`, `Form`, `Radio`, `Input`, `Input.Password`, `Collapse`, `Checkbox`, `Button`, `Modal` + `Tabs` (termos), `Modal` (migração). |
 | **APIs** | `POST /api/auth/signup`; após sucesso, se houver visitante: endpoint de migração (detalhe em [04 §7](04-ESPECIFICACAO-TECNICA.md)). |
 | **Eventos / triggers** | Sem métrica de interesse. O cadastro não altera o gate de coleta (§4.0.1): se o banner estiver sem decisão, ele segue aberto. Pós-sucesso: toast “Conta criada”, redirect para `next`, modal migração de histórico se houver visitante. |
-| **Estados** | Validação CPF/CNPJ/e-mail; submit bloqueado sem aceite; Modal “Associar histórico desta sessão?” Sim/Não. |
+| **Estados** | Validação CPF/CNPJ/e-mail; submit bloqueado sem aceite; Modal “Associar histórico de navegação?” Sim, associar / Não associar. |
 | **Rastreabilidade** | RF01–RF04, RF19, RNF08, RNF09 |
 
 #### 4 — Recuperar senha (`/recuperar-senha`)
@@ -218,10 +218,10 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Ficha completa para decisão B2B + CTA de contato. |
 | **Rota / auth** | Pública. CTA WhatsApp e favoritar: **somente autenticado** ([04 §12](04-ESPECIFICACAO-TECNICA.md)). Visitante: CTA primário (única ação da tela) “Entrar para contatar” → `/entrar?next=/produtos/[slug]`. |
 | **Layout** | Breadcrumb Vitrine → Catálogo → nome; imagem principal 4:3 (esquerda, altura limitada) + info (direita) na ordem categoria → nome → preço → CTAs → descrição (recolhível), para o CTA ficar sem scroll em 1366×768; abaixo `Descriptions` ficha técnica (2 colunas a partir de 992px); CTA fixo no rodapé abaixo de 768px. |
-| **Conteúdo e campos** | `produto.nome`, `descricao`, `preco`, `categoria`, `ficha_tecnica` (JSONB → pares chave/valor), imagem ordem 0 (mock: sem carrossel; spec prevê galeria). |
+| **Conteúdo e campos** | `produto.nome`, `descricao`, `preco`, `categoria`, `ficha_tecnica` (JSONB → pares chave/valor), galeria com miniaturas (imagens por `ordem`); sem imagem, mostra um aviso no lugar da foto. |
 | **Componentes** | `Breadcrumb`, `Image`, `Typography`, `Descriptions`, `Button` (ícones WhatsApp / Heart), `Tag`, `Divider`. Toggle favorito imediato na ficha, sem confirmação. |
 | **APIs** | `GET /api/produtos/{slug}`; `POST/DELETE /api/favoritos/{produtoId}`; `POST /api/eventos`. |
-| **Eventos / triggers** | Com consentimento (§4.0.1): **`VISUALIZACAO_PRODUTO`** — 1× no mount/hydration (`produto_id`). **`TEMPO_PAGINA`** — heartbeat com aba visível; flush no unmount → `metadados.segundos_ativos`. **`SCROLL_DEPTH`** — marcos 25/50/75/100% (1× por marco por visita) → `metadados.pct`. **`FAVORITAR` / `DESFAVORITAR`** — clique no controle de favorito (auth). **`CONTATO_WHATSAPP` + `conversao=LEVE`** — CTA “Entrar em contato” (auth); pausa decay 60d ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). *Derivados (sem evento extra):* retorno multi-sessão e sequência de navegação a partir das views. |
+| **Eventos / triggers** | Com consentimento (§4.0.1): **`VISUALIZACAO_PRODUTO`** — 1× no mount/hydration (`produto_id`). **`TEMPO_PAGINA`** — conta só com a aba visível; um envio por visita, no unmount ou no `pagehide` → `metadados.segundos_ativos`. **`SCROLL_DEPTH`** — marcos 25/50/75/100% (1× por marco por visita) → `metadados.pct`. **`FAVORITAR` / `DESFAVORITAR`** — clique no controle de favorito (auth). **`CONTATO_WHATSAPP` + `conversao=LEVE`** — CTA “Entrar em contato” (auth); pausa decay 60d ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). *Derivados (sem evento extra):* retorno multi-sessão e sequência de navegação a partir das views. |
 | **Estados** | Slug inexistente/inativo: `notFound()` (página 404). Loading. Erro: `PageError` com retry. Sem consentimento: página ok, sem telemetria. |
 | **Rastreabilidade** | RF12–RF16, RF14 |
 
@@ -246,11 +246,11 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Gerir dados, consentimentos LGPD e pedidos de direitos do titular; ajuda. |
 | **Rota / auth** | Autenticado PF/PJ. Visitante → `/entrar?next=/conta`. |
 | **Layout** | `Tabs`: Dados · Privacidade · Ajuda. Abaixo das abas, após `Divider`, “Sair da conta” (`text`) → `/`. |
-| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (reflete o consentimento deste navegador) e CONTATO_PROATIVO, que salvam ao alternar; separados por `Divider`, Exportar (mock) / Solicitar exclusão → `solicitacao_lgpd`. **Ajuda:** `Collapse` com 3 itens (contato WhatsApp; cookies/recomendações; suporte com links `/sobre` e `/privacidade`). |
+| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (reflete o consentimento deste navegador) e CONTATO_PROATIVO, que salvam ao alternar; separados por `Divider`, Exportar em JSON ou CSV / Solicitar exclusão (registra `solicitacao_lgpd`). **Ajuda:** `Collapse` com 3 itens (contato WhatsApp; cookies/recomendações; suporte com links `/sobre` e `/privacidade`). |
 | **Componentes** | `Tabs`, `Descriptions`, `Form`, `Switch`, `Button`, `modal.confirm` de `App.useApp()` (exclusão), `Alert`, `Collapse` (FAQ), `notification`. |
-| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `GET /api/conta/exportar`; `DELETE /api/conta` (ou POST solicitação). |
+| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `GET /api/conta/exportar`; `DELETE /api/conta`. |
 | **Eventos / triggers** | Sem métrica de interesse. **Gate:** revogar `COOKIES_COMPORTAMENTAIS` → parar coleta imediatamente ([04 §11](04-ESPECIFICACAO-TECNICA.md)); ver §4.0.1. |
-| **Estados** | Confirmação destrutiva com verbo “Excluir conta” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. Export: download JSON/CSV (mock). |
+| **Estados** | Confirmação destrutiva com verbo “Excluir conta” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. Export: download do arquivo JSON ou CSV. |
 | **Rastreabilidade** | RF28–RF30, RNF08, RNF09 |
 
 ---
@@ -293,8 +293,8 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Explorar clientes com sinais de intenção. |
 | **Rota / auth** | Admin. |
-| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Select` **nível de interesse** (Quente/Morno/Frio/Sem interação → `nivel`) + `Table` paginada (`pageSize` 20). Filtros `nivel` e `status` (`ativo`/`inativo`) vêm da URL e são mantidos nela (link compartilhável; o KPI “Clientes com alto interesse” abre `?nivel=QUENTE&status=ativo`). Página envolve a lista em `Suspense` (`useSearchParams`). |
-| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ), e-mail (sortable), telefone, status `ativo` (filtro Ativo/Inativo), score máx. (sortable, com ícone do nível de interesse + tooltip: Quente `FireFilled`, Morno `FireOutlined`, Frio `CloudOutlined`, Sem interação `MinusCircleOutlined`), top categoria (sortable), última atividade (sortable), ações. |
+| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Select` **nível de interesse** (Quente/Morno/Frio/Sem interação → `nivel`) + `Table` paginada (`pageSize` 20). Paginação, ordenação e filtros no servidor (`useTabelaPaginada`), sem limite de clientes. Filtros `nivel` e `status` (`ativo`/`inativo`) vêm da URL e são mantidos nela (link compartilhável; o KPI “Clientes com alto interesse” abre `?nivel=QUENTE&status=ativo`). Página envolve a lista em `Suspense` (`useSearchParams`). |
+| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ, o mesmo estado do `Select`), e-mail (sortable), telefone, status `ativo` (filtro Ativo/Inativo), score máx. (sortable, com ícone do nível de interesse + tooltip: Quente `FireFilled`, Morno `FireOutlined`, Frio `CloudOutlined`, Sem interação `MinusCircleOutlined`), top categoria (sortable), última atividade (sortable), ações. |
 | **Componentes** | `Table`, `Select`, `Input.Search`, `Tag`, `Button` icon-only `EyeOutlined` + tooltip (abrir detalhe). |
 | **APIs** | `GET /api/admin/usuarios?…`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
@@ -305,12 +305,12 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 | Item | Spec |
 |---|---|
-| **Objetivo** | Qualificar lead: scores, preço, histórico; registrar compra; contactar. |
+| **Objetivo** | Qualificar lead: notas, preço, histórico; registrar, editar e excluir compra; contactar. |
 | **Rota / auth** | Admin (dono do catálogo). |
-| **Layout** | Link “← Usuários” → `/admin/usuarios`; cabeçalho (nome + e-mail + botão WhatsApp com telefone formatado / mensagem pré-preenchida) + `Tabs`: Scores · Faixa de preço · Compras. |
-| **Conteúdo e campos** | Scores: tabelas `score_produto` / `score_categoria` (sortable). Faixa: `mediana_com_conversao`, `mediana_sem_conversao`, `gap_preco` — `Alert` warning se **`gapPreco > 10`** (“Gap sugere possível barreira de preço”, [04 §8](04-ESPECIFICACAO-TECNICA.md)). Compras: tabela (Produto, Qtd, Total, Data) + form (produto com `showSearch`, preço unitário, qtd, data, observações; **`valorTotal` auto** = preço × qtd — uma linha por produto, [08 §5.6](08-MODELO-DE-DADOS.md)). Aviso se `< 3` compras: métrica zerada no score ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). Pós-submit: toast “Compra registrada”, reset form, reload. |
+| **Layout** | Breadcrumb Usuários → nome; cabeçalho (nome + e-mail + botão WhatsApp com telefone formatado / mensagem pré-preenchida) + `Tabs`: Notas de interesse · Faixa de preço · Compras (N). |
+| **Conteúdo e campos** | Scores: tabelas `score_produto` / `score_categoria` (sortable). Faixa: `mediana_com_conversao`, `mediana_sem_conversao`, `gap_preco` — `Alert` warning se **`gapPreco > 10`** (“Gap sugere possível barreira de preço”, [04 §8](04-ESPECIFICACAO-TECNICA.md)). Compras: tabela (Produto, Qtd, Total, Data) + form (produto em `Select.Pageable`: 20 por vez, busca no servidor; preço unitário, qtd, data, observações; **`valorTotal` auto** = preço × qtd — uma linha por produto, [08 §5.6](08-MODELO-DE-DADOS.md)). Aviso se `< 3` compras: métrica zerada no score ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). Cada linha tem editar (`Modal`) e excluir (`Popconfirm`). Pós-submit: toast “Compra registrada”, reset form, reload. |
 | **Componentes** | `Descriptions`, `Tabs`, `Table`, `Form`, `Select` (`showSearch`), `DatePicker`, `InputNumber`, `Alert`, `Button`, `notification`. |
-| **APIs** | `GET /api/admin/usuarios/{id}`; `POST /api/admin/usuarios/{id}/compras`. |
+| **APIs** | `GET /api/admin/usuarios/{id}`; `POST /api/admin/usuarios/{id}/compras`; `PUT`/`DELETE …/compras/{compraId}`; `GET /api/admin/produtos` (`q`, `page`, `limit`) no seletor de produto. |
 | **Eventos / triggers** | Sem `tipo_evento` comportamental. **Histórico de compras ([04 §3.3](04-ESPECIFICACAO-TECNICA.md)):** submit do form “Registrar compra” → insert `compra` (não fila de eventos). WhatsApp do dono do catálogo é contato externo — **não** dispara `CONTATO_WHATSAPP` do consumidor. Ver §4.0.1. |
 | **Estados** | Sem telefone: desabilitar WhatsApp + tooltip. Loading: Spin. |
 | **Rastreabilidade** | RF22, RF24 |
@@ -321,10 +321,10 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Listar e gerir produtos. |
 | **Rota / auth** | Admin. |
-| **Layout** | Busca + `Table` (`pageSize` 20) + ações icon+tooltip: Editar / (Des)ativar / Excluir. Botão “Novo produto”. |
-| **Conteúdo e campos** | Colunas: `nome`, `slug`, `preco`, `categoria`, `ativo` (filtro Sim/Não), `updated_at` — Nome/Slug/Preço/Categoria/Atualizado sortable. |
-| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check / Delete), `Popconfirm` (título “Remover produto do catálogo?”, ok “Remover”), `notification` (toggle ativo). |
-| **APIs** | `GET/DELETE /api/admin/produtos`; PATCH para `ativo`. |
+| **Layout** | Busca + `Table` (`pageSize` 20) + ações icon+tooltip: Editar / (Des)ativar. Botão “Novo produto”. Paginação, ordenação e filtro no servidor. |
+| **Conteúdo e campos** | Colunas: `nome`, `slug`, `preco`, `categoria`, `ativo` (filtro Sim/Não), `updated_at` — Nome/Slug/Preço/Atualizado sortable. |
+| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check), `notification` (toggle ativo). |
+| **APIs** | `GET /api/admin/produtos` (`q`, `ativo`, `page`, `limit`, `sort`); PATCH para `ativo`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Estados** | Loading: Spin. |
 | **Rastreabilidade** | RF23 |
@@ -335,12 +335,12 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Criar ou atualizar produto + imagens. |
 | **Rota / auth** | Admin. Mesmo formulário; A7 pré-preenche. Títulos de página “Novo produto” / “Editar produto”. |
-| **Layout** | Form em seções: Dados · Ficha técnica (`Form.List` chave/valor) · Imagens (`Form.List` url/alt/ordem) + ações Salvar / **Cancelar** → `/admin/produtos`. |
+| **Layout** | Form em seções: Dados · Ficha técnica (`Form.List` chave/valor) · Imagens (upload de arquivo ou URL, com alt e ordem) + ações Salvar / **Cancelar** → `/admin/produtos`. |
 | **Conteúdo e campos** | `nome`, `slug` (auto a partir do nome até edição manual), `descricao`, `preco`, `categoria_id`, `ativo` (default **`true`** na criação), `ficha_tecnica` (spec), imagens (spec). Tooltips nos campos. |
 | **Componentes** | `Form`, `Input`, `Select`, `Switch`, `Button` (Save / Close), `Alert` (erro). |
-| **APIs** | `POST /api/admin/produtos`; `PATCH /api/admin/produtos/{id}`. |
+| **APIs** | `POST /api/admin/produtos`; `PATCH /api/admin/produtos/{id}`; `POST /api/admin/produtos/imagens` (upload). |
 | **Eventos / triggers** | Sem métrica de interesse. |
-| **Estados** | Validação preço ≥ 0; slug único. Sucesso → toast + redirect **sempre** à lista. |
+| **Estados** | Validação preço > 0; slug único. Sucesso → toast + redirect **sempre** à lista. |
 | **Rastreabilidade** | RF23 |
 
 #### A8 — Conta admin (`/admin/conta`)
@@ -349,10 +349,10 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Admin altera próprios dados de acesso. |
 | **Rota / auth** | Admin. |
-| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha (mock).”). No fim, após `Divider`, “Sair da conta” (`text`) → `/admin/entrar`. |
-| **Conteúdo e campos** | `email`, `telefone`, senha atual + nova (opcional: “deixe em branco para manter”; mock: senha UI-only, PATCH envia e-mail/telefone). Tooltips. |
+| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha.”). No fim, após `Divider`, “Sair da conta” (`text`) → `/admin/entrar`. |
+| **Conteúdo e campos** | `email`, `telefone`, senha atual + nova (opcional: “deixe em branco para manter”). Trocar a senha exige a atual. Tooltips. |
 | **Componentes** | `Form`, `Input`, `Input.Password`, `Button`, `Alert`, `notification`. |
-| **APIs** | `GET/PATCH` conta admin (espelho de `/api/conta` ou endpoint admin dedicado). |
+| **APIs** | `GET/PATCH /api/admin/conta`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Estados** | Erro: Alert. Sucesso: “Conta atualizada”. Loading auth: Spin. |
 | **Rastreabilidade** | RF26 |
@@ -370,7 +370,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **APIs** | `GET/PATCH /api/admin/configuracao/pesos`; `GET/PATCH /api/admin/configuracao/decay`; `POST …/simular`; `POST …/recalcular` ([11 §3.8](11-API-ENDPOINTS.md)). |
 | **Eventos / triggers** | Sem métrica de interesse (configura pesos das métricas da §4.0.1; não as dispara). |
 | **Estados** | Loading: Spin; prévia “atualizando…”; erro de prévia em `Alert`; precisão sem histórico → `Empty`; sucesso: “Ajustes salvos. Notas de N clientes e visitantes recalculadas.” |
-| **Mudanças de escopo** | Justificadas em [13 — Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) (M1–M15). |
+| **Mudanças de escopo** | Justificadas em [13 — Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) (M1–M3, M5–M9 e M13). |
 | **Rastreabilidade** | RF25, RNF13 |
 
 #### A10 — Design system (`/admin/design-system`)
@@ -411,11 +411,11 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 #### S1 — Política de Privacidade (`/privacidade`)
 
-Texto legal LGPD (mock 1.0); link no cadastro e footer. Seções: **Dados coletados** · **Finalidade** · **Direitos do titular**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal LGPD (versão 1.0); link no cadastro e footer. Seções: **Dados coletados** · **Finalidade** · **Direitos do titular**. **Eventos / triggers:** sem métrica de interesse.
 
 #### S2 — Termos de Uso (`/termos`)
 
-Texto legal (mock 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Seções: **Objeto** · **Contas** · **Uso aceitável**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal (versão 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Seções: **Objeto** · **Contas** · **Uso aceitável**. **Eventos / triggers:** sem métrica de interesse.
 
 #### S3 — 404
 

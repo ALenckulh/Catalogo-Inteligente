@@ -2,6 +2,7 @@ package com.catalogo.admin;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -173,15 +174,27 @@ class AdminControllersSmokeTest {
 
     @Test
     void produtosListGetDelete() throws Exception {
-        when(produtoService.listar(any(), any(), any(), any()))
+        when(produtoService.listar(any(), any(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
-        mockMvc.perform(get("/api/admin/produtos"))
+        mockMvc.perform(get("/api/admin/produtos").param("sort", "nome,asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(0));
+        verify(produtoService).listar(null, null, null, null, "nome,asc");
 
         mockMvc.perform(delete("/api/admin/produtos/3"))
                 .andExpect(status().isNoContent());
         verify(produtoService).deletar(3L);
+    }
+
+    @Test
+    void produtoPatchInvalidoDa400() throws Exception {
+        for (String body : List.of("{\"preco\":0}", "{\"preco\":-5}", "{\"nome\":\"\"}", "{\"nome\":\"   \"}", "{\"slug\":\"\"}")) {
+            mockMvc.perform(patch("/api/admin/produtos/3")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+        verify(produtoService, never()).patch(any(), any());
     }
 
     @Test

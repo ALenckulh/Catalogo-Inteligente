@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { FilterOutlined } from '@ant-design/icons'
 import { listCategorias } from '@/lib/api/categorias'
 import { listProdutos } from '@/lib/api/produtos'
+import { precoInputProps } from '@/lib/formatters'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
 import type { Categoria, Produto } from '@/lib/types'
 import { ProdutoCard } from '@/components/ProdutoCard'
@@ -97,6 +98,8 @@ function FiltrosPanel({
           aria-label="Categoria"
           allowClear
           treeDefaultExpandAll
+          // A lista virtual assume linha de altura fixa e cortava rótulos que quebram em duas linhas.
+          virtual={false}
           placeholder="Selecione a categoria"
           style={{ width: '100%' }}
           value={treeData.length ? categoriaId : undefined}
@@ -112,6 +115,7 @@ function FiltrosPanel({
           <InputNumber
             id={`${idPrefix}-preco-min`}
             aria-label="Preço mínimo"
+            {...precoInputProps(0)}
             min={0}
             step={1}
             placeholder="Mín."
@@ -123,6 +127,7 @@ function FiltrosPanel({
           <InputNumber
             id={`${idPrefix}-preco-max`}
             aria-label="Preço máximo"
+            {...precoInputProps(0)}
             min={0}
             step={1}
             placeholder="Máx."

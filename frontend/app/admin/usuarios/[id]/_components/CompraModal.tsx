@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import dayjs from 'dayjs'
-import { createCompra, updateCompra } from '@/lib/api/admin'
+import { createCompra, listAdminProdutos, updateCompra } from '@/lib/api/admin'
 import { toApiError } from '@/lib/api/client'
-import { toMoneyBRL } from '@/lib/formatters'
-import type { Compra, Produto } from '@/lib/types'
+import { precoInputProps, toMoneyBRL } from '@/lib/formatters'
+import type { Compra } from '@/lib/types'
 import {
   Alert,
   Col,
@@ -37,12 +37,11 @@ interface Props {
   usuarioId: number
   /** Presente = edição; ausente = novo registro. */
   compra?: Compra
-  produtos: Produto[]
   onClose: () => void
   onSaved: (mensagem: string) => void
 }
 
-export function CompraModal({ open, usuarioId, compra, produtos, onClose, onSaved }: Props) {
+export function CompraModal({ open, usuarioId, compra, onClose, onSaved }: Props) {
   const [form] = useForm<Valores>()
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -50,11 +49,23 @@ export function CompraModal({ open, usuarioId, compra, produtos, onClose, onSave
   const qtd = useWatch('quantidade', form)
   const total = preco && qtd ? Math.round(preco * qtd * 100) / 100 : null
 
-  const opcoes = produtos.map((p) => ({ value: p.id, label: p.nome }))
-  // Produto inativo ou fora da lista carregada: garante o rótulo em vez do ID cru.
-  if (compra && !produtos.some((p) => p.id === compra.produtoId)) {
-    opcoes.unshift({ value: compra.produtoId, label: compra.produtoNome ?? `Produto ${compra.produtoId}` })
-  }
+  const buscarProdutos = useCallback(
+    async ({ page, pageSize, search }: { page: number; pageSize: number; search: string }) => {
+      try {
+        // Página do Select começa em 0; a da API do front, em 1.
+        const res = await listAdminProdutos({ q: search || undefined, page: page + 1, limit: pageSize })
+        setErro(null)
+        return {
+          items: res.items.map((p) => ({ value: p.id, label: p.nome, preco: p.preco })),
+          hasMore: (page + 1) * pageSize < res.total,
+        }
+      } catch (e) {
+        setErro(toApiError(e).message)
+        return { items: [], hasMore: false }
+      }
+    },
+    [],
+  )
 
   async function onFinish(v: Valores) {
     setErro(null)
@@ -110,16 +121,17 @@ export function CompraModal({ open, usuarioId, compra, produtos, onClose, onSave
           tooltip="Produto adquirido pelo cliente"
           rules={[{ required: true, message: 'Selecione o produto' }]}
         >
-          <Select
+          <Select.Pageable
             id="admin-compra-produto"
             placeholder="Selecione o produto"
-            options={opcoes}
-            showSearch
-            optionFilterProp="label"
-            onChange={(id: number) => {
-              if (form.getFieldValue('precoUnitario') == null) {
-                form.setFieldValue('precoUnitario', produtos.find((p) => p.id === id)?.preco)
-              }
+            fetchPage={buscarProdutos}
+            // Na edição, o produto da compra pode não estar entre as opções carregadas: mostra o nome, não o id.
+            labelRender={({ label, value }) =>
+              label ?? (value === compra?.produtoId ? compra?.produtoNome : null) ?? `Produto ${value}`
+            }
+            onChange={(_, opcao) => {
+              const preco = Array.isArray(opcao) ? undefined : opcao?.preco
+              if (form.getFieldValue('precoUnitario') == null) form.setFieldValue('precoUnitario', preco)
             }}
           />
         </FormItem>
@@ -136,7 +148,7 @@ export function CompraModal({ open, usuarioId, compra, produtos, onClose, onSave
                 min={0.01}
                 step={0.01}
                 precision={2}
-                decimalSeparator=","
+                {...precoInputProps()}
                 prefix="R$"
                 placeholder="0,00"
                 style={{ width: '100%' }}

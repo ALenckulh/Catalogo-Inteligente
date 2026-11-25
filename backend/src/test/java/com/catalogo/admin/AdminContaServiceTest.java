@@ -1,6 +1,7 @@
 package com.catalogo.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.catalogo.admin.dto.PatchAdminContaRequest;
@@ -81,8 +83,25 @@ class AdminContaServiceTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
         when(passwordEncoder.matches("wrong", "hashed")).thenReturn(false);
 
-        assertThrows(ApiException.class, () ->
+        ApiException ex = assertThrows(ApiException.class, () ->
                 service.patch(1L, new PatchAdminContaRequest(null, null, "wrong", "novaSenha1")));
+        // 400 e não 401: 401 faria o front limpar a sessão do admin.
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("INVALID_PASSWORD", ex.getCode());
+    }
+
+    @Test
+    void patchTelefoneVazioLimpa() {
+        Usuario u = admin(1L, "a@x.c");
+        u.setTelefone("47999999999");
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.patch(1L, new PatchAdminContaRequest(null, null, null, null));
+        assertEquals("47999999999", u.getTelefone());
+
+        service.patch(1L, new PatchAdminContaRequest(null, "", null, null));
+        assertNull(u.getTelefone());
     }
 
     @Test

@@ -17,7 +17,10 @@ lib/
 │   ├── favoritos.ts
 │   ├── conta.ts
 │   ├── eventos.ts
+│   ├── visitantes.ts  # sessão de visitante (30 min)
+│   ├── visitanteId.ts # identificador de 30 dias
 │   ├── admin.ts
+│   ├── pagination.ts
 │   └── index.ts       # barrel
 ├── mocks/
 │   ├── data.ts        # seed
@@ -29,12 +32,12 @@ Páginas e hooks **nunca** chamam axios direto — só `lib/api/*`.
 
 ## 2. `USE_MOCK`
 
-Constante em `lib/api/config.ts` (default `true`).
+Constante em `lib/api/config.ts`: vale `true`, a não ser que `NEXT_PUBLIC_USE_MOCK=false`.
 
 - `true` → service lê/escreve `lib/mocks` + `delay()`
 - `false` → service usa `apiClient` (backend real)
 
-Troca futura: flip da flag (e `NEXT_PUBLIC_API_URL`). Sem factory/interface extra.
+O ambiente de demonstração usa `false` com `NEXT_PUBLIC_API_URL`. Sem factory/interface extra.
 
 ## 3. Axios client
 
@@ -59,10 +62,9 @@ export async function listProdutos(query: ProdutosQuery = {}): Promise<Page<Prod
 
 Assinaturas alinhadas aos endpoints de [11-API-ENDPOINTS.md](../11-API-ENDPOINTS.md).
 
-## 5. Auth mock
+## 5. Auth
 
-- Contas seed: ver `lib/mocks/data.ts`
-- Senha de todos: `senha123`
+- No modo mock, as contas estão em `lib/mocks/data.ts`
 - Sessão: `localStorage` (`ci_auth_token` + `ci_auth_user`) via `persistSession` / `readStoredUser`
 - `CurrentUserProvider` orquestra login/logout
 
@@ -72,7 +74,7 @@ Assinaturas alinhadas aos endpoints de [11-API-ENDPOINTS.md](../11-API-ENDPOINTS
 
 ## 7. Hooks de dados (quando criar)
 
-Seguir [HOOKS.md](HOOKS.md) §4.3: `AbortController` + cleanup. Passar `signal` ao axios (`apiClient.get(url, { signal })`) quando sair do mock.
+Seguir [HOOKS.md](HOOKS.md) §4.3: descartar resposta atrasada.
 
 ## 8. Checklist
 

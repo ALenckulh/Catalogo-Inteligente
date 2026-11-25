@@ -23,7 +23,7 @@ export function VitrineContent() {
     const t = window.setTimeout(() => {
       setLoading(true)
       setFalhou(false)
-      Promise.all([listProdutos({ destaque: true, limit: 4 }), listCategorias()])
+      Promise.all([listProdutos({ destaque: true, limit: 6 }), listCategorias()])
         .then(([produtos, cats]) => {
           if (cancelled) return
           setDestaques(produtos.items)

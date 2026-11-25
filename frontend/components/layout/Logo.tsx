@@ -13,7 +13,7 @@ export function Logo({ size = 'md', iconOnly = false }: Props) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}>
       <Image src="/logo/LOGOTIPO_CLARA.png" alt="" aria-hidden width={s.icon} height={s.icon} style={{ flexShrink: 0 }} />
-      {!iconOnly && <span style={{ fontWeight: 'var(--font-weight-semibold)', fontSize: s.font }}>Renova</span>}
+      {!iconOnly && <span style={{ fontWeight: 'var(--font-weight-semibold)', fontSize: s.font, lineHeight: 1 }}>Renova</span>}
     </span>
   )
 }

@@ -327,8 +327,7 @@ export function CadastroForm() {
                           id="cadastro-idade"
                           type="number"
                           placeholder="Informe a idade"
-                          min={18}
-                          max={120}
+                          // Sem min/max nativos: geravam o balão do navegador além da mensagem do Form.
                         />
                       </FormItem>
                     </Col>

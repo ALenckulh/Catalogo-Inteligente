@@ -2,6 +2,7 @@ package com.catalogo.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -23,8 +24,11 @@ import org.springframework.http.HttpStatus;
 import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
 import com.catalogo.admin.service.AdminUsuarioService;
+import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
+import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.entity.Usuario;
+import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.auth.repository.UsuarioRepository;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
@@ -54,6 +58,8 @@ class AdminUsuarioServiceCompraTest {
     @Mock
     ProdutoRepository produtoRepository;
     @Mock
+    ConsentimentoLgpdRepository consentimentoRepository;
+    @Mock
     ScoreEngine scoreEngine;
 
     AdminUsuarioService service;
@@ -68,8 +74,28 @@ class AdminUsuarioServiceCompraTest {
                 faixaPrecoUsuarioRepository,
                 compraRepository,
                 produtoRepository,
+                consentimentoRepository,
                 scoreEngine
         );
+    }
+
+    @Test
+    void detalheTrazOUltimoConsentimentoDeContato() {
+        Usuario u = new Usuario();
+        u.setId(5L);
+        u.setTipo(TipoUsuario.PF);
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(u));
+        ConsentimentoLgpd sim = new ConsentimentoLgpd();
+        sim.setAceito(true);
+        ConsentimentoLgpd nao = new ConsentimentoLgpd();
+        nao.setAceito(false);
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
+                5L, TipoConsentimento.CONTATO_PROATIVO
+        )).thenReturn(Optional.of(sim), Optional.of(nao), Optional.empty());
+
+        assertEquals(true, service.detalhe(5L).contatoProativo());
+        assertEquals(false, service.detalhe(5L).contatoProativo());
+        assertNull(service.detalhe(5L).contatoProativo());
     }
 
     @Test

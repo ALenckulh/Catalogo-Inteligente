@@ -13,9 +13,11 @@ export function useTrackEvent() {
   const { canTrackBehavioral } = useCookieConsent()
 
   return useCallback(
-    (payload: EventoPayload) => {
+    (payload: EventoPayload, options?: { keepalive?: boolean }) => {
       if (!canTrackBehavioral) return
-      void trackEvent(payload)
+      void trackEvent(payload, options).catch(() => {
+        /* fire-and-forget */
+      })
     },
     [canTrackBehavioral],
   )

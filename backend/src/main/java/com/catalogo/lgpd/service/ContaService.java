@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.catalogo.auth.domain.TipoConsentimento;
+import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.dto.MessageResponse;
 import com.catalogo.auth.dto.UsuarioResponse;
 import com.catalogo.auth.entity.ConsentimentoLgpd;
@@ -76,6 +77,10 @@ public class ContaService {
     @Transactional
     public ContaResponse patchConta(Long usuarioId, PatchContaRequest request) {
         Usuario usuario = requireUsuario(usuarioId);
+        if (usuario.getTipo() == TipoUsuario.PJ && (request.nomeCompleto() != null || request.idade() != null)) {
+            throw new ApiException(
+                    "VALIDATION_ERROR", "Nome e idade não se aplicam a pessoa jurídica", HttpStatus.BAD_REQUEST);
+        }
 
         if (request.telefone() != null) {
             usuario.setTelefone(request.telefone());
@@ -95,8 +100,9 @@ public class ContaService {
             if (request.senhaAtual() == null || request.senhaAtual().isBlank()) {
                 throw new ApiException("VALIDATION_ERROR", "senhaAtual obrigatória para trocar senha", HttpStatus.BAD_REQUEST);
             }
+            // 400, não 401: o front trata 401 como sessão expirada e deslogaria o usuário.
             if (!passwordEncoder.matches(request.senhaAtual(), usuario.getSenhaHash())) {
-                throw new ApiException("UNAUTHORIZED", "Senha atual inválida", HttpStatus.UNAUTHORIZED);
+                throw new ApiException("INVALID_PASSWORD", "Senha atual inválida", HttpStatus.BAD_REQUEST);
             }
             usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
         }
@@ -119,7 +125,8 @@ public class ContaService {
             c.setTipo(item.tipo());
             c.setAceito(Boolean.TRUE.equals(item.aceito()));
             c.setVersaoTermos(item.versaoTermos());
-            c.setAceitoEm(item.aceitoEm() != null ? item.aceitoEm() : OffsetDateTime.now());
+            // Hora do servidor: a do navegador decidia qual linha era a vigente e podia anular uma revogação.
+            c.setAceitoEm(OffsetDateTime.now());
             consentimentoRepository.save(c);
             saved.add(ConsentimentoResponse.from(c));
         }
@@ -212,6 +219,9 @@ public class ContaService {
         if (usuario.getDeletedAt() != null) {
             return;
         }
+        if (usuario.getTipo() == TipoUsuario.ADMIN) {
+            throw new ApiException("FORBIDDEN", "A conta do admin não pode ser excluída", HttpStatus.FORBIDDEN);
+        }
         Long usuarioId = usuario.getId();
         favoritoRepository.softDeleteByUsuarioId(usuarioId);
         eventoRepository.softDeleteByUsuarioId(usuarioId);
@@ -233,7 +243,7 @@ public class ContaService {
     /** Consentimento vigente = linha mais recente de cada tipo (lista vem ordenada por data desc). */
     private List<ConsentimentoResponse> latestConsentimentos(Long usuarioId) {
         Map<TipoConsentimento, ConsentimentoLgpd> latest = new EnumMap<>(TipoConsentimento.class);
-        for (ConsentimentoLgpd c : consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(usuarioId)) {
+        for (ConsentimentoLgpd c : consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(usuarioId)) {
             latest.putIfAbsent(c.getTipo(), c);
         }
         return latest.values().stream().map(ConsentimentoResponse::from).toList();

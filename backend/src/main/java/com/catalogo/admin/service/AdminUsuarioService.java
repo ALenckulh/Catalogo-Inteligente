@@ -2,11 +2,14 @@ package com.catalogo.admin.service;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,9 +24,13 @@ import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.dto.ScoreCategoriaRow;
 import com.catalogo.admin.dto.ScoreProdutoRow;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
+import com.catalogo.admin.repository.AdminAnalyticsRepository.FiltroUsuarios;
+import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.dto.UsuarioResponse;
+import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.entity.Usuario;
+import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.auth.repository.UsuarioRepository;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
@@ -40,7 +47,6 @@ import com.catalogo.shared.PageResponse;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.TypedQuery;
 
 @Service
 public class AdminUsuarioService {
@@ -55,6 +61,7 @@ public class AdminUsuarioService {
     private final FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository;
     private final CompraRepository compraRepository;
     private final ProdutoRepository produtoRepository;
+    private final ConsentimentoLgpdRepository consentimentoRepository;
     private final ScoreEngine scoreEngine;
 
     public AdminUsuarioService(
@@ -65,6 +72,7 @@ public class AdminUsuarioService {
             FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository,
             CompraRepository compraRepository,
             ProdutoRepository produtoRepository,
+            ConsentimentoLgpdRepository consentimentoRepository,
             ScoreEngine scoreEngine
     ) {
         this.usuarioRepository = usuarioRepository;
@@ -74,6 +82,7 @@ public class AdminUsuarioService {
         this.faixaPrecoUsuarioRepository = faixaPrecoUsuarioRepository;
         this.compraRepository = compraRepository;
         this.produtoRepository = produtoRepository;
+        this.consentimentoRepository = consentimentoRepository;
         this.scoreEngine = scoreEngine;
     }
 
@@ -84,64 +93,27 @@ public class AdminUsuarioService {
             BigDecimal scoreMin,
             NivelInteresse nivel,
             String q,
+            Boolean ativo,
             Integer page,
-            Integer limit
+            Integer limit,
+            String sort
     ) {
         int pageIndex = page == null || page < 0 ? 0 : page;
         int size = limit == null || limit < 1 ? 20 : Math.min(limit, 100);
+        FiltroUsuarios filtro = new FiltroUsuarios(tipo, categoria, scoreMin, nivel, q, ativo);
 
-        StringBuilder jpql = new StringBuilder("SELECT u FROM Usuario u WHERE u.tipo <> :admin");
-        if (tipo != null) {
-            jpql.append(" AND u.tipo = :tipo");
-        }
-        if (q != null && !q.isBlank()) {
-            jpql.append("""
-                     AND (LOWER(u.email) LIKE :q
-                       OR LOWER(COALESCE(u.nomeCompleto, '')) LIKE :q
-                       OR LOWER(COALESCE(u.razaoSocial, '')) LIKE :q)
-                    """);
-        }
-        jpql.append(" ORDER BY u.id DESC");
+        List<Object[]> rows = analyticsRepository.usuarios(filtro, sort, size, (long) pageIndex * size);
+        long total = analyticsRepository.countUsuarios(filtro);
 
-        TypedQuery<Usuario> query = em.createQuery(jpql.toString(), Usuario.class);
-        query.setParameter("admin", TipoUsuario.ADMIN);
-        if (tipo != null) {
-            query.setParameter("tipo", tipo);
-        }
-        if (q != null && !q.isBlank()) {
-            query.setParameter("q", "%" + q.trim().toLowerCase(Locale.ROOT) + "%");
-        }
-
-        List<Usuario> all = query.getResultList();
-        List<AdminUsuarioListItem> enriched = new ArrayList<>();
-        // ponytail: N+1 (uma query de nota/categoria/última atividade por usuário) e filtro/paginação em memória;
-        // ok no volume do TCC. Com escala: uma query única com JOIN, como a de topLeads.
-        for (Usuario u : all) {
-            if (u.getTipo() == TipoUsuario.ADMIN) {
-                continue;
-            }
-            Object[] row = analyticsRepository.usuarioEnrichment(u.getId()).stream().findFirst().orElse(null);
-            BigDecimal scoreMax = row != null ? toBd(row[0]) : null;
-            String topCat = row != null && row[1] != null ? String.valueOf(row[1]) : null;
-            OffsetDateTime ultima = row != null ? toOdt(row[2]) : null;
-
-            if (scoreMin != null && (scoreMax == null || scoreMax.compareTo(scoreMin) < 0)) {
-                continue;
-            }
-            if (nivel != null && NivelInteresse.of(scoreMax) != nivel) {
-                continue;
-            }
-            if (categoria != null && !categoria.isBlank()) {
-                if (topCat == null || !topCat.equalsIgnoreCase(categoria.trim())) {
-                    continue;
-                }
-            }
-            enriched.add(AdminUsuarioListItem.from(u, scoreMax, topCat, ultima));
-        }
-
-        int from = Math.min(pageIndex * size, enriched.size());
-        int to = Math.min(from + size, enriched.size());
-        return new PageResponse<>(enriched.subList(from, to), pageIndex, size, enriched.size());
+        Map<Long, Usuario> porId = usuarioRepository.findAllById(rows.stream().map(r -> toLong(r[0])).toList())
+                .stream()
+                .collect(Collectors.toMap(Usuario::getId, Function.identity()));
+        List<AdminUsuarioListItem> items = rows.stream()
+                .filter(r -> porId.containsKey(toLong(r[0])))
+                .map(r -> AdminUsuarioListItem.from(
+                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3])))
+                .toList();
+        return new PageResponse<>(items, pageIndex, size, total);
     }
 
     @Transactional(readOnly = true)
@@ -174,7 +146,12 @@ public class AdminUsuarioService {
                 .map(CompraResponse::from)
                 .toList();
 
-        return new AdminUsuarioDetalhe(UsuarioResponse.from(u), scoreRows, catRows, faixa, compras);
+        Boolean contatoProativo = consentimentoRepository
+                .findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(id, TipoConsentimento.CONTATO_PROATIVO)
+                .map(ConsentimentoLgpd::isAceito)
+                .orElse(null);
+
+        return new AdminUsuarioDetalhe(UsuarioResponse.from(u), contatoProativo, scoreRows, catRows, faixa, compras);
     }
 
     /**
@@ -237,6 +214,10 @@ public class AdminUsuarioService {
                 .orElseThrow(() -> new ApiException("NOT_FOUND", "Compra não encontrada", HttpStatus.NOT_FOUND));
     }
 
+    private static Long toLong(Object o) {
+        return ((Number) o).longValue();
+    }
+
     private static BigDecimal toBd(Object o) {
         if (o == null) {
             return null;
@@ -253,6 +234,10 @@ public class AdminUsuarioService {
         }
         if (o instanceof OffsetDateTime odt) {
             return odt;
+        }
+        // Hibernate 6 devolve timestamptz de query nativa como Instant.
+        if (o instanceof Instant i) {
+            return i.atOffset(ZoneOffset.UTC);
         }
         if (o instanceof Timestamp ts) {
             return ts.toInstant().atOffset(ZoneOffset.UTC);

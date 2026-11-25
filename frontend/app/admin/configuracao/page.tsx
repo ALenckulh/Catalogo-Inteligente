@@ -16,7 +16,7 @@ import {
   pontosPorAcao,
 } from '@/lib/scoring'
 import type { Categoria, ParametroDecay, PesoMetrica, TipoEvento } from '@/lib/types'
-import { App, Badge, Button, Card, Checkbox, Col, Flex, Popconfirm, Row, Space, Spin, Typography, message } from '@/components/ui'
+import { App, Badge, Button, Card, Checkbox, Col, Flex, Popconfirm, Row, Space, Spin, Typography } from '@/components/ui'
 import { CategoriasSecao, MeiaVidaSecao } from './_components/DecaimentoSecoes'
 import { PesosSecao } from './_components/PesosSecao'
 import { Previa, type AbaConfig } from './_components/Previa'
@@ -121,7 +121,7 @@ function ConfirmacaoConteudo({
 
 export default function AdminConfiguracaoPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { modal } = App.useApp()
+  const { message, modal } = App.useApp()
   const [pesos, setPesos] = useState<PesoMetrica[]>([])
   const [decay, setDecay] = useState<ParametroDecay[]>([])
   /** Últimos valores salvos: base do "Desfazer", da prévia ("hoje") e da confirmação. */
@@ -244,6 +244,8 @@ export default function AdminConfiguracaoPage() {
           } else {
             void message.success('Ajustes salvos. As notas mudam conforme os clientes interagirem.')
           }
+          // O "Hoje" mudou no servidor; sem refazer, a prévia seguia comparando com o estado antigo.
+          simulacao.refazer()
         } catch {
           void message.error('Não foi possível salvar. Tente novamente.')
         }

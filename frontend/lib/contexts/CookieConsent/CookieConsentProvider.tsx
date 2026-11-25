@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CookieConsentLevel } from '@/lib/types'
-import { abrirSessaoVisitante } from '@/lib/api/visitantes'
 import {
   CookieConsentContext,
   type CookieConsentPreferences,
@@ -53,7 +52,6 @@ interface Props {
 export function CookieConsentProvider({ children }: Props) {
   const [preferences, setPreferences] = useState<CookieConsentPreferences>(defaultPrefs)
   const [hydrated, setHydrated] = useState(false)
-  const sessaoBootstrapped = useRef(false)
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -63,14 +61,7 @@ export function CookieConsentProvider({ children }: Props) {
     return () => window.clearTimeout(t)
   }, [])
 
-  // Só com cookies comportamentais aceitos o visitante anônimo ganha sessão (e passa a ser rastreado).
-  useEffect(() => {
-    if (!hydrated || !preferences.behavioral || sessaoBootstrapped.current) return
-    sessaoBootstrapped.current = true
-    void abrirSessaoVisitante().catch(() => {
-      sessaoBootstrapped.current = false
-    })
-  }, [hydrated, preferences.behavioral])
+  // Não abre sessão de visitante: ela nasce no primeiro evento (trackEvent), que só sai com o aceite.
 
   const persist = useCallback((level: CookieConsentLevel, behavioral: boolean) => {
     const decidedAt = new Date().toISOString()
@@ -81,12 +72,6 @@ export function CookieConsentProvider({ children }: Props) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
     } catch {
       /* ignore */
-    }
-    if (behavioral) {
-      sessaoBootstrapped.current = true
-      void abrirSessaoVisitante().catch(() => {
-        sessaoBootstrapped.current = false
-      })
     }
   }, [])
 

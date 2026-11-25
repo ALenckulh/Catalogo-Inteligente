@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DeleteOutlined, EditOutlined, PlusOutlined, WhatsAppOutlined } from '@ant-design/icons'
-import { deleteCompra, getAdminUsuario, listAdminProdutos } from '@/lib/api/admin'
+import { deleteCompra, getAdminUsuario } from '@/lib/api/admin'
 import { toApiError } from '@/lib/api/client'
-import { whatsappUrl } from '@/lib/config'
+import { whatsappClienteUrl } from '@/lib/config'
 import { formatDate, formatTelefone, toMoney, toMoneyBRL } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
-import type { AdminUsuarioDetalhe, Compra, Produto } from '@/lib/types'
+import type { AdminUsuarioDetalhe, Compra } from '@/lib/types'
 import { PageError, PageLoading } from '@/components/layout/PageStates'
 import {
   Alert,
@@ -50,7 +50,6 @@ export function UsuarioDetalhe() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
   const { api, contextHolder } = useAppNotification()
   const [data, setData] = useState<AdminUsuarioDetalhe | null>(null)
-  const [produtos, setProdutos] = useState<Produto[]>([])
   const [erroCarga, setErroCarga] = useState(false)
   const [tentativa, setTentativa] = useState(0)
   const [modal, setModal] = useState<{ open: boolean; compra?: Compra }>({ open: false })
@@ -60,12 +59,8 @@ export function UsuarioDetalhe() {
     let cancelled = false
     const t = window.setTimeout(() => {
       setErroCarga(false)
-      void Promise.all([getAdminUsuario(id), listAdminProdutos({ limit: 100 })])
-        .then(([detalhe, prods]) => {
-          if (cancelled) return
-          setData(detalhe)
-          setProdutos(prods.items)
-        })
+      void getAdminUsuario(id)
+        .then((detalhe) => !cancelled && setData(detalhe))
         .catch(() => !cancelled && setErroCarga(true))
     }, 0)
     return () => {
@@ -111,9 +106,11 @@ export function UsuarioDetalhe() {
     )
   }
 
-  const { usuario, compras } = data
+  const { usuario, compras, contatoProativo } = data
   const nome = usuario.nomeCompleto ?? usuario.razaoSocial ?? usuario.email
   const tel = usuario.telefone
+  const whatsapp = whatsappClienteUrl(tel, `Olá ${nome}!`)
+  const abrirWhatsapp = () => whatsapp && window.open(whatsapp, '_blank', 'noopener,noreferrer')
   const totalCompras = compras.reduce((acc, c) => acc + c.valorTotal, 0)
   const abrirNovaCompra = () => setModal({ open: true })
 
@@ -210,6 +207,8 @@ export function UsuarioDetalhe() {
             okText="Excluir"
             cancelText="Cancelar"
             okButtonProps={{ danger: true }}
+            // À esquerda: o tooltip "Excluir compra" abre em cima do botão e cobria o "Excluir".
+            placement="left"
             onConfirm={() => excluir(row)}
           >
             <Button
@@ -284,19 +283,26 @@ export function UsuarioDetalhe() {
             {[usuario.tipo, usuario.email, tel && formatTelefone(tel)].filter(Boolean).join(' · ')}
           </Text>
         </Flex>
-        <Button
-          id="admin-user-whatsapp"
-          color="primary"
-          icon={<WhatsAppOutlined />}
-          disabled={!tel}
-          tooltip={!tel ? 'Cliente sem telefone cadastrado' : undefined}
-          onClick={() => {
-            if (!tel) return
-            window.open(whatsappUrl(`Olá ${nome}!`), '_blank', 'noopener,noreferrer')
-          }}
+        {/* Sem autorização de contato, avisa antes: o cliente pode ter chamado primeiro, então não bloqueia. */}
+        <Popconfirm
+          title="Abrir a conversa mesmo assim?"
+          description="Este cliente não autorizou contato proativo."
+          okText="Abrir"
+          cancelText="Cancelar"
+          disabled={!whatsapp || contatoProativo === true}
+          onConfirm={abrirWhatsapp}
         >
-          WhatsApp
-        </Button>
+          <Button
+            id="admin-user-whatsapp"
+            color="primary"
+            icon={<WhatsAppOutlined />}
+            disabled={!whatsapp}
+            tooltip={whatsapp ? undefined : tel ? 'Telefone inválido' : 'Cliente sem telefone cadastrado'}
+            onClick={contatoProativo === true ? abrirWhatsapp : undefined}
+          >
+            WhatsApp
+          </Button>
+        </Popconfirm>
       </Flex>
 
       <Tabs
@@ -382,7 +388,6 @@ export function UsuarioDetalhe() {
         open={modal.open}
         usuarioId={id}
         compra={modal.compra}
-        produtos={produtos}
         onClose={() => setModal((m) => ({ ...m, open: false }))}
         onSaved={(mensagem) => {
           setModal((m) => ({ ...m, open: false }))

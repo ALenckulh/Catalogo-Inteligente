@@ -38,9 +38,6 @@ public class Sessao {
     @Column(name = "canal_origem", length = 100)
     private String canalOrigem;
 
-    @Column(name = "ip_hash", length = 64)
-    private String ipHash;
-
     @Column(name = "iniciada_em", nullable = false)
     private OffsetDateTime iniciadaEm = OffsetDateTime.now();
 
@@ -93,14 +90,6 @@ public class Sessao {
 
     public void setCanalOrigem(String canalOrigem) {
         this.canalOrigem = canalOrigem;
-    }
-
-    public String getIpHash() {
-        return ipHash;
-    }
-
-    public void setIpHash(String ipHash) {
-        this.ipHash = ipHash;
     }
 
     public OffsetDateTime getIniciadaEm() {

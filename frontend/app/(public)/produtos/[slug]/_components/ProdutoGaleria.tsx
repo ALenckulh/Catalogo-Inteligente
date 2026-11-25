@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { PictureOutlined } from '@ant-design/icons'
 import { imagemSrc } from '@/lib/api/config'
 import type { ProdutoImagem } from '@/lib/types'
-import { Button, Flex, Image } from '@/components/ui'
+import { Button, Flex, Image, Typography } from '@/components/ui'
 
+const { Text } = Typography
 const THUMB = 64
 
 interface ProdutoGaleriaProps {
@@ -26,11 +28,19 @@ export function ProdutoGaleria({ imagens, nomeProduto }: ProdutoGaleriaProps) {
           width: '100%',
           aspectRatio: '4 / 3',
           maxHeight: 'min(60vh, 480px)',
-          background: 'var(--surface-neutral-subtle)',
+          background: principal ? 'var(--surface-neutral-subtle)' : 'var(--surface-base)',
+          // Sem imagem, a borda é o que faz a área aparecer como card (o fundo se confunde com a página).
+          border: principal ? undefined : 'var(--border-width-default) solid var(--border-neutral-subtle)',
           borderRadius: 'var(--radius-default)',
           overflow: 'hidden',
         }}
       >
+        {!principal && (
+          <Flex vertical align="center" gap="small" style={{ color: 'var(--icon-subtle)', textAlign: 'center', padding: 'var(--space-4)' }}>
+            <PictureOutlined aria-hidden style={{ fontSize: 'var(--font-size-3xl)' }} />
+            <Text type="secondary">Este produto não possui imagens</Text>
+          </Flex>
+        )}
         {principal && (
           <Image.PreviewGroup
             items={imagens.map((i) => imagemSrc(i.url))}

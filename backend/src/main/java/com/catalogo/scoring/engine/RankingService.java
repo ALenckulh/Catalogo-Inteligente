@@ -9,7 +9,6 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import com.catalogo.catalog.entity.Produto;
 import com.catalogo.scoring.entity.ScoreProduto;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
 
@@ -77,8 +76,9 @@ public class RankingService {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /** Ordena os ids pela nota (maior primeiro); empate pelo menor id. */
     public void sortByRank(
-            List<Produto> produtos,
+            List<Long> produtoIds,
             double personalWeight,
             Map<Long, BigDecimal> personal,
             Map<Long, BigDecimal> popularidade
@@ -86,10 +86,14 @@ public class RankingService {
         Map<Long, BigDecimal> cache = popularidade.isEmpty()
                 ? popularidadeGlobalService.scoresByProduto()
                 : popularidade;
-        produtos.sort(Comparator
-                .comparing((Produto p) -> blendedScore(p.getId(), personalWeight, personal, cache))
+        Map<Long, BigDecimal> notas = new HashMap<>();
+        for (Long id : produtoIds) {
+            notas.put(id, blendedScore(id, personalWeight, personal, cache));
+        }
+        produtoIds.sort(Comparator
+                .comparing((Long id) -> notas.get(id))
                 .reversed()
-                .thenComparing(Produto::getId));
+                .thenComparing(Comparator.naturalOrder()));
     }
 
     public Map<Long, BigDecimal> loadPopularidade() {

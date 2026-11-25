@@ -2,8 +2,9 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { migrarHistorico } from '@/lib/api/auth'
-import { USE_MOCK, VISITANTE_COOKIE_KEY } from '@/lib/api/config'
+import { USE_MOCK } from '@/lib/api/config'
 import { toApiError } from '@/lib/api/client'
+import { encerrarSessao, readVisitanteId } from '@/lib/api/visitanteId'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { Modal, Typography } from '@/components/ui'
 
@@ -22,7 +23,7 @@ function shouldPromptMigrar(isAuthenticated: boolean, loading: boolean): boolean
   if (loading || USE_MOCK || !isAuthenticated) return false
   try {
     if (sessionStorage.getItem(PENDING_KEY) !== '1') return false
-    return Boolean(localStorage.getItem(VISITANTE_COOKIE_KEY))
+    return readVisitanteId() !== null
   } catch {
     return false
   }
@@ -47,6 +48,8 @@ export function MigrarHistoricoGate() {
     } catch (e) {
       void toApiError(e)
     } finally {
+      // Sem migração, a sessão continua do visitante: o próximo evento abre uma do usuário.
+      if (!aceitar) encerrarSessao()
       try {
         sessionStorage.removeItem(PENDING_KEY)
       } catch {
@@ -66,7 +69,7 @@ export function MigrarHistoricoGate() {
       centered
       confirmLoading={busy}
       okText="Sim, associar"
-      cancelText="Não agora"
+      cancelText="Não associar"
       onOk={() => void finish(true)}
       onCancel={() => void finish(false)}
       closable={!busy}

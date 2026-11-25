@@ -5,6 +5,9 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,6 +36,12 @@ public class RabbitConfig {
     @Bean
     public MessageConverter jacksonMessageConverter() {
         return new JacksonJsonMessageConverter();
+    }
+
+    /** Mensagem que falha por dado inválido vai para a DLQ; só falha passageira volta para a fila. */
+    @Bean
+    public ContainerCustomizer<SimpleMessageListenerContainer> destinoDasFalhas() {
+        return container -> container.setErrorHandler(new ConditionalRejectingErrorHandler(new FalhaPassageira()));
     }
 
     @Bean
@@ -102,7 +111,7 @@ public class RabbitConfig {
 
     /**
      * Fila durável com dead letter: mensagem rejeitada sem requeue vai para events.dlq em vez de se perder.
-     * Retry com backoff não está configurado: o padrão do Spring AMQP recoloca na fila a mensagem que falhou.
+     * Quem decide entre rejeitar e devolver à fila é FalhaPassageira.
      */
     private static Queue durableWithDlq(String name) {
         return QueueBuilder.durable(name)

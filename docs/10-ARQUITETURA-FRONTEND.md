@@ -15,7 +15,7 @@ Links irmãos:
 
 | Camada | Tecnologia | Versão |
 |---|---|---|
-| Node | — | ≥ 20 |
+| Node | — | ≥ 20 (CI usa 22) |
 | TypeScript | strict | ^5 |
 | Framework | **Next.js (App Router)** | 16.2.x |
 | React | — | 19.x |
@@ -33,9 +33,10 @@ Scripts:
 - `npm run build` — build de produção.
 - `npm start` — serve o build.
 - `npm run lint` — ESLint.
-- `npx tsc --noEmit` — type-check manual.
+- `npm run typecheck` — `tsc --noEmit`.
+- `npm run test` / `npm run test:coverage` — Vitest (cobertura mínima de 25%).
 
-Gates antes de PR: `tsc --noEmit` → `lint` → `build`.
+Gates antes de PR (os mesmos do CI): `lint` → `typecheck` → `test:coverage`.
 
 ## 2. Estrutura de pastas
 
@@ -60,7 +61,7 @@ frontend/
 │   │   │   └── [slug]/page.tsx       # /produtos/{slug}
 │   │   ├── favoritos/page.tsx
 │   │   ├── conta/page.tsx
-│   │   ├── sobre/page.tsx            # /sobre — landing acadêmica (S0)
+│   │   ├── sobre/page.tsx            # /sobre — página da empresa (S0)
 │   │   ├── privacidade/page.tsx      # /privacidade (S1)
 │   │   └── termos/page.tsx           # /termos (S2)
 │   └── admin/                        # /admin/*
@@ -68,28 +69,31 @@ frontend/
 │       ├── page.tsx                  # dashboard
 │       ├── _components/
 │       ├── entrar/page.tsx           # /admin/entrar (A1 — sem link na área pública)
-│       ├── usuarios/
-│       ├── produtos/
+│       ├── usuarios/                 # A3 e A4 ([id])
+│       ├── produtos/                 # A5, A6 (novo) e A7 ([id]/editar)
 │       ├── conta/page.tsx            # /admin/conta (A8)
-│       └── configuracao/page.tsx     # /admin/configuracao (A9)
+│       ├── configuracao/page.tsx     # /admin/configuracao (A9)
+│       ├── design-system/page.tsx    # /admin/design-system (A10)
+│       └── projeto/page.tsx          # /admin/projeto (A11)
 ├── components/
-│   └── ui/                           # wrappers e re-exports do antd
-│       ├── index.ts                  # barrel único
-│       ├── Button/
-│       ├── Input/
-│       ├── Form/
-│       ├── Card/
-│       └── Select/                   # com pageable async
+│   ├── admin/                        # componentes compartilhados do admin
+│   ├── auth/                         # migração de histórico, sincronização de consentimento
+│   ├── layout/                       # header, footer, shell admin, banner de cookies, estados de página
+│   ├── ProdutoCard.tsx
+│   └── ui/                           # wrappers e re-exports do antd (barrel index.ts)
+│       ├── Alert/  Button/  Card/  Form/  Image/  Input/  Select/  Upload/
 ├── lib/
-│   ├── theme/
-│   │   ├── tokens.ts                 # TS espelho de design-tokens.css
-│   │   └── antdTheme.ts              # ThemeConfig do antd
+│   ├── api/                          # axios + funções por domínio (ver SERVICES.md)
+│   ├── contexts/                     # CookieConsent e CurrentUser (ver CONTEXTS.md)
 │   ├── hooks/                        # hooks globais (2+ rotas)
-│   │   └── useAppNotification.ts
-│   └── contexts/                     # React Contexts globais (ver CONTEXTS.md)
-├── docs/                             # documentação do projeto
+│   ├── mocks/                        # dados para rodar sem backend (USE_MOCK)
+│   ├── theme/                        # tokens.ts e antdTheme.ts
+│   ├── types/                        # DTOs camelCase
+│   └── formatters.ts, validators.ts, scoring.ts, navigation.ts, config.ts…
 └── public/                           # assets estáticos
 ```
+
+A documentação fica em `docs/`, na raiz do repositório.
 
 ### 2.1 Convenções de pasta
 
@@ -128,17 +132,17 @@ CSS vars reais ficam em `app/design-tokens.css` (fonte de verdade visual, import
 
 Hooks compartilhados por 2+ rotas. Ver [padroes/HOOKS.md](padroes/HOOKS.md).
 
-Exemplo instalado: `useAppNotification` — wrapper de `notification.useNotification()`.
+Existentes: `useAppNotification` (wrapper de `notification.useNotification()`), `useTabelaPaginada` (tabela com paginação e ordenação no servidor), `useRequireAdmin` (exige admin) e `useTrackEvent` (envia evento só com consentimento).
 
 ### 5.3 `lib/contexts/`
 
-React Context compartilhado (ex: tema do app, flags de usuário logado). Ver [padroes/CONTEXTS.md](padroes/CONTEXTS.md).
+React Context compartilhado: `CurrentUser` (login) e `CookieConsent` (cookies). Ver [padroes/CONTEXTS.md](padroes/CONTEXTS.md).
 
 ## 6. Roteamento (App Router)
 
 - **Server Components por padrão.** Marque `'use client'` só quando precisar de `useState`/`useEffect`/`useRef`/handlers/eventos de DOM.
 - Antd rendera no cliente (CSS-in-JS). O `AntdRegistry` em `providers.tsx` coleta estilos no SSR para evitar flash.
-- Fetching: `fetch()` em server component (streaming/cache nativo) é o padrão. Em client components, usar o padrão `AbortController` descrito em [padroes/HOOKS.md](padroes/HOOKS.md). React Query entra quando o pattern repetido valer a abstração — até lá, YAGNI.
+- Fetching: os dados vêm do cliente, com axios, sempre pelas funções de `lib/api` ([padroes/SERVICES.md](padroes/SERVICES.md)), dentro de `useEffect` com descarte de resposta atrasada ([padroes/HOOKS.md](padroes/HOOKS.md)). As `page.tsx` de servidor só montam o componente cliente. React Query não é usado.
 
 ## 7. i18n
 
@@ -170,13 +174,13 @@ Passo a passo para `/produtos/[slug]`:
 3. Lógica compartilhada com outras rotas → `components/ui/` ou `lib/hooks/`.
 4. Verificar que a página respeita [09-NORMAS-DE-USABILIDADE.md] (checklist).
 5. `npm run build` — verificar que a rota aparece no output.
-6. Se precisar de dados: `fetch(...)` no server component (ou hook em client quando houver interação).
+6. Se precisar de dados: função em `lib/api/*`, chamada no componente cliente.
 
 ## 10. ADRs — decisões arquiteturais
 
 ### ADR-01: Next.js 16 App Router
 - **Contexto:** TCC precisa de SSR para SEO (produtos públicos) + rotas dinâmicas (`[slug]`).
-- **Decisão:** App Router (não Pages Router). React 19 + Server Components.
+- **Decisão:** App Router (não Pages Router), com React 19. Na implementação, as telas com dados são componentes de cliente.
 - **Trade-off:** API mais nova com breaking changes vs. estabilidade. Vale pelo potencial de ensino/escrita no TCC.
 
 ### ADR-02: Ant Design 6 como design system
@@ -191,7 +195,7 @@ Passo a passo para `/produtos/[slug]`:
 
 ### ADR-04: Route groups `(public)` / `admin/`
 - **Contexto:** Layouts diferentes (header público vs. sidebar admin).
-- **Decisão:** `(public)` como route group (parênteses não entram na URL) + `admin/` como segmento normal (para proteger via middleware futuro).
+- **Decisão:** `(public)` como route group (parênteses não entram na URL) + `admin/` como segmento normal (protegido no cliente por `useRequireAdmin` e, na API, pela regra `hasRole("ADMIN")`).
 
 ### ADR-05: Wrapper fino sobre antd
 - **Contexto:** Risco de over-engineering (wrapper para cada componente antd).

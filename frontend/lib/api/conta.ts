@@ -1,4 +1,4 @@
-import type { ConsentimentoLgpd, Usuario } from '@/lib/types'
+import type { ConsentimentoInput, ConsentimentoLgpd, Usuario } from '@/lib/types'
 import { delay } from '@/lib/mocks/delay'
 import { mockUsuarios } from '@/lib/mocks/data'
 import { ApiError, apiClient } from './client'
@@ -63,7 +63,7 @@ export async function updateConta(
 
 export async function updateConsentimentos(
   _usuarioId: number,
-  consentimentos: ConsentimentoLgpd[],
+  consentimentos: ConsentimentoInput[],
 ): Promise<ConsentimentoLgpd[]> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<ConsentimentoLgpd[]>('/conta/consentimentos', {
@@ -73,7 +73,7 @@ export async function updateConsentimentos(
   }
 
   await delay()
-  return consentimentos
+  return consentimentos.map((c) => ({ ...c, aceitoEm: new Date().toISOString() }))
 }
 
 export async function exportarConta(formato: 'json' | 'csv' = 'json'): Promise<Blob> {

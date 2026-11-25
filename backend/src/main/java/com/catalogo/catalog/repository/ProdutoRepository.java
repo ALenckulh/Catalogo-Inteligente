@@ -1,6 +1,7 @@
 package com.catalogo.catalog.repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -39,8 +40,9 @@ public interface ProdutoRepository extends JpaRepository<Produto, Long> {
             Pageable pageable
     );
 
+    /** Só os ids dos produtos ativos que batem com os filtros; quem ordena e pagina é o ranking. */
     @Query("""
-            SELECT p FROM Produto p
+            SELECT p.id FROM Produto p
             WHERE p.ativo = true
               AND (:q IS NULL OR LOWER(p.nome) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
                    OR LOWER(p.descricao) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
@@ -48,11 +50,14 @@ public interface ProdutoRepository extends JpaRepository<Produto, Long> {
               AND (:precoMin IS NULL OR p.preco >= :precoMin)
               AND (:precoMax IS NULL OR p.preco <= :precoMax)
             """)
-    Page<Produto> search(
+    List<Long> searchIds(
             @Param("q") String q,
             @Param("categoriaIds") Collection<Long> categoriaIds,
             @Param("precoMin") java.math.BigDecimal precoMin,
-            @Param("precoMax") java.math.BigDecimal precoMax,
-            Pageable pageable
+            @Param("precoMax") java.math.BigDecimal precoMax
     );
+
+    /** Produtos com as imagens já carregadas; a ordem dos ids não é garantida. */
+    @Query("SELECT p FROM Produto p LEFT JOIN FETCH p.imagens WHERE p.id IN :ids")
+    List<Produto> findAllByIdInWithImagens(@Param("ids") Collection<Long> ids);
 }

@@ -42,8 +42,11 @@ export async function listAdminUsuarios(params?: {
   tipo?: string
   categoria?: string
   nivel?: NivelInteresse
+  ativo?: boolean
   page?: number
   limit?: number
+  /** "campo,asc|desc" com campo em nome, email, scoreMaxProduto, topCategoria, ultimaAtividade. */
+  sort?: string
 }): Promise<Page<AdminUsuarioListItem>> {
   if (!USE_MOCK) {
     const { data } = await apiClient.get<Page<AdminUsuarioListItem>>('/admin/usuarios', {
@@ -81,6 +84,21 @@ export async function listAdminUsuarios(params?: {
     const nivel = params.nivel
     enriched = enriched.filter((u) => nivelDoScore(u.scoreMaxProduto) === nivel)
   }
+  if (params?.ativo !== undefined) enriched = enriched.filter((u) => u.ativo === params.ativo)
+  if (params?.sort) {
+    const [campo, dir] = params.sort.split(',')
+    const sinal = dir === 'desc' ? -1 : 1
+    const valor = (u: AdminUsuarioListItem) =>
+      campo === 'nome' ? (u.nomeCompleto ?? u.razaoSocial) : u[campo as keyof AdminUsuarioListItem]
+    enriched.sort((a, b) => {
+      const [x, y] = [valor(a), valor(b)]
+      const ordem =
+        typeof x === 'number' || typeof y === 'number'
+          ? Number(x ?? -1) - Number(y ?? -1)
+          : String(x ?? '').localeCompare(String(y ?? ''))
+      return ordem * sinal
+    })
+  }
   const page = params?.page ?? 1
   const limit = params?.limit ?? 20
   const start = (page - 1) * limit
@@ -103,6 +121,7 @@ export async function getAdminUsuario(id: number): Promise<AdminUsuarioDetalhe> 
   const compras = mockCompras.filter((c) => c.usuarioId === id)
   return {
     usuario: { ...user },
+    contatoProativo: false,
     scoresProduto: mockProdutos.slice(0, 3).map((p, i) => ({
       produtoId: p.id,
       produtoNome: p.nome,
@@ -173,6 +192,9 @@ export async function listAdminProdutos(params?: {
   q?: string
   page?: number
   limit?: number
+  ativo?: boolean
+  /** "campo,asc|desc" com campo em nome, slug, preco, updatedAt. */
+  sort?: string
 }): Promise<Page<Produto>> {
   if (!USE_MOCK) {
     const { data } = await apiClient.get<Page<Produto>>('/admin/produtos', {
@@ -185,6 +207,12 @@ export async function listAdminProdutos(params?: {
   if (params?.q) {
     const term = params.q.toLowerCase()
     items = items.filter((p) => p.nome.toLowerCase().includes(term) || p.slug.includes(term))
+  }
+  if (params?.ativo !== undefined) items = items.filter((p) => p.ativo === params.ativo)
+  if (params?.sort) {
+    const [campo, dir] = params.sort.split(',') as [keyof Produto, string]
+    const sinal = dir === 'desc' ? -1 : 1
+    items = [...items].sort((a, b) => (a[campo]! > b[campo]! ? 1 : a[campo]! < b[campo]! ? -1 : 0) * sinal)
   }
   const page = params?.page ?? 1
   const limit = params?.limit ?? 20
@@ -397,8 +425,9 @@ export async function recalcularScores(): Promise<{ recalculados: number }> {
   return { recalculados: 0 }
 }
 
+/** telefone: null = não altera, '' = limpa. Senha só muda com senhaAtual + novaSenha. */
 export async function updateAdminConta(
-  patch: Partial<Pick<Usuario, 'telefone' | 'email'>>,
+  patch: Partial<Pick<Usuario, 'telefone' | 'email'>> & { senhaAtual?: string; novaSenha?: string },
 ): Promise<Usuario> {
   if (!USE_MOCK) {
     const { data } = await apiClient.patch<Usuario>('/admin/conta', patch)
@@ -407,6 +436,7 @@ export async function updateAdminConta(
   await delay()
   const admin = mockUsuarios.find((u) => u.tipo === 'ADMIN')
   if (!admin) throw new ApiError('NOT_FOUND', 'Admin não encontrado', 404)
-  Object.assign(admin, patch, { updatedAt: new Date().toISOString() })
+  const { email, telefone } = patch
+  Object.assign(admin, { email: email ?? admin.email, telefone: telefone === '' ? null : (telefone ?? admin.telefone) }, { updatedAt: new Date().toISOString() })
   return { ...admin }
 }

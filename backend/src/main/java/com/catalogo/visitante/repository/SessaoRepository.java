@@ -11,11 +11,16 @@ import com.catalogo.visitante.entity.Sessao;
 
 public interface SessaoRepository extends JpaRepository<Sessao, Long> {
 
-    Optional<Sessao> findFirstByVisitante_IdAndEncerradaEmIsNullOrderByIniciadaEmDesc(Long visitanteId);
+    Optional<Sessao> findFirstByVisitante_IdAndUsuarioIsNullAndEncerradaEmIsNullOrderByIniciadaEmDesc(Long visitanteId);
 
     Optional<Sessao> findFirstByUsuario_IdAndEncerradaEmIsNullOrderByIniciadaEmDesc(Long usuarioId);
 
+    /** Só sessões ainda sem dono: uma migração nunca leva a sessão de outro usuário. */
     @Modifying(clearAutomatically = true)
-    @Query(value = "UPDATE sessao SET usuario_id = :usuarioId WHERE visitante_id = :visitanteId", nativeQuery = true)
+    @Query(value = """
+            UPDATE sessao
+            SET usuario_id = :usuarioId
+            WHERE visitante_id = :visitanteId AND usuario_id IS NULL
+            """, nativeQuery = true)
     int attachUsuarioToVisitanteSessoes(@Param("usuarioId") Long usuarioId, @Param("visitanteId") Long visitanteId);
 }

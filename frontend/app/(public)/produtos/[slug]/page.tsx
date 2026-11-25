@@ -116,23 +116,45 @@ export default function ProdutoPage() {
       }
     }
 
+    // Um TEMPO_PAGINA por visita, no que vier primeiro: pagehide (recarregar, fechar a aba, digitar
+    // outra URL) ou unmount (navegação interna). Antes só o unmount enviava e recarregar perdia o tempo.
+    // Não envia em visibilitychange: a visita seguiria e viraria vários eventos parciais.
+    let enviado = false
+    function enviarTempo(keepalive: boolean) {
+      if (enviado) return
+      enviado = true
+      tick()
+      const seconds = Math.round(activeMs.current / 1000)
+      activeMs.current = 0
+      if (seconds > 0) {
+        track(
+          { tipo: 'TEMPO_PAGINA', produtoId: produto!.id, metadados: { segundos_ativos: seconds } },
+          { keepalive },
+        )
+      }
+    }
+    const onPageHide = () => enviarTempo(true)
+    // Voltou pelo cache do navegador (bfcache): é uma nova visita, o tempo conta de novo.
+    function onPageShow(e: PageTransitionEvent) {
+      if (!e.persisted) return
+      enviado = false
+      lastTick.current = Date.now()
+    }
+
     lastTick.current = Date.now()
     const interval = window.setInterval(tick, 1000)
     window.addEventListener('scroll', onScroll, { passive: true })
     document.addEventListener('visibilitychange', tick)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
 
     return () => {
       window.clearInterval(interval)
       window.removeEventListener('scroll', onScroll)
       document.removeEventListener('visibilitychange', tick)
-      const seconds = Math.round(activeMs.current / 1000)
-      if (seconds > 0) {
-        track({
-          tipo: 'TEMPO_PAGINA',
-          produtoId: produto.id,
-          metadados: { segundos_ativos: seconds },
-        })
-      }
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+      enviarTempo(false)
     }
   }, [produto, track])
 

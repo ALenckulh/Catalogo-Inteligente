@@ -117,6 +117,9 @@ export function PublicHeader() {
             href="/"
             id="header-logo"
             style={{
+              // inline-flex: como <a> inline, a logo ficava na linha de base do texto e descia em relação ao menu.
+              display: 'inline-flex',
+              alignItems: 'center',
               textDecoration: 'none',
               color: 'var(--text-neutral-strong)',
               fontWeight: 'var(--font-weight-semibold)',

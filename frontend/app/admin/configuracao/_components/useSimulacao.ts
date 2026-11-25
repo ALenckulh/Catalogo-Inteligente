@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { simularScoring } from '@/lib/api/admin'
 import type { ParametroDecay, PesoMetrica, SimulacaoResponse } from '@/lib/types'
 
@@ -15,6 +15,8 @@ export function useSimulacao(pesos: PesoMetrica[], decay: ParametroDecay[], ativ
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState(false)
   const seq = useRef(0)
+  // Incrementado por refazer(): os parâmetros não mudam ao salvar, mas o "Hoje" do servidor muda.
+  const [versao, setVersao] = useState(0)
   const chave = JSON.stringify({ pesos, decay })
 
   useEffect(() => {
@@ -37,7 +39,10 @@ export function useSimulacao(pesos: PesoMetrica[], decay: ParametroDecay[], ativ
         })
     }, DEBOUNCE_MS)
     return () => window.clearTimeout(t)
-  }, [chave, ativo])
+  }, [chave, ativo, versao])
 
-  return { data, carregando, erro }
+  /** Simula de novo com os mesmos parâmetros (ex.: depois de salvar e recalcular as notas). */
+  const refazer = useCallback(() => setVersao((v) => v + 1), [])
+
+  return { data, carregando, erro, refazer }
 }

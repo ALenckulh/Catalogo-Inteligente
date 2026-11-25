@@ -55,12 +55,20 @@ public final class ScoreCalculator {
     public static Resultado calcular(List<Evento> eventos, List<Compra> compras, ScoringParams params, OffsetDateTime agora) {
         double scoreMax = params.scoreMax();
 
+        // Produtos avaliados = com eventos ∪ comprados (compra sem nenhuma interação também pontua).
         Map<Long, List<Evento>> byProduto = new HashMap<>();
+        Map<Long, Produto> produtos = new HashMap<>();
         for (Evento e : eventos) {
             if (e.getProduto() == null || e.getProduto().getId() == null) {
                 continue;
             }
             byProduto.computeIfAbsent(e.getProduto().getId(), k -> new ArrayList<>()).add(e);
+            produtos.putIfAbsent(e.getProduto().getId(), e.getProduto());
+        }
+        for (Compra c : compras) {
+            if (c.getProduto() != null && c.getProduto().getId() != null) {
+                produtos.putIfAbsent(c.getProduto().getId(), c.getProduto());
+            }
         }
 
         Map<Long, Double> productScores = new HashMap<>();
@@ -73,10 +81,10 @@ public final class ScoreCalculator {
 
         double contatoPeso = params.pesos().getOrDefault(TipoEvento.CONTATO_WHATSAPP, 1.0);
 
-        for (Map.Entry<Long, List<Evento>> entry : byProduto.entrySet()) {
+        for (Map.Entry<Long, Produto> entry : produtos.entrySet()) {
             Long produtoId = entry.getKey();
-            List<Evento> pe = entry.getValue();
-            Produto produto = pe.getFirst().getProduto();
+            Produto produto = entry.getValue();
+            List<Evento> pe = byProduto.getOrDefault(produtoId, List.of());
             Long categoriaId = produto.getCategoria() != null ? produto.getCategoria().getId() : null;
             if (categoriaId != null) {
                 produtoCategoria.put(produtoId, categoriaId);
@@ -107,20 +115,24 @@ public final class ScoreCalculator {
             }
 
             // Cada compra do produto soma peso do WhatsApp × fator de idade (1,0 até 2 anos, depois 0,5).
+            int comprasDoProduto = 0;
             for (Compra c : compras) {
                 if (c.getProduto() != null && produtoId.equals(c.getProduto().getId())) {
                     OffsetDateTime compraEm = c.getDataCompra().atStartOfDay().atOffset(agora.getOffset());
                     raw += contatoPeso * DecayCalculator.purchaseAgeFactor(compraEm, agora);
+                    comprasDoProduto++;
                 }
             }
 
             // Normaliza para 0–100 dividindo pelo ScoreMax (soma dos pesos de produto).
             double normalized = Math.max(0.0, Math.min(100.0, raw / scoreMax * 100.0));
             productScores.put(produtoId, normalized);
-            productInteractions.put(produtoId, pe.size());
+            // Compra conta como interação: sem isso o peso ln(1 + n) do produto na categoria seria 0.
+            productInteractions.put(produtoId, pe.size() + comprasDoProduto);
 
+            // Faixa de preço segue só produtos com interação (comportamento anterior à inclusão das compras).
             BigDecimal preco = produto.getPreco();
-            if (preco != null) {
+            if (preco != null && !pe.isEmpty()) {
                 (hasConversion ? precosComConversao : precosSemConversao).add(preco);
             }
         }
@@ -217,14 +229,14 @@ public final class ScoreCalculator {
         return 1.0;
     }
 
+    /** Valor que não é número finito ("abc", "NaN", infinito) conta como 0: NaN contaminaria a nota inteira. */
     private static double toDouble(Object o) {
-        if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        double d;
         try {
-            return Double.parseDouble(String.valueOf(o));
+            d = o instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(o));
         } catch (NumberFormatException ex) {
             return 0.0;
         }
+        return Double.isFinite(d) ? d : 0.0;
     }
 }

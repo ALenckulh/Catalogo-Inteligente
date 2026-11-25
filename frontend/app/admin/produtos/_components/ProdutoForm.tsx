@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createProduto, updateProduto } from '@/lib/api/admin'
 import { listCategorias } from '@/lib/api/categorias'
 import { toApiError } from '@/lib/api/client'
+import { precoInputProps } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import type { Categoria, Produto, ProdutoInput } from '@/lib/types'
 import {
@@ -189,15 +190,21 @@ export function ProdutoForm({ initial }: Props) {
         <FormItem
           name="preco"
           label="Preço"
-          tooltip="Preço de referência (≥ 0)"
-          rules={[{ required: true, message: 'Informe o preço' }]}
+          tooltip="Preço de referência (maior que zero)"
+          rules={[
+            { required: true, message: 'Informe o preço' },
+            { type: 'number', min: 0.01, message: 'O preço deve ser maior que zero' },
+          ]}
         >
+          {/* pt-BR: sem isso "1234,50" era lido como 123450 e "1.234,50" como 1,23. */}
           <InputNumber
             id="admin-prod-form-preco"
-            min={0}
+            {...precoInputProps()}
+            precision={2}
             step={0.01}
+            prefix="R$"
             style={{ width: '100%' }}
-            placeholder="R$ 0,00"
+            placeholder="0,00"
           />
         </FormItem>
         <FormItem

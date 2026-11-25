@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiErrorBody } from '@/lib/types'
-import { API_BASE_URL, AUTH_TOKEN_KEY, USE_MOCK, VISITANTE_COOKIE_KEY } from './config'
+import { API_BASE_URL, AUTH_TOKEN_KEY, AUTH_USER_KEY, USE_MOCK } from './config'
+import { readVisitanteId } from './visitanteId'
 
 export const SESSION_CLEARED_EVENT = 'ci:session-cleared'
 
@@ -17,7 +18,7 @@ function clearStoredAuth(): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.removeItem(AUTH_TOKEN_KEY)
-    window.localStorage.removeItem('ci_auth_user')
+    window.localStorage.removeItem(AUTH_USER_KEY)
     window.dispatchEvent(new Event(SESSION_CLEARED_EVENT))
   } catch {
     /* ignore */
@@ -47,7 +48,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
-  const visitanteId = readStorage(VISITANTE_COOKIE_KEY)
+  const visitanteId = readVisitanteId()
   if (visitanteId) {
     config.headers['X-Visitante-Cookie-Id'] = visitanteId
   }

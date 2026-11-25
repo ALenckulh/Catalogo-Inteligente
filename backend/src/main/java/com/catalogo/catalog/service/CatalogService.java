@@ -6,12 +6,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,9 +54,9 @@ public class CatalogService {
 
     /**
      * Catálogo ordenado por intenção:
-     * 1) busca até 100 produtos ativos que batem com os filtros; 2) conta as interações do sujeito;
+     * 1) busca os ids dos produtos ativos que batem com os filtros; 2) conta as interações do sujeito;
      * 3) calcula o peso pessoal w (cold start); 4) nota final = w × nota pessoal + (1 − w) × popularidade;
-     * 5) ordena (desempate por id) e pagina em memória.
+     * 5) ordena os ids (desempate por id), corta a página e carrega do banco só os produtos dela.
      */
     @Transactional(readOnly = true)
     public PageResponse<ProdutoResponse> listProdutos(
@@ -85,11 +84,8 @@ public class CatalogService {
 
         String query = (q == null || q.isBlank()) ? null : q.trim();
 
-        // Fetch up to 100 candidates then rank in memory (TCC page size).
-        // Limite: com catálogo maior, o que passar dos 100 mais recentes não aparece; evolução = ordenar no SQL.
-        PageRequest fetchPage = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Produto> result = produtoRepository.search(query, categoriaIds, precoMin, precoMax, fetchPage);
-        List<Produto> produtos = new ArrayList<>(result.getContent());
+        // Só ids: todos os produtos entram no ranking sem carregar descrição, ficha e imagens de cada um.
+        List<Long> ids = new ArrayList<>(produtoRepository.searchIds(query, categoriaIds, precoMin, precoMax));
 
         long interactions = 0;
         boolean hasScores = false;
@@ -97,22 +93,31 @@ public class CatalogService {
             interactions = eventoRepository.countByUsuario_IdAndDeletedAtIsNull(usuarioId);
             hasScores = scoreProdutoRepository.countByUsuarioId(usuarioId) > 0;
         } else if (visitanteId != null) {
-            interactions = eventoRepository.countByVisitante_IdAndDeletedAtIsNull(visitanteId);
+            interactions = eventoRepository.countByVisitante_IdAndUsuarioIsNullAndDeletedAtIsNull(visitanteId);
             hasScores = scoreProdutoRepository.countByVisitanteId(visitanteId) > 0;
         }
 
         double personalWeight = rankingService.personalWeight(interactions, hasScores);
         Map<Long, BigDecimal> personal = rankingService.personalScores(usuarioId, visitanteId);
         Map<Long, BigDecimal> popularidade = rankingService.loadPopularidade();
-        rankingService.sortByRank(produtos, personalWeight, personal, popularidade);
+        rankingService.sortByRank(ids, personalWeight, personal, popularidade);
 
-        int from = Math.min(pageIndex * size, produtos.size());
-        int to = Math.min(from + size, produtos.size());
-        List<ProdutoResponse> pageContent = produtos.subList(from, to).stream()
+        int from = (int) Math.min((long) pageIndex * size, ids.size());
+        int to = Math.min(from + size, ids.size());
+        return new PageResponse<>(carregarNaOrdem(ids.subList(from, to)), pageIndex, size, ids.size());
+    }
+
+    private List<ProdutoResponse> carregarNaOrdem(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Produto> porId = produtoRepository.findAllByIdInWithImagens(ids).stream()
+                .collect(Collectors.toMap(Produto::getId, Function.identity()));
+        return ids.stream()
+                .map(porId::get)
+                .filter(Objects::nonNull)
                 .map(p -> ProdutoResponse.from(p, false))
                 .toList();
-
-        return new PageResponse<>(pageContent, pageIndex, size, produtos.size());
     }
 
     /** Backward-compatible overload for tests without actor. */

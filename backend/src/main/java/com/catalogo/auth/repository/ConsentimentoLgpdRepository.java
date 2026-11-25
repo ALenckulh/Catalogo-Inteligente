@@ -10,10 +10,10 @@ import com.catalogo.auth.entity.ConsentimentoLgpd;
 
 public interface ConsentimentoLgpdRepository extends JpaRepository<ConsentimentoLgpd, Long> {
 
-    Optional<ConsentimentoLgpd> findFirstByUsuario_IdAndTipoOrderByAceitoEmDesc(
+    Optional<ConsentimentoLgpd> findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
             Long usuarioId,
             TipoConsentimento tipo
     );
 
-    List<ConsentimentoLgpd> findByUsuario_IdOrderByAceitoEmDesc(Long usuarioId);
+    List<ConsentimentoLgpd> findByUsuario_IdOrderByAceitoEmDescIdDesc(Long usuarioId);
 }

@@ -1,17 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import Link from 'next/link'
-import { deleteProduto, listAdminProdutos, updateProduto } from '@/lib/api/admin'
+import { listAdminProdutos, updateProduto } from '@/lib/api/admin'
 import { formatDateTime, toMoneyBRL } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
+import { useTabelaPaginada } from '@/lib/hooks/useTabelaPaginada'
 import type { Produto } from '@/lib/types'
 import {
   Button,
   Flex,
   Input,
-  Popconfirm,
   Spin,
   Table,
   Tag,
@@ -20,7 +20,6 @@ import {
 import type { TableProps } from '@/components/ui'
 import {
   CheckCircleOutlined,
-  DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   StopOutlined,
@@ -31,28 +30,16 @@ const { Title } = Typography
 export default function AdminProdutosPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
   const { api, contextHolder } = useAppNotification()
-  const [items, setItems] = useState<Produto[]>([])
-  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [ativo, setAtivo] = useState<boolean | undefined>(undefined)
 
-  async function reload(term = q) {
-    setLoading(true)
-    try {
-      const res = await listAdminProdutos({ q: term || undefined })
-      setItems(res.items)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!isAdmin) return
-    const t = window.setTimeout(() => {
-      void reload()
-    }, 0)
-    return () => window.clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, q])
+  const buscar = useCallback(
+    (params: { page: number; limit: number; sort?: string }) =>
+      listAdminProdutos({ q: q || undefined, ativo, ...params }),
+    [q, ativo],
+  )
+  const { items, loading, setPage, reload, onTableChange, sortOrder, pagination } =
+    useTabelaPaginada<Produto>(buscar, isAdmin)
 
   if (authLoading || !isAdmin) {
     return (
@@ -67,41 +54,45 @@ export default function AdminProdutosPage() {
     {
       title: 'Nome',
       dataIndex: 'nome',
-      sorter: (a, b) => a.nome.localeCompare(b.nome),
+      sorter: true,
+      sortOrder: sortOrder('nome'),
     },
     {
       title: 'Slug',
       dataIndex: 'slug',
-      sorter: (a, b) => a.slug.localeCompare(b.slug),
+      sorter: true,
+      sortOrder: sortOrder('slug'),
     },
     {
       title: 'Preço',
       dataIndex: 'preco',
-      sorter: (a, b) => a.preco - b.preco,
+      sorter: true,
+      sortOrder: sortOrder('preco'),
       render: (v: number) => toMoneyBRL(v),
     },
     {
       title: 'Categoria',
       key: 'cat',
       render: (_, row) => row.categoria?.nome ?? '—',
-      sorter: (a, b) => (a.categoria?.nome ?? '').localeCompare(b.categoria?.nome ?? ''),
     },
     {
       title: 'Ativo',
       dataIndex: 'ativo',
+      key: 'ativo',
       filters: [
         { text: 'Sim', value: true },
         { text: 'Não', value: false },
       ],
-      onFilter: (v, row) => row.ativo === v,
-      render: (ativo: boolean) => (
-        <Tag color={ativo ? 'success' : 'default'}>{ativo ? 'Ativo' : 'Inativo'}</Tag>
+      filteredValue: ativo === undefined ? null : [ativo],
+      render: (valor: boolean) => (
+        <Tag color={valor ? 'success' : 'default'}>{valor ? 'Ativo' : 'Inativo'}</Tag>
       ),
     },
     {
       title: 'Atualizado',
       dataIndex: 'updatedAt',
-      sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
+      sorter: true,
+      sortOrder: sortOrder('updatedAt'),
       render: (d) => formatDateTime(d),
     },
     {
@@ -131,27 +122,6 @@ export default function AdminProdutosPage() {
               })
             }}
           />
-          <Popconfirm
-            title="Remover produto do catálogo?"
-            description="Esta ação é permanente e não pode ser desfeita."
-            okText="Remover"
-            cancelText="Cancelar"
-            onConfirm={() => {
-              void deleteProduto(row.id).then(() => {
-                api.success({ title: 'Produto removido' })
-                void reload()
-              })
-            }}
-          >
-            <Button
-              variant="text"
-              size="small"
-              color="danger"
-              icon={<DeleteOutlined />}
-              tooltip="Excluir"
-              id={`admin-prod-${row.id}-excluir`}
-            />
-          </Popconfirm>
         </Flex>
       ),
     },
@@ -175,7 +145,10 @@ export default function AdminProdutosPage() {
         placeholder="Informe o termo de busca"
         allowClear
         style={{ maxWidth: 320 }}
-        onSearch={setQ}
+        onSearch={(v) => {
+          setQ(v)
+          setPage(1)
+        }}
       />
       <Table
         size="small"
@@ -183,7 +156,12 @@ export default function AdminProdutosPage() {
         loading={loading}
         columns={columns}
         dataSource={items}
-        pagination={{ pageSize: 20 }}
+        pagination={pagination}
+        onChange={(p, filters, sorter) => {
+          const ativoFiltro = filters.ativo?.length === 1 ? (filters.ativo[0] as boolean) : undefined
+          setAtivo(ativoFiltro)
+          onTableChange(p, sorter, ativoFiltro !== ativo)
+        }}
       />
     </Flex>
   )

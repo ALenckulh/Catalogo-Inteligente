@@ -1,12 +1,12 @@
 # Backend — Catálogo Inteligente
 
-API Spring Boot do Catálogo Inteligente. Arquitetura: [frontend/docs/12-ARQUITETURA-BACKEND.md](../frontend/docs/12-ARQUITETURA-BACKEND.md). Contrato REST: [11-API-ENDPOINTS.md](../frontend/docs/11-API-ENDPOINTS.md).
+API Spring Boot do Catálogo Inteligente. Arquitetura: [docs/12-ARQUITETURA-BACKEND.md](../docs/12-ARQUITETURA-BACKEND.md). Contrato REST: [docs/11-API-ENDPOINTS.md](../docs/11-API-ENDPOINTS.md).
 
 ## Pré-requisitos
 
 - JDK 25+ (LTS). Sem JDK 25 local, o Gradle baixa via Foojay toolchain (`settings.gradle.kts`)
 - Docker Desktop (Postgres + RabbitMQ + Flyway)
-- Stack: Spring Boot **4.1.x** + Java **25** — ver [12-ARQUITETURA-BACKEND.md](../frontend/docs/12-ARQUITETURA-BACKEND.md)
+- Stack: Spring Boot **4.1.x** + Java **25** — ver [12-ARQUITETURA-BACKEND.md](../docs/12-ARQUITETURA-BACKEND.md)
 
 ## Infra local
 
@@ -36,16 +36,12 @@ Schema: só via Flyway em `database/migrations/` (a app **não** roda migrations
 ./gradlew build
 ```
 
-Gates antes de PR: `test` → `build`.
+Gates antes de PR (os mesmos do CI): `test` → `jacocoTestCoverageVerification` (mínimo de 75%).
 
 ## Estrutura
 
 Pacotes por domínio (`auth`, `catalog`, `eventos`, `scoring`, `admin`, `lgpd`, `visitante`) + `config` + `shared`.
 
-### Phase 1 endpoints
-
-- Auth: `POST /api/auth/signup|login|logout|password-reset|password-reset/confirm`
-- Admin login: `POST /api/admin/auth/login`
-- Catálogo: `GET /api/produtos`, `GET /api/produtos/{slug}`, `GET /api/categorias`
+Lista completa de rotas: [docs/11-API-ENDPOINTS.md](../docs/11-API-ENDPOINTS.md).
 
 Antes de `bootRun`: Postgres + Rabbit (`database/`) e Flyway migrate.

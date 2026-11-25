@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -83,7 +84,7 @@ class ContaServiceTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
         ConsentimentoLgpd old = consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, false, OffsetDateTime.now().minusDays(2));
         ConsentimentoLgpd neu = consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, true, OffsetDateTime.now());
-        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(1L)).thenReturn(List.of(neu, old));
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of(neu, old));
 
         var conta = service.getConta(1L);
 
@@ -93,14 +94,15 @@ class ContaServiceTest {
     }
 
     @Test
-    void patchWrongPasswordUnauthorized() {
+    void patchWrongPasswordBadRequest() {
         Usuario u = usuario(1L);
         u.setSenhaHash(passwordEncoder.encode("secret"));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
 
         ApiException ex = assertThrows(ApiException.class, () ->
                 service.patchConta(1L, new PatchContaRequest(null, null, null, null, "wrong", "nova1234")));
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("INVALID_PASSWORD", ex.getCode());
         verify(usuarioRepository, never()).save(any());
     }
 
@@ -111,20 +113,50 @@ class ContaServiceTest {
         when(consentimentoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.salvarConsentimentos(1L, new ConsentimentosBatchRequest(List.of(
-                new ConsentimentoItemRequest(TipoConsentimento.CONTATO_PROATIVO, true, "1.0", null)
+                new ConsentimentoItemRequest(TipoConsentimento.CONTATO_PROATIVO, true, "1.0")
         )));
 
         assertEquals(1, result.size());
         ArgumentCaptor<ConsentimentoLgpd> cap = ArgumentCaptor.forClass(ConsentimentoLgpd.class);
         verify(consentimentoRepository).save(cap.capture());
         assertEquals(TipoConsentimento.CONTATO_PROATIVO, cap.getValue().getTipo());
+        // Hora do servidor, nunca a do navegador.
+        assertTrue(Duration.between(cap.getValue().getAceitoEm(), OffsetDateTime.now()).abs().toSeconds() < 10);
+    }
+
+    /** Aba aberta como PF salvando com o token da PJ gravava o nome da pessoa na empresa. */
+    @Test
+    void pjNaoAceitaNomeNemIdade() {
+        Usuario pj = usuario(2L);
+        pj.setTipo(TipoUsuario.PJ);
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(pj));
+
+        for (PatchContaRequest r : List.of(
+                new PatchContaRequest(null, null, "Ana", null, null, null),
+                new PatchContaRequest(null, null, null, (short) 30, null, null))) {
+            ApiException ex = assertThrows(ApiException.class, () -> service.patchConta(2L, r));
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        }
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void contaDoAdminNaoEAnonimizada() {
+        Usuario admin = usuario(1L);
+        admin.setTipo(TipoUsuario.ADMIN);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(admin));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.excluirConta(1L));
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+        assertNull(admin.getDeletedAt());
+        verify(usuarioRepository, never()).save(any());
     }
 
     @Test
     void exportJsonMarksSolicitacaoAtendida() {
         Usuario u = usuario(1L);
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
-        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(1L)).thenReturn(List.of());
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of());
         when(favoritoRepository.findAtivosByUsuarioId(1L)).thenReturn(List.of());
         Evento e = new Evento();
         e.setTipo(TipoEvento.VISUALIZACAO_PRODUTO);

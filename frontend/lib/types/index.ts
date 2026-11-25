@@ -80,6 +80,9 @@ export interface ConsentimentoLgpd {
   aceitoEm: string
 }
 
+/** Envio: a data é do servidor. */
+export type ConsentimentoInput = Omit<ConsentimentoLgpd, 'aceitoEm'>
+
 export interface AuthSession {
   token: string
   usuario: Usuario

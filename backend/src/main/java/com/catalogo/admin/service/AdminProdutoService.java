@@ -2,6 +2,7 @@ package com.catalogo.admin.service;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,14 +33,30 @@ public class AdminProdutoService {
         this.categoriaRepository = categoriaRepository;
     }
 
+    private static final Set<String> SORT_FIELDS = Set.of("nome", "slug", "preco", "updatedAt");
+
+    /** @param sort "campo,asc|desc" com campo em {@link #SORT_FIELDS}; inválido ou nulo = id desc. */
     @Transactional(readOnly = true)
-    public PageResponse<ProdutoResponse> listar(String q, Boolean ativo, Integer page, Integer limit) {
+    public PageResponse<ProdutoResponse> listar(String q, Boolean ativo, Integer page, Integer limit, String sort) {
         int pageIndex = page == null || page < 0 ? 0 : page;
         int size = limit == null || limit < 1 ? 20 : Math.min(limit, 100);
         String query = q == null || q.isBlank() ? null : q.trim();
-        PageRequest pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "id"));
+        PageRequest pageable = PageRequest.of(pageIndex, size, parseSort(sort));
         Page<Produto> result = produtoRepository.adminSearch(query, ativo, pageable);
         return PageResponse.from(result.map(p -> ProdutoResponse.from(p, true)));
+    }
+
+    private static Sort parseSort(String sort) {
+        if (sort != null) {
+            String[] parts = sort.split(",", -1);
+            String field = parts[0].trim();
+            if (SORT_FIELDS.contains(field)) {
+                boolean desc = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim());
+                // id como desempate: paginação estável quando há valores iguais.
+                return Sort.by(desc ? Sort.Direction.DESC : Sort.Direction.ASC, field).and(Sort.by("id"));
+            }
+        }
+        return Sort.by(Sort.Direction.DESC, "id");
     }
 
     @Transactional(readOnly = true)

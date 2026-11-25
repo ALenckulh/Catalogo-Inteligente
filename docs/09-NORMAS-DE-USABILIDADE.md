@@ -101,9 +101,9 @@ Texto obrigatório: pergunta explícita + consequência. Botão primário com **
 
 ```tsx
 <Popconfirm
-  message="Remover produto do catálogo?"
-  description="Esta ação é permanente e não pode ser desfeita."
-  okText="Remover"
+  title="Excluir compra?"
+  description="Ela sai do histórico do cliente e a nota é recalculada."
+  okText="Excluir"
   cancelText="Cancelar"
   onConfirm={handleDelete}
 >
@@ -176,7 +176,7 @@ Default `bordered`. **Preenchida** só em status crítico (erro grave, bloqueio)
 Texto que pode estourar precisa truncar + revelar via `Tooltip`:
 
 ```tsx
-<Tooltip message={produto.nome}>
+<Tooltip title={produto.nome}>
   <Text ellipsis style={{ maxWidth: 240 }}>{produto.nome}</Text>
 </Tooltip>
 ```

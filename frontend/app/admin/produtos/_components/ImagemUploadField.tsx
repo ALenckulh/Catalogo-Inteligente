@@ -9,6 +9,7 @@ import { Button, Flex, Image, Upload } from '@/components/ui'
 
 const THUMB = 64
 const ACCEPT = 'image/jpeg,image/png,image/webp'
+const FORMATO_INVALIDO = 'Formato não suportado. Envie JPEG, PNG ou WebP'
 
 interface Props {
   /** Injetados pelo FormItem. */
@@ -24,19 +25,27 @@ export function ImagemUploadField({ value, onChange, id, onError }: Props) {
 
   async function enviar(file: File) {
     if (!ACCEPT.split(',').includes(file.type)) {
-      onError('Formato não suportado. Envie JPEG, PNG ou WebP')
+      onError(FORMATO_INVALIDO)
       return
     }
     setEnviando(true)
     try {
       // Import sob demanda: a lib só é baixada quando o admin envia uma foto.
       const { default: imageCompression } = await import('browser-image-compression')
-      const comprimida = await imageCompression(file, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1600,
-        fileType: 'image/webp',
-        useWebWorker: true,
-      })
+      let comprimida: File
+      try {
+        comprimida = await imageCompression(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1600,
+          fileType: 'image/webp',
+          useWebWorker: true,
+        })
+      } catch {
+        // O file.type vem da extensão: um .txt renomeado para .jpg passa no filtro acima e só
+        // falha aqui, ao decodificar.
+        onError(FORMATO_INVALIDO)
+        return
+      }
       const { url } = await uploadImagem(comprimida)
       onChange?.(url)
     } catch (e) {

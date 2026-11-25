@@ -45,10 +45,12 @@ public class AdminUsuarioController {
             @RequestParam(required = false) BigDecimal scoreMin,
             @RequestParam(required = false) NivelInteresse nivel,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean ativo,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer limit
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String sort
     ) {
-        return usuarioService.listar(tipo, categoria, scoreMin, nivel, q, page, limit);
+        return usuarioService.listar(tipo, categoria, scoreMin, nivel, q, ativo, page, limit, sort);
     }
 
     @GetMapping("/{id}")

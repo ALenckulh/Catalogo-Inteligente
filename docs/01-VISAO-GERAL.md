@@ -54,8 +54,8 @@ O sistema funciona como **vitrine inteligente e catálogo gerenciável**, onde:
 
 Os dados, inspirados nos artigos de referência (ver [07-REFERENCIAS.md](07-REFERENCIAS.md)), alimentam o **cálculo de score de intenção** (regras + decay):
 
-- **Contexto da sessão:** hora, dia da semana, dispositivo, canal de origem.
-- **Navegação e engajamento:** sequência de páginas visitadas, tempo em página, profundidade de scroll, hover.
+- **Contexto da sessão:** hora e dia da semana (pela data da sessão), dispositivo e canal de origem (hoje sempre `web`).
+- **Navegação e engajamento:** sequência de páginas visitadas, tempo em página, profundidade de scroll.
 - **Interação com a busca:** termos pesquisados, cliques nos resultados, filtros aplicados.
 - **Interação com produtos:** visualizações, favoritações, cliques no botão do WhatsApp.
 - **Histórico (usuários identificados):** compras anteriores, valor total, categorias preferidas, recência.

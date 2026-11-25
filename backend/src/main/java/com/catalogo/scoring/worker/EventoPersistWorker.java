@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.catalogo.auth.entity.Usuario;
-import com.catalogo.catalog.entity.Categoria;
-import com.catalogo.catalog.entity.Produto;
+import com.catalogo.catalog.repository.CategoriaRepository;
+import com.catalogo.catalog.repository.ProdutoRepository;
 import com.catalogo.config.RabbitConfig;
 import com.catalogo.eventos.dto.EventoMessage;
 import com.catalogo.eventos.entity.Evento;
@@ -32,10 +32,19 @@ public class EventoPersistWorker {
     private static final Logger log = LoggerFactory.getLogger(EventoPersistWorker.class);
 
     private final EventoRepository eventoRepository;
+    private final ProdutoRepository produtoRepository;
+    private final CategoriaRepository categoriaRepository;
     private final ScoreEngine scoreEngine;
 
-    public EventoPersistWorker(EventoRepository eventoRepository, ScoreEngine scoreEngine) {
+    public EventoPersistWorker(
+            EventoRepository eventoRepository,
+            ProdutoRepository produtoRepository,
+            CategoriaRepository categoriaRepository,
+            ScoreEngine scoreEngine
+    ) {
         this.eventoRepository = eventoRepository;
+        this.produtoRepository = produtoRepository;
+        this.categoriaRepository = categoriaRepository;
         this.scoreEngine = scoreEngine;
     }
 
@@ -70,14 +79,11 @@ public class EventoPersistWorker {
             evento.setVisitante(v);
         }
         if (message.produtoId() != null) {
-            Produto p = new Produto();
-            p.setId(message.produtoId());
-            evento.setProduto(p);
+            // Referência, e não um Produto vazio: o recálculo, na mesma transação, lê preço e categoria deste objeto.
+            evento.setProduto(produtoRepository.getReferenceById(message.produtoId()));
         }
         if (message.categoriaId() != null) {
-            Categoria c = new Categoria();
-            c.setId(message.categoriaId());
-            evento.setCategoria(c);
+            evento.setCategoria(categoriaRepository.getReferenceById(message.categoriaId()));
         }
 
         evento.setConversao(message.conversao());

@@ -37,12 +37,14 @@ public class AdminContaService {
             }
             u.setEmail(email);
         }
+        // null = não altera; string vazia = limpa o telefone.
         if (request.telefone() != null) {
-            u.setTelefone(request.telefone());
+            u.setTelefone(request.telefone().isBlank() ? null : request.telefone().trim());
         }
         if (request.novaSenha() != null && !request.novaSenha().isBlank()) {
+            // 400, não 401: o front trata 401 como sessão expirada e deslogaria o admin.
             if (request.senhaAtual() == null || !passwordEncoder.matches(request.senhaAtual(), u.getSenhaHash())) {
-                throw new ApiException("UNAUTHORIZED", "Senha atual inválida", HttpStatus.UNAUTHORIZED);
+                throw new ApiException("INVALID_PASSWORD", "Senha atual inválida", HttpStatus.BAD_REQUEST);
             }
             u.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
         }

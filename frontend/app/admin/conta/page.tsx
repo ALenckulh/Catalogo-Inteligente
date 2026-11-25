@@ -23,7 +23,7 @@ const { Title, Paragraph } = Typography
 
 export default function AdminContaPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { user, logout } = useCurrentUser()
+  const { user, logout, updateUser } = useCurrentUser()
   const { api, contextHolder } = useAppNotification()
   const [form] = Form.useForm()
   const [error, setError] = useState<string | null>(null)
@@ -37,9 +37,17 @@ export default function AdminContaPage() {
   async function onFinish(values: { email: string; telefone?: string; senhaAtual?: string; novaSenha?: string }) {
     setError(null)
     setSaving(true)
+    const trocarSenha = Boolean(values.novaSenha)
     try {
-      await updateAdminConta({ email: values.email, telefone: values.telefone || null })
-      api.success({ title: 'Conta atualizada' })
+      const updated = await updateAdminConta({
+        email: values.email,
+        // '' limpa o telefone no backend; null seria "não alterar".
+        telefone: values.telefone?.trim() ?? '',
+        ...(trocarSenha ? { senhaAtual: values.senhaAtual, novaSenha: values.novaSenha } : {}),
+      })
+      updateUser(updated)
+      form.setFieldsValue({ senhaAtual: undefined, novaSenha: undefined })
+      api.success({ title: trocarSenha ? 'Conta e senha atualizadas' : 'Conta atualizada' })
     } catch (e) {
       setError(toApiError(e).message)
     } finally {
@@ -71,7 +79,7 @@ export default function AdminContaPage() {
       <Title level={2} style={{ margin: 0 }} id="admin-conta-title">
         Minha conta
       </Title>
-      <Paragraph type="secondary">Altere e-mail, telefone ou senha (mock).</Paragraph>
+      <Paragraph type="secondary">Altere e-mail, telefone ou senha.</Paragraph>
       {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <FormItem
@@ -85,11 +93,30 @@ export default function AdminContaPage() {
         <FormItem name="telefone" label="Telefone" tooltip="Contato do admin">
           <Input id="admin-conta-telefone" placeholder="Informe o telefone" />
         </FormItem>
-        <FormItem name="senhaAtual" label="Senha atual" tooltip="Necessária para trocar a senha (mock)">
-          <Input.Password id="admin-conta-senha-atual" placeholder="Informe a senha atual" />
+        <FormItem
+          name="senhaAtual"
+          label="Senha atual"
+          tooltip="Necessária para trocar a senha"
+          dependencies={['novaSenha']}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator: (_, v) =>
+                !getFieldValue('novaSenha') || v
+                  ? Promise.resolve()
+                  : Promise.reject(new Error('Informe a senha atual para trocar a senha')),
+            }),
+          ]}
+        >
+          <Input.Password id="admin-conta-senha-atual" placeholder="Informe a senha atual" autoComplete="current-password" />
         </FormItem>
-        <FormItem name="novaSenha" label="Nova senha" tooltip="Deixe em branco para manter">
-          <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" />
+        <FormItem
+          name="novaSenha"
+          label="Nova senha"
+          tooltip="Deixe em branco para manter"
+          rules={[{ min: 6, message: 'A nova senha deve ter pelo menos 6 caracteres' }]}
+        >
+          {/* new-password: o navegador não preenche sozinho, o que trocaria a senha ao salvar. */}
+          <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" autoComplete="new-password" />
         </FormItem>
         <Button
           id="admin-conta-salvar"

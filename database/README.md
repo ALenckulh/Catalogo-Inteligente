@@ -1,6 +1,6 @@
 # Banco de Dados — Catálogo Inteligente
 
-Ambiente local do PostgreSQL com migrações versionadas via Flyway, materializando o modelo documentado em [frontend/docs/08-MODELO-DE-DADOS.md](../frontend/docs/08-MODELO-DE-DADOS.md).
+Ambiente local do PostgreSQL com migrações versionadas via Flyway, materializando o modelo documentado em [docs/08-MODELO-DE-DADOS.md](../docs/08-MODELO-DE-DADOS.md).
 
 ## Pré-requisitos
 
@@ -22,7 +22,7 @@ docker compose up -d postgres
 docker compose run --rm flyway migrate
 ```
 
-Na primeira execução, o Flyway aplica V001 → V015 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
+Na primeira execução, o Flyway aplica V001 → V017 em ordem. O comando `migrate` é idempotente: nas execuções seguintes só aplica migrações novas.
 
 ## RabbitMQ (API / eventos)
 
@@ -127,7 +127,9 @@ database/
     ├── V012__align_scoring_decay_auth.sql  # XOR scores, boost_conversao, favorito.deleted_at, password_reset_token
     ├── V013__compra_editavel.sql           # compra.updated_at + trigger, índice de compras ativas
     ├── V014__imagem_arquivo.sql            # imagens de produto enviadas pelo admin (BYTEA)
-    └── V015__seed_catalogo_retifica.sql    # catálogo da Renova: peças, óleos, motores e serviços (substitui produtos do V011)
+    ├── V015__seed_catalogo_retifica.sql    # catálogo da Renova: peças, óleos, motores e serviços (substitui produtos do V011)
+    ├── V016__usuario_anonimizado_chk.sql   # conta excluída (LGPD) pode ficar sem CPF/CNPJ e nome
+    └── V017__remove_sessao_ip_hash.sql     # remove coluna nunca usada (o sistema não coleta IP)
 ```
 
 Após puxar o repositório com V012 (ou qualquer migração nova):
@@ -139,7 +141,7 @@ docker compose run --rm flyway migrate
 ## Adicionando novas migrações
 
 1. Crie um novo arquivo em `migrations/` seguindo a convenção `V{numero}__{descricao}.sql`.
-   - Exemplo: `V013__add_coluna_x_em_produto.sql`.
+   - Exemplo: `V018__add_coluna_x_em_produto.sql`.
 2. Rode `docker compose run --rm flyway migrate`.
 
 **Nunca** edite uma migração que já foi aplicada no histórico — o Flyway detecta e rejeita. Sempre faça uma nova migração para alterar o schema.

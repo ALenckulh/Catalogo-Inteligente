@@ -1,12 +1,14 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest'
 import { CookieConsentProvider } from '@/lib/contexts/CookieConsent/CookieConsentProvider'
+import { apiClient } from '@/lib/api/client'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 
-vi.mock('@/lib/api/visitantes', () => ({
-  abrirSessaoVisitante: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('@/lib/api/config', async (original) => ({ ...(await original<object>()), USE_MOCK: false }))
+
+// Nunca vai à rede, mesmo que o provider volte a chamar a API.
+const post = vi.spyOn(apiClient, 'post')
 
 function Probe() {
   const { needsDecision, acceptAll, acceptEssential, preferences } = useCookieConsent()
@@ -27,7 +29,9 @@ function Probe() {
 describe('CookieConsentProvider', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    post.mockReset().mockResolvedValue({ data: {} })
   })
+  afterEach(cleanup)
 
   it('needs decision after hydrate then persists acceptAll', async () => {
     const user = userEvent.setup()
@@ -48,5 +52,23 @@ describe('CookieConsentProvider', () => {
       expect(screen.getByTestId('level')).toHaveTextContent('all')
     })
     expect(window.localStorage.getItem('ci_cookie_consent')).toContain('"level":"all"')
+  })
+
+  it('não abre sessão de visitante ao aceitar nem ao recarregar (ela nasce no primeiro evento)', async () => {
+    const user = userEvent.setup()
+    const tela = (
+      <CookieConsentProvider>
+        <Probe />
+      </CookieConsentProvider>
+    )
+    const { unmount } = render(tela)
+    await waitFor(() => expect(screen.getByTestId('needs')).toHaveTextContent('true'))
+    await user.click(screen.getByRole('button', { name: 'all' }))
+    await waitFor(() => expect(screen.getByTestId('level')).toHaveTextContent('all'))
+    unmount()
+
+    render(tela)
+    await waitFor(() => expect(screen.getByTestId('level')).toHaveTextContent('all'))
+    expect(post).not.toHaveBeenCalled()
   })
 })

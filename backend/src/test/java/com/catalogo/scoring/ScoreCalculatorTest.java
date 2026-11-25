@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.catalogo.catalog.entity.Categoria;
+import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.eventos.domain.TipoEvento;
 import com.catalogo.eventos.entity.Evento;
@@ -139,6 +141,17 @@ class ScoreCalculatorTest {
     }
 
     @Test
+    void tempoNaoNumericoOuInfinitoValeZero() {
+        ScoringParams params = params(Map.of(TipoEvento.TEMPO_PAGINA, 1.0, TipoEvento.CONTATO_WHATSAPP, 3.0));
+        Produto p = produto(10L, 1L);
+        for (Object s : new Object[] {"NaN", "Infinity", "-Infinity", "abc", Double.NaN}) {
+            Evento e = evento(TipoEvento.TEMPO_PAGINA, p, AGORA);
+            e.setMetadados(Map.of("segundos_ativos", s));
+            assertEquals(0.0, nota(params, e), 1e-9, String.valueOf(s));
+        }
+    }
+
+    @Test
     void rolarAteOFimSomaNoMaximoOPesoCheio() {
         ScoringParams params = params(Map.of(TipoEvento.SCROLL_DEPTH, 1.0, TipoEvento.CONTATO_WHATSAPP, 3.0));
         Produto p = produto(10L, 1L);
@@ -151,6 +164,34 @@ class ScoreCalculatorTest {
         // 1 marco = 1/4 do peso (6,25); os 4 marcos = peso cheio (25)
         assertEquals(6.25, nota(params, marcos[0]), 1e-9);
         assertEquals(25.0, nota(params, marcos), 1e-9);
+    }
+
+    @Test
+    void compraDeProdutoSemEventosTambemPontua() {
+        ScoringParams params = params(Map.of(TipoEvento.VISUALIZACAO_PRODUTO, 1.0, TipoEvento.CONTATO_WHATSAPP, 3.0));
+        Produto visto = produto(10L, 1L);
+        Produto soComprado = produto(20L, 2L);
+        List<Compra> compras = List.of(
+                compra(visto, AGORA.toLocalDate()),
+                compra(visto, AGORA.toLocalDate()),
+                compra(soComprado, AGORA.toLocalDate())
+        );
+
+        var r = ScoreCalculator.calcular(
+                List.of(evento(TipoEvento.VISUALIZACAO_PRODUTO, visto, AGORA)), compras, params, AGORA);
+
+        // 1 compra recente = peso do WhatsApp (3) / (1 + 3) * 100 = 75
+        assertEquals(75.0, r.notasProduto().get(20L), 1e-9);
+        assertEquals(75.0, r.notasCategoria().get(2L), 1e-9);
+        // faixa de preço continua só com produtos que tiveram interação
+        assertEquals(1, r.precosSemConversao().size());
+    }
+
+    private static Compra compra(Produto p, LocalDate data) {
+        Compra c = new Compra();
+        c.setProduto(p);
+        c.setDataCompra(data);
+        return c;
     }
 
     private static Evento tempo(Produto p, int segundos) {

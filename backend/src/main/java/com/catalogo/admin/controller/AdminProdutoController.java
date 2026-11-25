@@ -42,9 +42,10 @@ public class AdminProdutoController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Boolean ativo,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer limit
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String sort
     ) {
-        return produtoService.listar(q, ativo, page, limit);
+        return produtoService.listar(q, ativo, page, limit, sort);
     }
 
     @GetMapping("/{id}")
@@ -65,7 +66,7 @@ public class AdminProdutoController {
     }
 
     @PatchMapping("/{id}")
-    public ProdutoResponse patch(@PathVariable Long id, @RequestBody PatchProdutoRequest input) {
+    public ProdutoResponse patch(@PathVariable Long id, @Valid @RequestBody PatchProdutoRequest input) {
         return produtoService.patch(id, input);
     }
 

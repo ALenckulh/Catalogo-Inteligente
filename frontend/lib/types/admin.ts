@@ -42,6 +42,8 @@ export type AdminUsuarioListItem = import('./index').Usuario & {
 
 export interface AdminUsuarioDetalhe {
   usuario: import('./index').Usuario
+  /** null = o cliente nunca respondeu. */
+  contatoProativo: boolean | null
   scoresProduto: ScoreProdutoRow[]
   scoresCategoria: ScoreCategoriaRow[]
   faixaPreco: FaixaPrecoUsuario

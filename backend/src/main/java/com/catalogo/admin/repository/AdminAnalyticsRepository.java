@@ -1,14 +1,22 @@
 package com.catalogo.admin.repository;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.springframework.stereotype.Repository;
 
+import com.catalogo.admin.domain.NivelInteresse;
+import com.catalogo.auth.domain.TipoUsuario;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 
-/** Números do dashboard admin em SQL nativo (agregações que ficariam ilegíveis em JPQL). */
+/** Dashboard e lista de clientes do admin em SQL nativo (agregações que ficariam ilegíveis em JPQL). */
 @Repository
 public class AdminAnalyticsRepository {
 
@@ -68,7 +76,7 @@ public class AdminAnalyticsRepository {
                     FROM score_categoria sc
                     JOIN categoria c ON c.id = sc.categoria_id
                     WHERE sc.usuario_id = u.id
-                    ORDER BY sc.valor DESC
+                    ORDER BY sc.valor DESC, sc.categoria_id
                     LIMIT 1
                 ) tc ON TRUE
                 LEFT JOIN LATERAL (
@@ -77,7 +85,7 @@ public class AdminAnalyticsRepository {
                     WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
                 ) ua ON TRUE
                 WHERE u.deleted_at IS NULL
-                ORDER BY mx.max_score DESC
+                ORDER BY mx.max_score DESC, u.id
                 LIMIT 50
                 """)
                 .getResultList()
@@ -170,19 +178,136 @@ public class AdminAnalyticsRepository {
                 .getResultList();
     }
 
+    /** Filtros da lista de clientes; nulo = sem filtro. */
+    public record FiltroUsuarios(
+            TipoUsuario tipo,
+            String categoria,
+            BigDecimal scoreMin,
+            NivelInteresse nivel,
+            String q,
+            Boolean ativo
+    ) {
+    }
+
+    /** pt-BR ignora acento e caixa na ordem; a collation padrão do Postgres Alpine põe "Ônibus" depois do Z. */
+    private static final String PT_BR = " COLLATE \"pt-BR-x-icu\"";
+
+    /** Colunas ordenáveis da lista de clientes: nome público → expressão SQL. */
+    private static final Map<String, String> ORDENACAO_USUARIOS = Map.of(
+            "nome", "COALESCE(u.nome_completo, u.razao_social)" + PT_BR,
+            "email", "u.email" + PT_BR,
+            "scoreMaxProduto", "mx.max_score",
+            "topCategoria", "tc.cat_nome" + PT_BR,
+            "ultimaAtividade", "ua.ultima"
+    );
+
+    /**
+     * Página de clientes: [id, nota máxima, top categoria, última atividade]. Uma consulta só; os LATERAL
+     * calculam os três valores por cliente, para que filtro, ordenação e paginação rodem no banco.
+     *
+     * @param sort "campo,asc|desc" com campo em {@link #ORDENACAO_USUARIOS}; inválido ou nulo = id desc.
+     */
     @SuppressWarnings("unchecked")
-    public List<Object[]> usuarioEnrichment(Long usuarioId) {
-        return em.createNativeQuery("""
-                SELECT
-                  (SELECT MAX(valor) FROM score_produto WHERE usuario_id = :uid),
-                  (SELECT c.nome FROM score_categoria sc
-                     JOIN categoria c ON c.id = sc.categoria_id
-                    WHERE sc.usuario_id = :uid
-                    ORDER BY sc.valor DESC LIMIT 1),
-                  (SELECT MAX(ocorrido_em) FROM evento
-                    WHERE usuario_id = :uid AND deleted_at IS NULL)
-                """)
-                .setParameter("uid", usuarioId)
-                .getResultList();
+    public List<Object[]> usuarios(FiltroUsuarios filtro, String sort, int limit, long offset) {
+        Map<String, Object> params = new HashMap<>();
+        String sql = "SELECT u.id, mx.max_score, tc.cat_nome, ua.ultima"
+                + fromUsuarios(filtro, params)
+                + " ORDER BY " + orderByUsuarios(sort)
+                + " LIMIT :limit OFFSET :offset";
+        params.put("limit", limit);
+        params.put("offset", offset);
+        return comParametros(sql, params).getResultList();
+    }
+
+    public long countUsuarios(FiltroUsuarios filtro) {
+        Map<String, Object> params = new HashMap<>();
+        String sql = "SELECT COUNT(*)" + fromUsuarios(filtro, params);
+        return ((Number) comParametros(sql, params).getSingleResult()).longValue();
+    }
+
+    private Query comParametros(String sql, Map<String, Object> params) {
+        Query query = em.createNativeQuery(sql);
+        params.forEach(query::setParameter);
+        return query;
+    }
+
+    /** Só entra no SQL o filtro preenchido: parâmetro nulo sem tipo quebra em query nativa no Postgres. */
+    private static String fromUsuarios(FiltroUsuarios f, Map<String, Object> params) {
+        StringBuilder sql = new StringBuilder("""
+
+                FROM usuario u
+                LEFT JOIN LATERAL (
+                    SELECT MAX(sp.valor) AS max_score
+                    FROM score_produto sp
+                    WHERE sp.usuario_id = u.id
+                ) mx ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT c.nome AS cat_nome
+                    FROM score_categoria sc
+                    JOIN categoria c ON c.id = sc.categoria_id
+                    WHERE sc.usuario_id = u.id
+                    ORDER BY sc.valor DESC, sc.categoria_id
+                    LIMIT 1
+                ) tc ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT MAX(e.ocorrido_em) AS ultima
+                    FROM evento e
+                    WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
+                ) ua ON TRUE
+                WHERE u.tipo <> 'ADMIN'
+                """);
+        if (f.tipo() != null) {
+            // Nome de enum Java, nunca texto do cliente; como parâmetro exigiria cast para tipo_usuario.
+            sql.append(" AND u.tipo = '").append(f.tipo().name()).append("'");
+        }
+        if (f.ativo() != null) {
+            sql.append(f.ativo() ? " AND u.deleted_at IS NULL" : " AND u.deleted_at IS NOT NULL");
+        }
+        if (f.q() != null && !f.q().isBlank()) {
+            sql.append(" AND (LOWER(u.email) LIKE :q")
+                    .append(" OR LOWER(u.nome_completo) LIKE :q")
+                    .append(" OR LOWER(u.razao_social) LIKE :q)");
+            params.put("q", "%" + f.q().trim().toLowerCase(Locale.ROOT) + "%");
+        }
+        if (f.categoria() != null && !f.categoria().isBlank()) {
+            sql.append(" AND LOWER(tc.cat_nome) = :categoria");
+            params.put("categoria", f.categoria().trim().toLowerCase(Locale.ROOT));
+        }
+        if (f.scoreMin() != null) {
+            sql.append(" AND mx.max_score >= :scoreMin");
+            params.put("scoreMin", f.scoreMin());
+        }
+        if (f.nivel() != null) {
+            switch (f.nivel()) {
+                case QUENTE -> {
+                    sql.append(" AND mx.max_score >= :alto");
+                    params.put("alto", NivelInteresse.ALTO);
+                }
+                case MORNO -> {
+                    sql.append(" AND mx.max_score >= :morno AND mx.max_score < :alto");
+                    params.put("morno", NivelInteresse.MORNO_MIN);
+                    params.put("alto", NivelInteresse.ALTO);
+                }
+                case FRIO -> {
+                    sql.append(" AND mx.max_score < :morno");
+                    params.put("morno", NivelInteresse.MORNO_MIN);
+                }
+                case SEM_SCORE -> sql.append(" AND mx.max_score IS NULL");
+            }
+        }
+        return sql.toString();
+    }
+
+    /** Sem valor = menor que todos (primeiro no crescente); id como desempate deixa a paginação estável. */
+    static String orderByUsuarios(String sort) {
+        if (sort != null) {
+            String[] parts = sort.split(",", -1);
+            String coluna = ORDENACAO_USUARIOS.get(parts[0].trim());
+            if (coluna != null) {
+                boolean desc = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim());
+                return coluna + (desc ? " DESC NULLS LAST" : " ASC NULLS FIRST") + ", u.id";
+            }
+        }
+        return "u.id DESC";
     }
 }

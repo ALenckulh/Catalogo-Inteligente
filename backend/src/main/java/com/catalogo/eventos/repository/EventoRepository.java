@@ -36,18 +36,19 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
             """)
     List<Evento> findAtivosByUsuarioId(@Param("usuarioId") Long usuarioId);
 
+    /** Só eventos ainda anônimos: os migrados para uma conta contam na nota do usuário, não na do visitante. */
     @Query("""
             SELECT e FROM Evento e
             LEFT JOIN FETCH e.produto p
             LEFT JOIN FETCH p.categoria
-            WHERE e.visitante.id = :visitanteId AND e.deletedAt IS NULL
+            WHERE e.visitante.id = :visitanteId AND e.usuario IS NULL AND e.deletedAt IS NULL
             ORDER BY e.ocorridoEm DESC
             """)
     List<Evento> findAtivosByVisitanteId(@Param("visitanteId") Long visitanteId);
 
     long countByUsuario_IdAndDeletedAtIsNull(Long usuarioId);
 
-    long countByVisitante_IdAndDeletedAtIsNull(Long visitanteId);
+    long countByVisitante_IdAndUsuarioIsNullAndDeletedAtIsNull(Long visitanteId);
 
     @Query(value = """
             SELECT produto_id, tipo, COUNT(*)

@@ -14,7 +14,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.catalogo.catalog.entity.Produto;
 import com.catalogo.scoring.engine.PopularidadeGlobalService;
 import com.catalogo.scoring.engine.RankingService;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
@@ -50,21 +49,20 @@ class RankingServiceTest {
 
     @Test
     void sortPrefersHigherBlended() {
-        Produto a = produto(1L);
-        Produto b = produto(2L);
-        List<Produto> list = new ArrayList<>(List.of(a, b));
+        List<Long> list = new ArrayList<>(List.of(1L, 2L));
         rankingService.sortByRank(
                 list,
                 1.0,
                 Map.of(1L, BigDecimal.TEN, 2L, BigDecimal.valueOf(90)),
                 Map.of(1L, BigDecimal.ZERO, 2L, BigDecimal.ZERO)
         );
-        assertEquals(2L, list.getFirst().getId());
+        assertEquals(List.of(2L, 1L), list);
     }
 
-    private static Produto produto(Long id) {
-        Produto p = new Produto();
-        p.setId(id);
-        return p;
+    @Test
+    void sortDesempataPorMenorId() {
+        List<Long> list = new ArrayList<>(List.of(300L, 2L, 150L, 1L));
+        rankingService.sortByRank(list, 0.0, Map.of(), Map.of(150L, BigDecimal.ONE));
+        assertEquals(List.of(150L, 1L, 2L, 300L), list);
     }
 }

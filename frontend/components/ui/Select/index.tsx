@@ -35,7 +35,6 @@ export function usePageableSelect({
 
   const abortRef = React.useRef<AbortController | null>(null)
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialLoadedRef = React.useRef(false)
 
   const load = React.useCallback(
     async (nextPage: number, searchTerm: string, append: boolean) => {
@@ -78,12 +77,13 @@ export function usePageableSelect({
 
   const onOpenChange = React.useCallback(
     (open: boolean) => {
-      if (!open) return
-      if (initialLoadedRef.current) return
-      initialLoadedRef.current = true
-      void load(0, search, false)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      // Ao fechar, o AntD limpa o campo de busca sem chamar onSearch: reabrir recarrega sem o termo antigo.
+      if (!open || (options.length > 0 && search === '')) return
+      setSearch('')
+      void load(0, '', false)
     },
-    [load, search],
+    [load, search, options.length],
   )
 
   React.useEffect(() => {

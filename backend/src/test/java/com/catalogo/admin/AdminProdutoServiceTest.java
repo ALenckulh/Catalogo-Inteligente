@@ -14,10 +14,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.catalogo.admin.dto.PatchProdutoRequest;
 import com.catalogo.admin.dto.ProdutoInput;
@@ -97,8 +99,24 @@ class AdminProdutoServiceTest {
                 .thenReturn(new PageImpl<>(List.of(p)));
         when(produtoRepository.findByIdWithDetails(3L)).thenReturn(Optional.of(p));
 
-        assertEquals(1, service.listar(null, null, null, null).total());
+        assertEquals(1, service.listar(null, null, null, null, null).total());
         assertEquals("P", service.getById(3L).nome());
+    }
+
+    @Test
+    void listarOrdenaSoPorCamposPermitidos() {
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        when(produtoRepository.adminSearch(any(), any(), pageable.capture())).thenReturn(new PageImpl<>(List.of()));
+
+        service.listar(null, null, 2, 20, "preco,desc");
+        service.listar(null, null, null, null, "senha_hash,asc");
+        service.listar(null, null, null, null, ",");
+
+        Sort porPreco = pageable.getAllValues().get(0).getSort();
+        assertEquals(Sort.Direction.DESC, porPreco.getOrderFor("preco").getDirection());
+        assertEquals(2, pageable.getAllValues().get(0).getPageNumber());
+        assertEquals(Sort.by(Sort.Direction.DESC, "id"), pageable.getAllValues().get(1).getSort());
+        assertEquals(Sort.by(Sort.Direction.DESC, "id"), pageable.getAllValues().get(2).getSort());
     }
 
     @Test

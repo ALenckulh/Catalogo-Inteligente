@@ -8,10 +8,13 @@ import {
   loginAdmin as apiLoginAdmin,
   logout as apiLogout,
   persistSession,
+  persistUser,
   readStoredUser,
   signup as apiSignup,
 } from '@/lib/api/auth'
 import { SESSION_CLEARED_EVENT } from '@/lib/api/client'
+import { AUTH_USER_KEY } from '@/lib/api/config'
+import { esquecerVisitante } from '@/lib/api/visitanteId'
 import { CurrentUserContext, type CurrentUserValue } from './CurrentUserContext'
 
 interface Props {
@@ -28,12 +31,26 @@ export function CurrentUserProvider({ children }: Props) {
       setLoading(false)
     }, 0)
     function onSessionCleared() {
+      esquecerVisitante()
       setUser(null)
     }
+    // Login, logout ou troca de conta em outra aba: as chamadas já usariam o token novo, então a tela tem de
+    // acompanhar (senão salvar aqui gravaria na outra conta). ci_auth_user é a última chave gravada no login.
+    function onStorage(e: StorageEvent) {
+      if (e.key === null || e.key === AUTH_USER_KEY) setUser(readStoredUser())
+    }
+    // Página que voltou do cache do navegador não recebeu os eventos de storage enquanto estava congelada.
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) setUser(readStoredUser())
+    }
     window.addEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('pageshow', onPageShow)
     return () => {
       window.clearTimeout(t)
       window.removeEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('pageshow', onPageShow)
     }
   }, [])
 
@@ -68,7 +85,13 @@ export function CurrentUserProvider({ children }: Props) {
   const logout = useCallback(async () => {
     await apiLogout()
     clearSession()
+    esquecerVisitante()
     setUser(null)
+  }, [])
+
+  const updateUser = useCallback((usuario: Usuario) => {
+    persistUser(usuario)
+    setUser(usuario)
   }, [])
 
   const value = useMemo<CurrentUserValue>(
@@ -79,10 +102,11 @@ export function CurrentUserProvider({ children }: Props) {
       loginAdmin,
       signup,
       logout,
+      updateUser,
       isAuthenticated: user !== null && user.tipo !== 'ADMIN',
       isAdmin: user?.tipo === 'ADMIN',
     }),
-    [user, loading, login, loginAdmin, signup, logout],
+    [user, loading, login, loginAdmin, signup, logout, updateUser],
   )
 
   return (

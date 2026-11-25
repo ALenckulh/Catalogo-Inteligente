@@ -1,6 +1,6 @@
 # API — Catálogo de Endpoints
 
-Catálogo REST do backend Spring Boot. Expande o esboço de [05-ARQUITETURA.md §4](05-ARQUITETURA.md). Telas: [03-PAGINAS-E-UX.md](03-PAGINAS-E-UX.md). Requisitos: [02-REQUISITOS.md](02-REQUISITOS.md). Entidades: [08-MODELO-DE-DADOS.md](08-MODELO-DE-DADOS.md). Triggers de eventos: [03 §4.0.1](03-PAGINAS-E-UX.md). Contrato JSON alinhado aos DTOs do front ([SERVICES.md](padroes/SERVICES.md)).
+Catálogo REST do backend Spring Boot. Visão geral da arquitetura: [05-ARQUITETURA.md](05-ARQUITETURA.md). Telas: [03-PAGINAS-E-UX.md](03-PAGINAS-E-UX.md). Requisitos: [02-REQUISITOS.md](02-REQUISITOS.md). Entidades: [08-MODELO-DE-DADOS.md](08-MODELO-DE-DADOS.md). Triggers de eventos: [03 §4.0.1](03-PAGINAS-E-UX.md). Contrato JSON alinhado aos DTOs do front ([SERVICES.md](padroes/SERVICES.md)).
 
 ---
 
@@ -10,7 +10,7 @@ Catálogo REST do backend Spring Boot. Expande o esboço de [05-ARQUITETURA.md �
 |---|---|
 | Base pública | `/api` |
 | Base admin | `/api/admin` ([RNF07](02-REQUISITOS.md) — rota e auth distintas) |
-| Auth | JWT ou sessão. Níveis: `público` · `auth` (PF/PJ) · `admin` · `visitante+cookie` |
+| Auth | JWT no header `Authorization: Bearer` (24 h). Níveis: `público` · `auth` (logado) · `admin` · `visitante+cookie`. Sem token válido → `401`; papel errado → `403 FORBIDDEN`. `/conta`, `/favoritos` e `/auth/migrar-historico` são só de cliente (PF/PJ) |
 | IDs | `produtoId` / `usuarioId` = `BIGINT`. Produto na URL pública usa `slug` |
 | **JSON wire** | **camelCase** em request/response (ex.: `emailAlternativo`, `produtoId`, `fichaTecnica`). Colunas DB permanecem snake_case ([08](08-MODELO-DE-DADOS.md)); mapear no backend (ex. Jackson). |
 | Erros | HTTP status + body `{ "code": string, "message": string }` |
@@ -36,8 +36,8 @@ Catálogo REST do backend Spring Boot. Expande o esboço de [05-ARQUITETURA.md �
 | Endpoint | Limite | Chave |
 |---|---|---|
 | `POST /api/auth/login`, `POST /api/admin/auth/login`, `POST /api/auth/signup`, `POST /api/auth/password-reset` | 5 req/min | IP |
-| `POST /api/eventos` | 60 req/min | `sessaoId` (ou `X-Visitante-Cookie-Id` quando sem sessão) |
-| Demais endpoints autenticados | 120 req/min | `usuarioId` |
+| `POST /api/eventos` | 60 req/min | `X-Visitante-Cookie-Id` (ou IP, sem o header) |
+| `POST /api/visitantes/sessao` | 30 req/min | IP |
 
 Excedido → `429 Too Many Requests` com header `Retry-After`.
 
@@ -52,31 +52,43 @@ IDs de tela conforme [03](03-PAGINAS-E-UX.md).
 | Tela | Rota UI | Endpoints |
 |---|---|---|
 | 1 Vitrine | `/` | `GET /api/produtos?destaque=…`, `GET /api/categorias` |
-| 2 Login | `/entrar` | `POST /api/auth/login`, `POST /api/auth/migrar-historico` † |
-| 3 Cadastro | `/cadastro` | `POST /api/auth/signup`, `POST /api/auth/migrar-historico` † |
+| 2 Login | `/entrar` | `POST /api/auth/login`, `POST /api/auth/migrar-historico` |
+| 3 Cadastro | `/cadastro` | `POST /api/auth/signup`, `POST /api/auth/migrar-historico` |
 | 4 Recuperar senha | `/recuperar-senha` | `POST /api/auth/password-reset`, `…/confirm` |
 | 5 Catálogo | `/produtos` | `GET /api/produtos`, `GET /api/categorias`, `POST /api/eventos` |
 | 6 Produto | `/produtos/[slug]` | `GET /api/produtos/{slug}`, favoritos, `POST /api/eventos` |
 | 7 Favoritos | `/favoritos` | `GET/DELETE /api/favoritos…`, `POST /api/eventos` |
-| 8 Conta | `/conta` | `GET/PATCH /api/conta`, consentimentos, exportar †, LGPD † |
-| Global | bootstrap | `POST /api/visitantes/sessao` †, `POST /api/auth/logout` |
+| 8 Conta | `/conta` | `GET/PATCH /api/conta`, `POST …/consentimentos`, `GET …/exportar`, `DELETE /api/conta` |
+| Global | primeiro evento / saída | `POST /api/visitantes/sessao`, `POST /api/auth/logout` |
 | A1 | `/admin/entrar` | `POST /api/admin/auth/login` |
 | A2 | `/admin` | `GET /api/admin/dashboard` |
 | A3 | `/admin/usuarios` | `GET /api/admin/usuarios` |
 | A4 | `/admin/usuarios/[id]` | `GET …/usuarios/{id}`, `POST/PUT/DELETE …/compras` |
-| A5 | `/admin/produtos` | `GET/DELETE/PATCH /api/admin/produtos…` |
-| A6 | `/admin/produtos/novo` | `POST /api/admin/produtos` |
-| A7 | `/admin/produtos/[id]/editar` | `GET /api/admin/produtos/{id}`, `PATCH /api/admin/produtos/{id}` |
+| A5 | `/admin/produtos` | `GET/PATCH /api/admin/produtos…` |
+| A6 | `/admin/produtos/novo` | `POST /api/admin/produtos`, `POST …/imagens` |
+| A7 | `/admin/produtos/[id]/editar` | `GET /api/admin/produtos/{id}`, `PATCH /api/admin/produtos/{id}`, `POST …/imagens` |
 | A8 | `/admin/conta` | `GET/PATCH /api/admin/conta` |
-| A9 | `/admin/configuracao` | `GET/PATCH …/pesos`, `GET/PATCH …/decay`, `DELETE …/decay/{categoriaId}` |
+| A9 | `/admin/configuracao` | `GET/PATCH …/pesos`, `GET/PATCH …/decay`, `DELETE …/decay/{categoriaId}`, `POST …/simular`, `POST …/recalcular` |
+| A11 | `/admin/projeto` | `GET …/pesos`, `GET …/decay` |
 
-† Front mock ainda não consome (doc-only / prioridade futura). S0–S3 e A10 (design-system): sem API de negócio.
+S0–S3 e A10 (design-system): sem API de negócio. Sem tela: `POST /api/conta/solicitacoes-lgpd`, `GET/PATCH /api/admin/solicitacoes-lgpd`, `DELETE /api/admin/produtos/{id}` e `GET /api/health`.
 
 ---
 
 ## 3. Catálogo detalhado
 
 Formato de cada entrada: **Method Path** — auth · telas · RF · entidades · notas.
+
+### 3.0 Saúde
+
+#### `GET /api/health`
+
+| | |
+|---|---|
+| **Auth** | público |
+| **Resposta** | `{ "status": "UP" }` |
+
+---
 
 ### 3.1 Auth e sessão
 
@@ -108,9 +120,9 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | | |
 |---|---|
 | **Auth** | auth (ou admin) |
-| **Telas** | header global |
+| **Telas** | 8, A8 |
 | **RF** | — |
-| **Notas** | Invalida sessão/token. |
+| **Notas** | Responde OK; quem esquece o token é o front. O JWT continua válido até expirar (24 h), exceto se a conta for excluída. |
 
 #### `POST /api/auth/password-reset`
 
@@ -140,19 +152,19 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **RF** | RF19 |
 | **Entidades** | `visitante`, `evento`, `sessao` |
 | **Body** | `aceitar: boolean` (associa cookie atual ao `usuarioId` ou descarta) |
-| **Notas** | [04 §7](04-ESPECIFICACAO-TECNICA.md). Front ainda não consome. Preenche `visitante.usuario_id` / `migrado_em`. |
+| **Notas** | [04 §7](04-ESPECIFICACAO-TECNICA.md). Preenche `visitante.usuario_id` / `migrado_em` e passa ao usuário só eventos e sessões ainda sem dono. |
 
 #### `POST /api/visitantes/sessao`
 
 | | |
 |---|---|
-| **Auth** | público |
-| **Telas** | global (primeira visita / refresh de sessão) |
+| **Auth** | público; com token, a sessão é do usuário |
+| **Telas** | 5, 6, 7 e header (no primeiro evento da visita) |
 | **RF** | RF18 |
 | **Entidades** | `visitante`, `sessao` |
 | **Body** | `cookieId?` (UUID), `fingerprint?`, contexto (`dispositivo`, `userAgent`, `canalOrigem`) |
-| **Resposta** | `cookieId`, `sessaoId` (cliente persiste cookie) |
-| **Notas** | Front ainda não consome; necessário para telemetria completa de visitante. |
+| **Resposta** | `cookieId` (null com token: sessão sem visitante), `sessaoId`. O cliente guarda o cookie por 30 dias e o esquece no logout |
+| **Notas** | Cada chamada insere uma sessão. O front só chama no primeiro evento da visita (com aceite dos cookies comportamentais) e reaproveita a sessão enquanto houver evento a cada 30 min. `cookieId` desconhecido → `400 INVALID_COOKIE`; o front cria outro visitante. |
 
 #### `POST /api/admin/auth/login`
 
@@ -259,7 +271,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Headers** | `X-Visitante-Cookie-Id: <uuid>` quando não autenticado |
 | **Body** | `tipo` (`TipoEvento`), `produtoId?`, `categoriaId?`, `conversao?` (`LEVE`\|`FORTE`\|`CONFIRMADA`), `metadados?` (objeto), `sessaoId?` |
 | **Resposta** | `202 Accepted` com body `{ "aceito": true }` — não espera persistência completa |
-| **Notas** | Sem consentimento → `403`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front atual envia `{ tipo, produtoId?, categoriaId?, conversao?, metadados? }`. `PESQUISA` com `produtoId` = cliente abriu um resultado da busca (soma no produto); `FILTRO_APLICADO` com `categoriaId` = filtro por categoria (soma na nota da categoria) — ver [13 — M1/M2](13-MUDANCAS-DE-ESCOPO.md). Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
+| **Notas** | `produtoId` ou `categoriaId` inexistente, ou texto com o caractere nulo → `400 VALIDATION_ERROR`. Logado sem consentimento → `403 CONSENT_REQUIRED`. Para o visitante, quem bloqueia o envio é o front: o backend não guarda o consentimento de quem não tem conta. `sessaoId` de outro usuário, de outro visitante ou sem o dono certo → `400 INVALID_SESSAO`. `sessaoId` obrigatório quando a sessão de visitante já foi criada via `POST /api/visitantes/sessao`; até lá o back pode resolver a sessão pelo header de cookie. Front envia `{ tipo, produtoId?, categoriaId?, conversao?, metadados?, sessaoId }` e, em `INVALID_SESSAO` ou `INVALID_COOKIE`, reabre a sessão e reenvia uma vez. `PESQUISA` com `produtoId` = cliente abriu um resultado da busca (soma no produto); `FILTRO_APLICADO` com `categoriaId` = filtro por categoria (soma na nota da categoria) — ver [13 — M1/M2](13-MUDANCAS-DE-ESCOPO.md). Triggers: [03 §4.0.1](03-PAGINAS-E-UX.md). Contato WhatsApp pausa decay ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). |
 
 Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_WHATSAPP`, `PESQUISA`, `FILTRO_APLICADO`, `SCROLL_DEPTH`, `TEMPO_PAGINA`.
 
@@ -283,7 +295,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | auth |
 | **Telas** | 8 |
 | **Body** | parcial: `telefone?`, `emailAlternativo?`, `nomeCompleto?`, `idade?`; troca de senha (opcional): `senhaAtual`, `novaSenha` |
-| **Notas** | Front consome os quatro primeiros campos. Não altera `tipo`. |
+| **Notas** | Front consome os quatro primeiros campos. Não altera `tipo`. Senha atual errada: `400 INVALID_PASSWORD` (não 401, que o front trata como sessão expirada). |
 
 #### `POST /api/conta/consentimentos`
 
@@ -293,8 +305,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | 8 (também implícito no signup) |
 | **RF** | RF04, RF28 |
 | **Entidades** | `consentimento_lgpd` |
-| **Body** | `{ "consentimentos": [{ "tipo", "aceito", "versaoTermos", "aceitoEm?" }] }` |
-| **Notas** | Batch. Revogar cookies → parar coleta ([04 §11](04-ESPECIFICACAO-TECNICA.md)). |
+| **Body** | `{ "consentimentos": [{ "tipo", "aceito", "versaoTermos" }] }` |
+| **Notas** | Batch. A data (`aceitoEm`, na resposta) é sempre a do servidor. Revogar cookies → parar coleta ([04 §11](04-ESPECIFICACAO-TECNICA.md)). |
 
 #### `GET /api/conta/exportar`
 
@@ -304,7 +316,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | 8 |
 | **RF** | RF29 |
 | **Query** | `formato=json\|csv` |
-| **Notas** | Portabilidade; pode criar `solicitacao_lgpd` tipo `EXPORTACAO` se assíncrono. Front ainda não chama (botão mock). |
+| **Notas** | Portabilidade: usuário, consentimentos vigentes, favoritos e eventos. Síncrono; grava uma `solicitacao_lgpd` `EXPORTACAO` já `ATENDIDA`. |
 
 #### `POST /api/conta/solicitacoes-lgpd`
 
@@ -316,7 +328,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Entidades** | `solicitacao_lgpd` |
 | **Body** | `tipo` (`EXPORTACAO`\|`EXCLUSAO`\|`REVOGACAO_CONSENTIMENTO`\|`CORRECAO`), `detalhes?` |
 | **Resposta** | `201` + status `PENDENTE` |
-| **Notas** | Front ainda não consome (exclusão mock via `DELETE /api/conta`). |
+| **Notas** | Nenhuma tela usa: a exportação e a exclusão da tela Conta têm rotas próprias. |
 
 #### `DELETE /api/conta`
 
@@ -325,7 +337,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | auth |
 | **Telas** | 8 |
 | **RF** | RF30 |
-| **Notas** | **Soft delete com anonimização de PII** ([08 §5.2](08-MODELO-DE-DADOS.md)): preenche `deleted_at` e zera PII; mantém `usuario_id` em eventos/compras/scores. Preferível enfileirar via `solicitacoes-lgpd` e confirmar antes de executar. |
+| **Notas** | **Soft delete com anonimização de PII** ([08 §5.2](08-MODELO-DE-DADOS.md)): preenche `deleted_at` e zera PII; mantém `usuario_id` em eventos/compras/scores. A tela pede confirmação antes. Grava uma `solicitacao_lgpd` `EXCLUSAO` já `ATENDIDA`. |
 
 ---
 
@@ -350,7 +362,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A3 |
 | **RF** | RF21 |
-| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?`, `page?`, `limit?` |
+| **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?`, `ativo?` (boolean), `page?`, `limit?` (até 100 por página), `sort?` (`campo,asc\|desc`; campos `nome`, `email`, `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`; outro valor = mais recentes primeiro) |
 | **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`) |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria` |
 
@@ -363,7 +375,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A4 |
 | **RF** | RF22 |
-| **Resposta** | `AdminUsuarioDetalhe`: `{ usuario, scoresProduto[{ produtoId, produtoNome, valor }], scoresCategoria[{ categoriaId, categoriaNome, valor }], faixaPreco[{ medianaComConversao, medianaSemConversao, gapPreco }], compras[] }` |
+| **Resposta** | `AdminUsuarioDetalhe`: `{ usuario, contatoProativo (boolean ou null = nunca respondeu), scoresProduto[{ produtoId, produtoNome, valor }], scoresCategoria[{ categoriaId, categoriaNome, valor }], faixaPreco[{ medianaComConversao, medianaSemConversao, gapPreco }], compras[] }` |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria`, `faixa_preco_usuario`, `compra` |
 
 #### `POST /api/admin/usuarios/{id}/compras`
@@ -411,9 +423,9 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A5 |
 | **RF** | RF23 |
-| **Query** | `q?`, `ativo?` †, `page?`, `limit?` |
+| **Query** | `q?`, `ativo?`, `page?`, `limit?` (até 100 por página), `sort?` (`campo,asc\|desc`; campos `nome`, `slug`, `preco`, `updatedAt`; outro valor = mais recentes primeiro) |
 | **Resposta** | `Page<Produto>` |
-| **Notas** | Inclui inativos. † Front ainda não envia `ativo`. |
+| **Notas** | Inclui inativos. |
 
 #### `GET /api/admin/produtos/{id}`
 
@@ -455,7 +467,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A5 (toggle ativo), A7 |
 | **RF** | RF23 |
-| **Body** | campos parciais do `POST` (incl. `fichaTecnica`, `imagens` — substituição da lista quando enviado) |
+| **Body** | campos parciais do `POST` (incl. `fichaTecnica`, `imagens` — substituição da lista quando enviado). Campo enviado segue a regra do `POST`: `preco` > 0, `nome` e `slug` não vazios (`400`) |
 
 #### `DELETE /api/admin/produtos/{id}`
 
@@ -464,7 +476,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A5 |
 | **RF** | RF23 |
-| **Notas** | Soft delete ou hard conforme política; UI com `Popconfirm` ([09](09-NORMAS-DE-USABILIDADE.md)). |
+| **Notas** | Soft delete (`ativo=false`). Sem botão na UI: a lista usa (Des)ativar. |
 
 ---
 
@@ -478,7 +490,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A8 |
 | **RF** | RF26 |
 | **Body (PATCH)** | `email?`, `telefone?`, `senhaAtual?` + `novaSenha?` |
-| **Notas** | Front hoje envia sobretudo `email`/`telefone`; campos de senha documentados para quando a UI ligar. |
+| **Notas** | `telefone` ausente ou nulo não altera; `""` limpa. `novaSenha` exige `senhaAtual`; se ela estiver errada, `400 INVALID_PASSWORD`. |
 
 #### `GET /api/admin/configuracao/pesos` · `PATCH /api/admin/configuracao/pesos`
 
@@ -554,13 +566,13 @@ Fluxo administrativo para processar os pedidos criados por `POST /api/conta/soli
 | **RF** | RF29, RF30 |
 | **Entidades** | `solicitacao_lgpd` |
 | **Body** | `status` (`EM_PROCESSAMENTO`\|`ATENDIDA`\|`REJEITADA`), `observacoes?` |
-| **Notas** | Transição para `ATENDIDA` em pedidos de `EXCLUSAO` executa o soft delete anonimizado ([08 §5.2](08-MODELO-DE-DADOS.md)); `EXPORTACAO` disponibiliza arquivo para download. Preenche `atendidoEm` em `ATENDIDA`/`REJEITADA`. |
+| **Notas** | Transição para `ATENDIDA` em pedidos de `EXCLUSAO` executa o soft delete anonimizado ([08 §5.2](08-MODELO-DE-DADOS.md)); `EXPORTACAO` só muda o status (não gera arquivo). Preenche `atendidoEm` em `ATENDIDA`/`REJEITADA`. |
 
 ---
 
-## 4. Lacunas fechadas vs [05 §4](05-ARQUITETURA.md)
+## 4. Endpoints acrescentados ao esboço original
 
-Itens neste doc que não estavam no esboço de arquitetura:
+Itens que não estavam no esboço inicial da arquitetura:
 
 | Endpoint | Motivo |
 |---|---|
@@ -572,14 +584,14 @@ Itens neste doc que não estavam no esboço de arquitetura:
 | `GET/PATCH /api/admin/configuracao/decay`, `DELETE …/decay/{categoriaId}` | RF25 λ / A9 |
 | `GET /api/admin/produtos/{id}` | A7 pré-preenche formulário |
 
-O esboço em 05 permanece como índice curto; **este arquivo é a fonte de verdade** para implementação.
+**Este arquivo é a fonte de verdade** da API.
 
 ---
 
 ## 5. Fora de escopo (API)
 
 - Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md))
-- Endpoints de treino/inferência ML síncronos (batch separado)
+- Treino ou inferência de modelos de ML (trabalho futuro)
 - Integração CRM / webhooks externos ([04 §13](04-ESPECIFICACAO-TECNICA.md))
 - Self-signup de admin (RF07)
 - Carrinho / pagamento (fora do produto)
@@ -603,6 +615,6 @@ O esboço em 05 permanece como índice curto; **este arquivo é a fonte de verda
 | RF21–22 | `GET /api/admin/usuarios…` |
 | RF23 | admin produtos CRUD (`GET/POST/PATCH/DELETE`, incl. `GET …/{id}`) |
 | RF24 | `POST/PUT/DELETE /api/admin/usuarios/{id}/compras…` |
-| RF25 | `configuracao/pesos`, `configuracao/decay` |
+| RF25 | `configuracao/pesos`, `configuracao/decay`, `configuracao/simular`, `configuracao/recalcular` |
 | RF26 | `GET/PATCH /api/admin/conta` |
 | RF28–30 | consentimentos, exportar, solicitacoes-lgpd (consumidor + admin), `DELETE /api/conta` |
