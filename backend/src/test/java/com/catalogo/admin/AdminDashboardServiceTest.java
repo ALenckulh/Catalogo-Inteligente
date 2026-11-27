@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -24,6 +23,7 @@ import com.catalogo.admin.service.AdminDashboardService;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.repository.UsuarioRepository;
 import com.catalogo.catalog.repository.ProdutoRepository;
+import com.catalogo.shared.Fuso;
 
 @ExtendWith(MockitoExtension.class)
 class AdminDashboardServiceTest {
@@ -100,7 +100,7 @@ class AdminDashboardServiceTest {
 
         ArgumentCaptor<OffsetDateTime> since = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(analyticsRepository).contatosPorDia(since.capture());
-        assertEquals(LocalDate.now().minusDays(13), since.getValue().toLocalDate());
+        assertEquals(Fuso.hoje().minusDays(13), since.getValue().toLocalDate());
         assertEquals(LocalTime.MIDNIGHT, since.getValue().toLocalTime());
     }
 }
