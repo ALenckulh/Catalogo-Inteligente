@@ -23,12 +23,12 @@ function Resumo({ d }: { d: SimulacaoImpacto }) {
     return (
       <Flex align="center" gap={8}>
         <CheckCircleOutlined style={{ color: palette.success[700] }} />
-        <Typography.Text>Nenhum cliente muda com estes ajustes.</Typography.Text>
+        <Typography.Text>Nenhum cliente muda</Typography.Text>
       </Flex>
     )
   }
   return (
-    <Typography.Text strong style={{ fontSize: 15 }}>
+    <Typography.Text strong>
       {partes.join(' · ')}
     </Typography.Text>
   )
@@ -86,8 +86,8 @@ export function Previa({
                 value={visao}
                 onChange={(v) => setVisao(v as 'nivel' | 'precisao')}
                 options={[
-                  { label: 'Nível dos clientes', value: 'nivel' },
-                  { label: 'Precisão das previsões', value: 'precisao' },
+                  { label: 'Nível', value: 'nivel' },
+                  { label: 'Precisão', value: 'precisao' },
                 ]}
               />
               {visao === 'nivel' ? <PreviaImpacto data={data.impacto} /> : <PreviaPrecisao data={data.precisao} />}

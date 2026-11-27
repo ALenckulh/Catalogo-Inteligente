@@ -35,6 +35,7 @@ public class Evento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Mapeia o enum nativo do Postgres (CREATE TYPE tipo_evento, V001): o banco recusa valores inválidos.
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "tipo_evento")
@@ -52,6 +53,7 @@ public class Evento {
     @JoinColumn(name = "visitante_id")
     private Visitante visitante;
 
+    // FK com ON DELETE SET NULL: o evento continua no histórico mesmo se o produto for apagado.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "produto_id")
     private Produto produto;
@@ -65,6 +67,8 @@ public class Evento {
     @Column(columnDefinition = "tipo_conversao")
     private TipoConversao conversao;
 
+    // JSONB para dados que variam por tipo (segundos_ativos, pct de rolagem, termo pesquisado, filtros);
+    // tem índice GIN no banco (V008) para buscas dentro do JSON.
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadados = new LinkedHashMap<>();

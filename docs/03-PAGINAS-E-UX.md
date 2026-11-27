@@ -65,22 +65,24 @@ Cadastro de admins feito pela TI; sem auto-signup. Rota separada da área públi
 | A1 | Login admin | `/admin/entrar` | Sem link na área pública |
 | A2 | Dashboard | `/admin` | KPIs + leads priorizados por score |
 | A3 | Lista de usuários | `/admin/usuarios` | Filtros, score, próxima compra, categorias |
-| A4 | Detalhe de usuário | `/admin/usuarios/[id]` | Scores, faixas de preço, histórico, registrar compra |
+| A4 | Detalhe de usuário | `/admin/usuarios/[id]` | Notas de interesse, faixas de preço, histórico, registrar/editar/excluir compra |
 | A5 | Catálogo admin | `/admin/produtos` | Lista com busca e CRUD |
 | A6 | Cadastro de produto | `/admin/produtos/novo` | Formulário de criação |
 | A7 | Edição de produto | `/admin/produtos/[id]/editar` | Reutiliza formulário de criação |
 | A8 | Minha conta | `/admin/conta` | E-mail, senha, telefone |
 | A9 | Configuração de scoring | `/admin/configuracao` | Pesos de métricas (`peso_metrica`) e λ (`parametro_decay`) |
 | A10 | Design system | `/admin/design-system` | Catálogo interno de tokens e componentes (uso admin) |
+| A11 | Sobre o projeto | `/admin/projeto` | Como a nota de interesse é calculada, em linguagem simples |
 
 ### 2.3 Páginas de apoio
 
 | # | Página | Rota | Motivo |
 |---|---|---|---|
-| S0 | Sobre o projeto (TCC) | `/sobre` | Landing acadêmica (Hero, scoring, cronograma). |
+| S0 | Sobre a empresa | `/sobre` | Apresentação da Renova Retífica (serviços, contato, horário). |
 | S1 | Política de Privacidade | `/privacidade` | Exigência LGPD |
 | S2 | Termos de Uso | `/termos` | Exigência LGPD |
 | S3 | Erro 404 | — | Boa prática de UX |
+| S5 | Ajuda | `/ajuda` | Pública: quem não consegue entrar também precisa dela |
 | S4 | Banner de cookies | — (global) | LGPD; primeira visita ([RF27](02-REQUISITOS.md)) |
 
 ---
@@ -104,14 +106,14 @@ Convenção de seções em cada tela: **Objetivo · Rota/auth · Layout · Conte
 
 ### 4.0 Comportamentos globais
 
-- **Banner de cookies (S4):** barra `sticky` inferior na primeira visita, em uma linha a partir de 768px (texto curto + link para Privacidade); não cobre o footer. Ações: Aceitar todos / Apenas essenciais / Personalizar. **Personalizar** abre `Modal` com Alert (essenciais sempre ativos), `Checkbox` de cookies comportamentais e “Salvar preferências”. Sem consentimento comportamental → sem coleta de eventos; recomendação só por Popularidade Global ([04 §10.2](04-ESPECIFICACAO-TECNICA.md)). Preferência válida 12 meses.
+- **Banner de cookies (S4):** barra `sticky` inferior na primeira visita (padding vertical `--space-6`, texto `--font-size-xl`, botão `large` com texto `--font-size-2xl`, 48px de altura e 192px de largura mínima), em uma linha a partir de 768px (texto sobre o uso dos cookies e onde mudar a escolha + link para Privacidade); não cobre o footer. Uma única ação: **Aceitar cookies e continuar** ([13 M23](13-MUDANCAS-DE-ESCOPO.md)). Logado numa conta que já aceitou, o banner não aparece: o navegador sem escolha adota o aceite da conta. Para recusar ou mudar depois: seção 4 da Política (`/privacidade`, switch deste navegador) ou aba Privacidade da conta. Sem consentimento comportamental → sem coleta de eventos; recomendação só por Popularidade Global ([04 §10.2](04-ESPECIFICACAO-TECNICA.md)). Preferência válida 12 meses.
 - **Eventos:** `POST /api/eventos` publica na fila e retorna rápido — não bloqueia UI ([RNF02](02-REQUISITOS.md)).
 - **Desktop-first**, responsivo; WCAG 2.1 AA ([RNF10](02-REQUISITOS.md), [RNF11](02-REQUISITOS.md)). Telas-alvo e padrões de layout, tipografia e fluxo: [09 §16–§21](09-NORMAS-DE-USABILIDADE.md).
 - **Skip-link:** layout público inclui link “Pular para o conteúdo” → `#main-content`.
 - **Header público:** sticky; logo → `/`; links Catálogo, Sobre (estado ativo conforme pathname); busca a partir de 992px, oculta em `/produtos` (Enter → `/produtos?q=`); se autenticado: Favoritos, Conta (label = `displayName`: nome/razão/e-mail, truncado com tooltip); se visitante: Entrar (leva `?next=` com a URL atual) / Cadastrar. Abaixo de 768px, nav e ações ficam em `Drawer`. Sem “Sair” (fica em `/conta`, [09 §20](09-NORMAS-DE-USABILIDADE.md)). Sem link para `/admin`.
-- **Footer público:** marca + links Catálogo / Sobre / Privacidade / Termos de Uso + linha de copyright “Uso acadêmico (TCC)”.
-- **Redirect `?next=`:** `/entrar` e `/cadastro` leem `next` (default `/`, só caminho interno via `safeNext`), repassam entre si e redirecionam após login, cadastro ou se já autenticado. Visitante em rotas autenticadas e CTAs “Entrar para…” usam o mesmo padrão (`/entrar?next=…`).
-- **Header admin:** sider (“Catálogo Inteligente” / subtítulo “Admin”), colapsável (`breakpoint=lg`); menu Dashboard, Usuários, Produtos, Configuração, **Design system**, Conta; top bar com e-mail do admin; “Sair da conta” fica em A8. `/admin/entrar` renderiza **fora** do shell (sem sider). Visitante no shell: CTA “Entrar” → `/admin/entrar`.
+- **Footer público:** marca + links Catálogo / Sobre / Ajuda / Privacidade / Preferências de cookies (seção Suas escolhas da Política) / Termos de Uso + linha de copyright “Uso acadêmico (TCC)”.
+- **Redirect `?next=`:** `/entrar` e `/cadastro` leem `next` (default `/`, só caminho interno via `safeNext`), repassam entre si e redirecionam após login, cadastro ou se já autenticado. Visitante em rotas autenticadas e CTAs “Entrar para…” usam o mesmo padrão (`/entrar?next=…`). No admin, `/admin/entrar?next=…` volta à tela pedida (só caminhos de `/admin`, `safeAdminNext`); ao sair pela Conta, não.
+- **Header admin:** sider (“Catálogo Inteligente” / subtítulo “Admin”), colapsável (`breakpoint=lg`; recolhido mostra só o símbolo); menu Dashboard, Usuários, Produtos, Configuração, **Design system**, Conta; top bar com e-mail do admin; “Sair da conta” fica em A8. `/admin/entrar` renderiza **fora** do shell (sem sider). Visitante no shell: CTA “Entrar” → `/admin/entrar`.
 - **ProdutoCard:** componente compartilhado (vitrine, catálogo, favoritos): `Card` hoverable, capa 4:3 (`contain`, com placeholder sem imagem), `Tag` categoria, nome (2 linhas + tooltip), preço BRL em destaque; clique → `/produtos/[slug]`.
 - **Forms admin:** labels com tooltips de ajuda nos campos (padrão das telas A1, A4, A6–A8).
 
@@ -123,14 +125,14 @@ Mapa das métricas de interesse ([04 §3](04-ESPECIFICACAO-TECNICA.md)) para enu
 |---|---|---|---|---|
 | Clique na página do produto | `VISUALIZACAO_PRODUTO` | 6 | Mount/hydration da ficha `/produtos/[slug]` (1× por abertura de página) | `produto_id`; alimenta retorno multi-sessão e sequência no backend |
 | Favoritar produto | `FAVORITAR` / `DESFAVORITAR` | 6, 7 | Clique favoritar na ficha; remover em favoritos (1 clique); Desfazer em favoritos emite `FAVORITAR` | `produto_id` |
-| Contato sobre produto | `CONTATO_WHATSAPP` + `conversao=LEVE` | 6 | Clique CTA “Entrar em contato” (só auth) | `produto_id`; pausa decay 60d ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)) |
+| Contato sobre produto | `CONTATO_WHATSAPP` + `conversao=LEVE` | 6 | Clique CTA “Entrar em contato” (só auth) | `produto_id`; pausa o decay (60 dias por padrão; [04 §5.4](04-ESPECIFICACAO-TECNICA.md)) |
 | Contato sobre lista de favoritos | `CONTATO_WHATSAPP` + `conversao=FORTE` | 7 | Clique CTA “Entrar em contato” em item de `/favoritos` (favoritos = proxy do antigo "carrinho") | `produto_id` |
 | Pesquisas | `PESQUISA` | 5, header | Submit / Enter ou botão busca em `/produtos` ou no header (termo não vazio; debounce se digitação contínua). **E** clique num produto do resultado com termo ativo | `metadados.termo`; no clique também `produtoId` e `metadados.origem = "resultado_pesquisa"` (soma no produto — [13 M1](13-MUDANCAS-DE-ESCOPO.md)) |
-| Filtros aplicados | `FILTRO_APLICADO` | 5 | Aplicar/alterar categoria, termo `q` ou faixa de preço (debounce ~300ms após mudança estável) | `metadados.filtros` (`categoria_id`, `q`, `precoMin`, `precoMax`); com categoria, também `categoriaId` (soma na nota da categoria — [13 M2](13-MUDANCAS-DE-ESCOPO.md)) |
-| Tempo ativo na página | `TEMPO_PAGINA` | 6 | Heartbeat enquanto aba visível (`visibilitychange`); flush no unmount | `metadados.segundos_ativos`, `produto_id` |
+| Filtros aplicados | `FILTRO_APLICADO` | 5 | Aplicar/alterar categoria, termo `q` ou faixa de preço (debounce ~300ms após mudança estável). Voltar ou recarregar com o mesmo filtro não envia de novo | `metadados.filtros` (`categoria_id`, `q`, `precoMin`, `precoMax`); quando a categoria **mudou**, também `categoriaId` (soma na nota da categoria — [13 M2](13-MUDANCAS-DE-ESCOPO.md)) |
+| Tempo ativo na página | `TEMPO_PAGINA` | 6 | Heartbeat enquanto aba visível (`visibilitychange`); um envio por visita, no `pagehide` (recarregar/fechar, `fetch` com `keepalive`) ou no unmount | `metadados.segundos_ativos`, `produto_id` |
 | Scroll depth | `SCROLL_DEPTH` | 6 | Cruzar marcos 25/50/75/100% do documento (uma vez por marco por visita à página) | `metadados.pct`, `produto_id` |
-| Retorno multi-sessão | *derivado* (N× `VISUALIZACAO_PRODUTO` em sessões distintas) | 6 | Sem evento extra no cliente | Worker/scoring conta revisitas |
-| Sequência de navegação | *derivado* (ordem de `VISUALIZACAO_PRODUTO` na `sessao`) | 6 (+ 1/5 só navegam) | Sem evento extra; cada view na ficha entra na sequência | Camada 3 / arestas ([04 §3.1](04-ESPECIFICACAO-TECNICA.md)) |
+| Retorno multi-sessão | *derivado* (N× `VISUALIZACAO_PRODUTO` em sessões distintas) | 6 | Sem evento extra no cliente | Cada visita soma como visualização; peso extra pelo retorno é trabalho futuro |
+| Sequência de navegação | *derivado* (ordem de `VISUALIZACAO_PRODUTO` na `sessao`) | 6 (+ 1/5 só navegam) | Sem evento extra | Trabalho futuro: Camada 3 / arestas ([04 §3.1](04-ESPECIFICACAO-TECNICA.md)) |
 | Sazonalidade / tempo entre visitas | *contextual* via `sessao` + timestamps | — | Abertura de sessão (já existente); sem UI dedicada | Backend |
 | Histórico de compras | tabela `compra` (não `tipo_evento`) | A4 | Submit do form “Registrar compra” | RF24; se &lt; 3 compras do cliente, peso = 0 ([04 §9](04-ESPECIFICACAO-TECNICA.md)) |
 
@@ -147,9 +149,9 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Apresentar produtos e categorias com maior probabilidade de interesse, sem saturar a tela. |
 | **Rota / auth** | Pública. Visitante e autenticado (PF/PJ). |
 | **Layout** | Header + hero curto (título + 1 frase + CTA “Ver catálogo”) + seção “Destaques” (grid de `ProdutoCard`) + seção “Categorias em evidência” + footer. Sem stats, badges de urgência ou overlays. |
-| **Conteúdo e campos** | Card produto via `ProdutoCard` (§4.0). Destaques: `GET` com `destaque=true`, **`limit=4`**. Categorias: só raiz (`parent_id` null); cada `Tag` navega para `/produtos?categoria={id}`. Autenticado: ordenação por `score_produto.valor`. Visitante: Popularidade Global ([04 §6](04-ESPECIFICACAO-TECNICA.md)). |
+| **Conteúdo e campos** | Card produto via `ProdutoCard` (§4.0). Destaques: `GET` com `destaque=true`, **`limit=6`**. Categorias: só raiz (`parent_id` null); cada `Tag` navega para `/produtos?categoria={id}`. Autenticado: ordenação por `score_produto.valor`. Visitante: Popularidade Global ([04 §6](04-ESPECIFICACAO-TECNICA.md)). |
 | **Componentes** | `Layout`, `ProdutoCard`, `Typography`, `Tag` (categoria), `Empty`, `Spin`, `Button` (ver catálogo), `Row`/`Col`. |
-| **APIs** | `GET /api/produtos?limit=4&destaque=true`; `GET /api/categorias`. |
+| **APIs** | `GET /api/produtos?limit=6&destaque=true`; `GET /api/categorias`. |
 | **Eventos / triggers** | Sem telemetria própria. Clique no card → só navega para `/produtos/[slug]`; `VISUALIZACAO_PRODUTO` dispara na tela 6. Contribui indiretamente à sequência de navegação quando a ficha abre. Ver §4.0.1. |
 | **Estados** | Hero não espera a API. Loading: Spin só nas seções de dados. Erro: `PageError` com retry. Empty destaques: “Nenhum produto disponível”. Empty categorias: “Nenhuma categoria cadastrada”. Sem consentimento: mesma UI, ordenação só global. |
 | **Rastreabilidade** | RF08, RF09, RNF01, RNF12 |
@@ -175,11 +177,11 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Criar conta PF ou PJ com consentimentos LGPD. |
 | **Rota / auth** | Pública. Autenticado → `/`. |
 | **Layout** | `Card` (640px), duas colunas a partir de 576px; `Radio` PJ/PF no topo (inicia em PJ); identificação → e-mail/senha → telefone; `Collapse` “Mais dados (opcional)”; checkbox de aceite; submit; link “Já tem conta? Entrar” → `/entrar` (preserva `next`). |
-| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6 no mock), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade; o texto abre `Modal` com abas dos dois documentos e botões Fechar / “Li e aceito” (marca o checkbox). Cookies comportamentais não têm campo: seguem a escolha do banner. Contato proativo inicia desligado. Os dois vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta`. Tooltips nos campos com label. |
-| **Componentes** | `Card`, `Form`, `Radio`, `Input`, `Input.Password`, `Collapse`, `Checkbox`, `Button`, `Modal` + `Tabs` (termos), `Modal` (migração). |
+| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade. Marcar **abre o `Modal`** e não marca: só “Li e aceito” marca (Fechar, X e Esc não); desmarcar é direto. O modal mostra, numa única área rolável e sem abas, os Termos e depois a Política, completos, em 12px (a mesma fonte de `/termos` e `/privacidade`); o que começa ligado na conta está na cláusula 4 dos dois. Cookies comportamentais e contato proativo não têm campo: começam ligados, vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta` ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)). Tooltips nos campos com label. |
+| **Componentes** | `Card`, `Form`, `Radio`, `Input`, `Input.Password`, `Collapse`, `Checkbox`, `Button`, `Modal` (termos), `Modal` (migração). |
 | **APIs** | `POST /api/auth/signup`; após sucesso, se houver visitante: endpoint de migração (detalhe em [04 §7](04-ESPECIFICACAO-TECNICA.md)). |
-| **Eventos / triggers** | Sem métrica de interesse. O cadastro não altera o gate de coleta (§4.0.1): se o banner estiver sem decisão, ele segue aberto. Pós-sucesso: toast “Conta criada”, redirect para `next`, modal migração de histórico se houver visitante. |
-| **Estados** | Validação CPF/CNPJ/e-mail; submit bloqueado sem aceite; Modal “Associar histórico desta sessão?” Sim/Não. |
+| **Eventos / triggers** | Sem métrica de interesse. Gate de coleta (§4.0.1): se este navegador ainda não escolheu, o cadastro liga a coleta nele e o banner some; quem desligou os cookies comportamentais neste navegador continua sem coleta nele. Pós-sucesso: toast “Conta criada”, redirect para `next`, modal migração de histórico se houver visitante. |
+| **Estados** | Validação CPF/CNPJ/e-mail; submit bloqueado sem aceite; Modal “Associar histórico de navegação?” Sim, associar / Não associar (descarta o histórico; o texto avisa). X e Esc fecham sem descartar, e a pergunta volta no próximo login. |
 | **Rastreabilidade** | RF01–RF04, RF19, RNF08, RNF09 |
 
 #### 4 — Recuperar senha (`/recuperar-senha`)
@@ -189,7 +191,7 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Redefinir senha em duas etapas. |
 | **Rota / auth** | Pública. |
 | **Layout** | `Card` + `Steps` (1 Solicitar · 2 Redefinir); link “Voltar ao login” → `/entrar`. |
-| **Conteúdo e campos** | Etapa 1: `email`. Pós-envio: Alert informativo. Etapa 2: campo **Código** (token; `mock-reset` pré-preenchido só em modo mock) + nova senha + confirmação. |
+| **Conteúdo e campos** | Etapa 1: `email`. Pós-envio: Alert informativo. Etapa 2: campo **Código** (recebido por e-mail; `mock-reset` pré-preenchido só em modo mock) + nova senha + confirmação. |
 | **Componentes** | `Card`, `Steps`, `Form`, `Input`, `Input.Password`, `Button`, `Alert`, `Result` (sucesso). |
 | **APIs** | `POST /api/auth/password-reset`; `POST /api/auth/password-reset/confirm`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
@@ -207,7 +209,7 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Componentes** | `Input.Search`, `TreeSelect`, `InputNumber` (preço), `Drawer`, `ProdutoCard`, `Pagination`, `Empty`, `Spin`, `Button` (limpar / filtros). |
 | **APIs** | `GET /api/produtos?q=&categoria=&precoMin=&precoMax=&page=&limit=12`; `GET /api/categorias`. |
 | **Eventos / triggers** | Com consentimento (§4.0.1): **`PESQUISA`** — submit/Enter/botão busca com termo não vazio → `metadados.termo`. **`FILTRO_APLICADO`** — mudança estável de categoria ou `q` (debounce ~300ms) → `metadados.filtros` (`categoria_id`, `q`; spec também `precoMin`/`precoMax`). Clique no card → navega; view na tela 6. Paginação sem evento próprio. |
-| **Estados** | Empty: “Nenhum produto encontrado” + botão Limpar filtros. Loading na troca de página/filtro. Erro: `PageError` com retry. Preço aplica com debounce de 400ms; mínimo maior que máximo marca os campos e não filtra. |
+| **Estados** | Empty: “Nenhum produto encontrado” + botão Limpar filtros. Loading na troca de página/filtro. Erro: `PageError` com retry. Preço aplica com debounce de 400ms; mínimo maior que máximo marca os campos e não filtra. `page` além do fim vai para a última; categoria inexistente é ignorada, com `Alert`. A contagem só aparece depois da primeira resposta. |
 | **Rastreabilidade** | RF08–RF11, RF17 |
 
 #### 6 — Produto individual (`/produtos/[slug]`)
@@ -217,10 +219,10 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Ficha completa para decisão B2B + CTA de contato. |
 | **Rota / auth** | Pública. CTA WhatsApp e favoritar: **somente autenticado** ([04 §12](04-ESPECIFICACAO-TECNICA.md)). Visitante: CTA primário (única ação da tela) “Entrar para contatar” → `/entrar?next=/produtos/[slug]`. |
 | **Layout** | Breadcrumb Vitrine → Catálogo → nome; imagem principal 4:3 (esquerda, altura limitada) + info (direita) na ordem categoria → nome → preço → CTAs → descrição (recolhível), para o CTA ficar sem scroll em 1366×768; abaixo `Descriptions` ficha técnica (2 colunas a partir de 992px); CTA fixo no rodapé abaixo de 768px. |
-| **Conteúdo e campos** | `produto.nome`, `descricao`, `preco`, `categoria`, `ficha_tecnica` (JSONB → pares chave/valor), imagem ordem 0 (mock: sem carrossel; spec prevê galeria). |
+| **Conteúdo e campos** | `produto.nome`, `descricao`, `preco`, `categoria`, `ficha_tecnica` (JSONB → pares chave/valor), galeria com miniaturas (imagens por `ordem`); sem imagem, mostra um aviso no lugar da foto. |
 | **Componentes** | `Breadcrumb`, `Image`, `Typography`, `Descriptions`, `Button` (ícones WhatsApp / Heart), `Tag`, `Divider`. Toggle favorito imediato na ficha, sem confirmação. |
 | **APIs** | `GET /api/produtos/{slug}`; `POST/DELETE /api/favoritos/{produtoId}`; `POST /api/eventos`. |
-| **Eventos / triggers** | Com consentimento (§4.0.1): **`VISUALIZACAO_PRODUTO`** — 1× no mount/hydration (`produto_id`). **`TEMPO_PAGINA`** — heartbeat com aba visível; flush no unmount → `metadados.segundos_ativos`. **`SCROLL_DEPTH`** — marcos 25/50/75/100% (1× por marco por visita) → `metadados.pct`. **`FAVORITAR` / `DESFAVORITAR`** — clique no controle de favorito (auth). **`CONTATO_WHATSAPP` + `conversao=LEVE`** — CTA “Entrar em contato” (auth); pausa decay 60d ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)). *Derivados (sem evento extra):* retorno multi-sessão e sequência de navegação a partir das views. |
+| **Eventos / triggers** | Com consentimento (§4.0.1): **`VISUALIZACAO_PRODUTO`** — 1× no mount/hydration (`produto_id`). **`TEMPO_PAGINA`** — conta só com a aba visível; um envio por visita, no unmount ou no `pagehide` → `metadados.segundos_ativos`. **`SCROLL_DEPTH`** — marcos 25/50/75/100% (1× por marco por visita) → `metadados.pct`. **`FAVORITAR` / `DESFAVORITAR`** — clique no controle de favorito (auth). **`CONTATO_WHATSAPP` + `conversao=LEVE`** — CTA “Entrar em contato” (auth); pausa o decay (60 dias por padrão; [04 §5.4](04-ESPECIFICACAO-TECNICA.md)). *Derivados (sem evento extra):* retorno multi-sessão e sequência de navegação a partir das views. |
 | **Estados** | Slug inexistente/inativo: `notFound()` (página 404). Loading. Erro: `PageError` com retry. Sem consentimento: página ok, sem telemetria. |
 | **Rastreabilidade** | RF12–RF16, RF14 |
 
@@ -244,12 +246,12 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 |---|---|
 | **Objetivo** | Gerir dados, consentimentos LGPD e pedidos de direitos do titular; ajuda. |
 | **Rota / auth** | Autenticado PF/PJ. Visitante → `/entrar?next=/conta`. |
-| **Layout** | `Tabs`: Dados · Privacidade · Ajuda. Abaixo das abas, após `Divider`, “Sair da conta” (`text`) → `/`. |
-| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (reflete o consentimento deste navegador) e CONTATO_PROATIVO, que salvam ao alternar; separados por `Divider`, Exportar (mock) / Solicitar exclusão → `solicitacao_lgpd`. **Ajuda:** `Collapse` com 3 itens (contato WhatsApp; cookies/recomendações; suporte com links `/sobre` e `/privacidade`). |
+| **Layout** | `Tabs`: Dados · Privacidade · Ajuda, com a aba na URL (`?aba=`). Abaixo das abas, após `Divider`, “Sair da conta” (`text` + `danger`) → `/`. |
+| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (valor da **conta**; alternar muda a conta e este navegador) e CONTATO_PROATIVO, que salvam ao alternar. Se a conta aceita e este navegador não, um `Alert` avisa e oferece "Aceitar neste navegador". A escolha do navegador só vai para a conta que nunca decidiu; separados por `Divider`, Solicitar exclusão (registra `solicitacao_lgpd`). **Ajuda:** o mesmo componente de S5; é onde se pede a cópia dos dados, por e-mail. |
 | **Componentes** | `Tabs`, `Descriptions`, `Form`, `Switch`, `Button`, `modal.confirm` de `App.useApp()` (exclusão), `Alert`, `Collapse` (FAQ), `notification`. |
-| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `GET /api/conta/exportar`; `DELETE /api/conta` (ou POST solicitação). |
+| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `DELETE /api/conta`. |
 | **Eventos / triggers** | Sem métrica de interesse. **Gate:** revogar `COOKIES_COMPORTAMENTAIS` → parar coleta imediatamente ([04 §11](04-ESPECIFICACAO-TECNICA.md)); ver §4.0.1. |
-| **Estados** | Confirmação destrutiva com verbo “Excluir conta” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. Export: download JSON/CSV (mock). |
+| **Estados** | Confirmação destrutiva com verbo “Excluir conta”, com o foco em “Cancelar” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. |
 | **Rastreabilidade** | RF28–RF30, RNF08, RNF09 |
 
 ---
@@ -263,7 +265,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | Item | Spec |
 |---|---|
 | **Objetivo** | Autenticar apenas `usuario.tipo = ADMIN`. |
-| **Rota / auth** | Pública sob `/admin`. Sem link na área pública. PF/PJ rejeitados mesmo com senha correta. Admin já autenticado → `/admin`. Fora do `AdminShell` (sem sider). |
+| **Rota / auth** | Pública sob `/admin`. Sem link na área pública. PF/PJ rejeitados mesmo com senha correta. Admin já autenticado → `/admin` (ou a tela de `?next=`). Fora do `AdminShell` (sem sider). |
 | **Layout** | `Card` centralizado (~400px); título “Admin — Entrar”; subtítulo “Acesso restrito ao dono do catálogo.” |
 | **Conteúdo e campos** | E-mail + senha; tooltips; submit com ícone `LoginOutlined`. |
 | **Componentes** | `Card`, `Form`, `Input`, `Input.Password`, `Button`, `Alert`. |
@@ -278,8 +280,8 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Visão rápida de saúde do catálogo (KPIs + gráficos). |
 | **Rota / auth** | Admin. |
-| **Layout** | Faixa de `Statistic` (KPIs com help) + 3 gráficos (`series`). |
-| **Conteúdo e campos** | KPIs num card **Indicadores** (tooltip ⓘ em linguagem simples; link **Ver** ao lado do número): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; Ver → `/admin/produtos`. **Contatos (7 dias)** — eventos `CONTATO_WHATSAPP`. **Clientes com alto interesse** — clientes ativos com `score_produto` máx. **≥ 70** (= faixa Quente); Ver → `/admin/usuarios?nivel=QUENTE&status=ativo`. Gráficos (cada um com título, ícone de ajuda em linguagem simples (o que é, como ler, por que importa), títulos de eixo, tooltip em pt-BR e estado vazio): **Nível de interesse dos clientes** — barras horizontais com usuários ativos pelo score máx. de produto: Quente (≥ 70, = KPI Clientes com alto interesse), Morno (40–69), Frio (< 40), Sem interação (sem score); rótulo "n · %"; soma = Usuários ativos; **Contatos pelo WhatsApp — últimos 14 dias** — contatos por dia, dias sem contato = 0; **Categoria favorita dos clientes** — usuários cuja categoria de maior score é a categoria (top 10; empates contam nas duas). |
+| **Layout** | Faixa de `Statistic` (KPIs com help) + tabela de leads + 3 gráficos (`series`). |
+| **Conteúdo e campos** | KPIs num card **Indicadores** (tooltip ⓘ em linguagem simples; link **Ver** ao lado do número): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; Ver → `/admin/produtos`. **Contatos (7 dias)** — eventos `CONTATO_WHATSAPP`. **Clientes com alto interesse** — clientes ativos com `score_produto` máx. **≥ 70** (= faixa Quente); Ver → `/admin/usuarios?nivel=QUENTE&status=ativo`. **Clientes para contatar primeiro:** os 5 primeiros `leads` da API, só de quem aceita contato e personalização (nome com link para A4, nível e nota, categoria, próxima compra provável). Gráficos (cada um com título, ícone de ajuda em linguagem simples (o que é, como ler, por que importa), títulos de eixo, tooltip em pt-BR e estado vazio): **Nível de interesse dos clientes** — barras horizontais com usuários ativos pelo score máx. de produto: Quente (≥ 70, = KPI Clientes com alto interesse), Morno (40–69), Frio (< 40), Sem interação (sem score); rótulo "n · %"; só de quem aceita personalização; **Contatos pelo WhatsApp — últimos 14 dias** — contatos por dia, dias sem contato = 0; **Categoria favorita dos clientes** — usuários cuja categoria de maior score é a categoria (top 10; empates contam nas duas). |
 | **Componentes** | `Statistic`, `Tooltip` + `InfoCircleOutlined`, `Button`/`Link` (Eye), `Row`/`Col`, `Card`, `@ant-design/charts` (`Column`, `Line`, `Bar`), `Spin`. |
 | **APIs** | `GET /api/admin/dashboard`. |
 | **Eventos / triggers** | Sem métrica de interesse (somente leitura de agregados já calculados). |
@@ -292,26 +294,26 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Explorar clientes com sinais de intenção. |
 | **Rota / auth** | Admin. |
-| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Select` **nível de interesse** (Quente/Morno/Frio/Sem interação → `nivel`) + `Table` paginada (`pageSize` 20). Filtros `nivel` e `status` (`ativo`/`inativo`) vêm da URL e são mantidos nela (link compartilhável; o KPI “Clientes com alto interesse” abre `?nivel=QUENTE&status=ativo`). Página envolve a lista em `Suspense` (`useSearchParams`). |
-| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ), e-mail (sortable), telefone, status `ativo` (filtro Ativo/Inativo), score máx. (sortable, com ícone do nível de interesse + tooltip: Quente `FireFilled`, Morno `FireOutlined`, Frio `CloudOutlined`, Sem interação `MinusCircleOutlined`), top categoria (sortable), última atividade (sortable), ações. |
+| **Layout** | `Input.Search` (`q`) + `Select` tipo PF/PJ + `Select` categoria (filtra `topCategoria`) + `Select` **nível de interesse** (Quente/Morno/Frio/Sem interação → `nivel`) + `Table` paginada (`pageSize` 20). Paginação, ordenação e filtros no servidor (`useTabelaPaginada`), sem limite de clientes. Filtros `nivel`, `status` (`ativo`/`inativo`), `tipo` e `categoria` vêm da URL e são mantidos nela; a busca não, porque pode ter CPF ou telefone (link compartilhável; o KPI “Clientes com alto interesse” abre `?nivel=QUENTE&status=ativo`). Página envolve a lista em `Suspense` (`useSearchParams`). |
+| **Conteúdo e campos** | Colunas: identificador (nome/razão, sortable), `tipo` (filtro de coluna PF/PJ, o mesmo estado do `Select`), contato (e-mail, sortable, com o telefone embaixo, os dois em 12px), status `ativo` (filtro Ativo/Inativo), score máx. (sortable, com ícone do nível de interesse + tooltip: Quente `FireFilled`, Morno `FireOutlined`, Frio `CloudOutlined`, Sem interação `MinusCircleOutlined`), top categoria (sortable), próxima compra provável, última atividade (sortable; data, com a hora na dica), ações. Textos longos em 12px (o identificador em 14px), até duas linhas, com o valor inteiro na dica ([09 §6](09-NORMAS-DE-USABILIDADE.md)). |
 | **Componentes** | `Table`, `Select`, `Input.Search`, `Tag`, `Button` icon-only `EyeOutlined` + tooltip (abrir detalhe). |
 | **APIs** | `GET /api/admin/usuarios?…`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
-| **Estados** | Loading auth/dados: Spin. |
+| **Estados** | Loading auth/dados: Spin. O que o cliente desligou em `/conta` aparece como “Oculto” (diferente de “—”, sem dado): contato proativo esconde o contato; cookies comportamentais, score, categoria, próxima compra e última atividade. A busca por e-mail, documento ou telefone e os filtros e a ordenação também não os revelam. |
 | **Rastreabilidade** | RF21 |
 
 #### A4 — Detalhe de usuário (`/admin/usuarios/[id]`)
 
 | Item | Spec |
 |---|---|
-| **Objetivo** | Qualificar lead: scores, preço, histórico; registrar compra; contactar. |
+| **Objetivo** | Qualificar lead: notas, preço, histórico; registrar, editar e excluir compra; contactar. |
 | **Rota / auth** | Admin (dono do catálogo). |
-| **Layout** | Link “← Usuários” → `/admin/usuarios`; cabeçalho (nome + e-mail + botão WhatsApp com telefone formatado / mensagem pré-preenchida) + `Tabs`: Scores · Faixa de preço · Compras. |
-| **Conteúdo e campos** | Scores: tabelas `score_produto` / `score_categoria` (sortable). Faixa: `mediana_com_conversao`, `mediana_sem_conversao`, `gap_preco` — `Alert` warning se **`gapPreco > 10`** (“Gap sugere possível barreira de preço”, [04 §8](04-ESPECIFICACAO-TECNICA.md)). Compras: tabela (Produto, Qtd, Total, Data) + form (produto com `showSearch`, preço unitário, qtd, data, observações; **`valorTotal` auto** = preço × qtd — uma linha por produto, [08 §5.6](08-MODELO-DE-DADOS.md)). Aviso se `< 3` compras: métrica zerada no score ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). Pós-submit: toast “Compra registrada”, reset form, reload. |
+| **Layout** | Breadcrumb Usuários → nome; cabeçalho (nome + e-mail + botão WhatsApp com telefone formatado / mensagem pré-preenchida) + `Tabs`: Notas de interesse · Faixa de preço · Compras (N). |
+| **Conteúdo e campos** | Scores: tabelas `score_produto` / `score_categoria` (sortable). Faixa: `mediana_com_conversao`, `mediana_sem_conversao`, `gap_preco` — `Alert` warning se **`gapPreco > 10`** (“Gap sugere possível barreira de preço”, [04 §8](04-ESPECIFICACAO-TECNICA.md)). Compras: tabela (Produto, Qtd, Preço unit., Total, Data) + form (produto em `Select.Pageable`: 20 por vez, busca no servidor; preço unitário, qtd, data, observações; **`valorTotal` auto** = preço × qtd — uma linha por produto, [08 §5.6](08-MODELO-DE-DADOS.md)). Aviso se `< 3` compras: ainda não somam pontos, mas já valem como conversão ([04 §9.2](04-ESPECIFICACAO-TECNICA.md)). Cada linha tem editar (`Modal`) e excluir (`Popconfirm`). Pós-submit: toast “Compra registrada”, reset form, reload. |
 | **Componentes** | `Descriptions`, `Tabs`, `Table`, `Form`, `Select` (`showSearch`), `DatePicker`, `InputNumber`, `Alert`, `Button`, `notification`. |
-| **APIs** | `GET /api/admin/usuarios/{id}`; `POST /api/admin/usuarios/{id}/compras`. |
+| **APIs** | `GET /api/admin/usuarios/{id}`; `POST /api/admin/usuarios/{id}/compras`; `PUT`/`DELETE …/compras/{compraId}`; `GET /api/admin/produtos` (`q`, `page`, `limit`) no seletor de produto. |
 | **Eventos / triggers** | Sem `tipo_evento` comportamental. **Histórico de compras ([04 §3.3](04-ESPECIFICACAO-TECNICA.md)):** submit do form “Registrar compra” → insert `compra` (não fila de eventos). WhatsApp do dono do catálogo é contato externo — **não** dispara `CONTATO_WHATSAPP` do consumidor. Ver §4.0.1. |
-| **Estados** | Sem telefone: desabilitar WhatsApp + tooltip. Loading: Spin. |
+| **Estados** | Sem telefone ou com o contato oculto: desabilitar WhatsApp + tooltip com o motivo. Interesses ocultos: `Empty` em Notas e Faixa de preço. Compras e nome continuam. Loading: Spin. |
 | **Rastreabilidade** | RF22, RF24 |
 
 #### A5 — Catálogo admin (`/admin/produtos`)
@@ -320,10 +322,10 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Listar e gerir produtos. |
 | **Rota / auth** | Admin. |
-| **Layout** | Busca + `Table` (`pageSize` 20) + ações icon+tooltip: Editar / (Des)ativar / Excluir. Botão “Novo produto”. |
-| **Conteúdo e campos** | Colunas: `nome`, `slug`, `preco`, `categoria`, `ativo` (filtro Sim/Não), `updated_at` — Nome/Slug/Preço/Categoria/Atualizado sortable. |
-| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check / Delete), `Popconfirm` (título “Remover produto do catálogo?”, ok “Remover”), `notification` (toggle ativo). |
-| **APIs** | `GET/DELETE /api/admin/produtos`; PATCH para `ativo`. |
+| **Layout** | Busca + `Table` (`pageSize` 20) + ações icon+tooltip: Editar / (Des)ativar. Botão “Novo produto”. Paginação, ordenação e filtro no servidor. |
+| **Conteúdo e campos** | Colunas: `nome`, `slug`, `preco`, `categoria`, `ativo` (filtro Sim/Não), `updated_at` (data, com a hora na dica) — Nome/Slug/Preço/Atualizado sortable. Nome (14px), slug e categoria (12px) em uma linha. |
+| **Componentes** | `Table`, `Input.Search`, `Tag`, `Button` (ícones Edit / Stop|Check; Stop em `danger`), `notification` (toggle ativo). |
+| **APIs** | `GET /api/admin/produtos` (`q`, `ativo`, `page`, `limit`, `sort`); PATCH para `ativo`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Estados** | Loading: Spin. |
 | **Rastreabilidade** | RF23 |
@@ -334,12 +336,12 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Criar ou atualizar produto + imagens. |
 | **Rota / auth** | Admin. Mesmo formulário; A7 pré-preenche. Títulos de página “Novo produto” / “Editar produto”. |
-| **Layout** | Form em seções: Dados · Ficha técnica (`Form.List` chave/valor) · Imagens (`Form.List` url/alt/ordem) + ações Salvar / **Cancelar** → `/admin/produtos`. |
+| **Layout** | Form em seções: Dados · Ficha técnica (`Form.List` chave/valor) · Imagens (upload de arquivo ou URL, com alt e ordem) + ações Salvar / **Cancelar** → `/admin/produtos`. |
 | **Conteúdo e campos** | `nome`, `slug` (auto a partir do nome até edição manual), `descricao`, `preco`, `categoria_id`, `ativo` (default **`true`** na criação), `ficha_tecnica` (spec), imagens (spec). Tooltips nos campos. |
 | **Componentes** | `Form`, `Input`, `Select`, `Switch`, `Button` (Save / Close), `Alert` (erro). |
-| **APIs** | `POST /api/admin/produtos`; `PATCH /api/admin/produtos/{id}`. |
+| **APIs** | `POST /api/admin/produtos`; `PATCH /api/admin/produtos/{id}`; `POST /api/admin/produtos/imagens` (upload). |
 | **Eventos / triggers** | Sem métrica de interesse. |
-| **Estados** | Validação preço ≥ 0; slug único. Sucesso → toast + redirect **sempre** à lista. |
+| **Estados** | Validação preço > 0; slug único. Sucesso → toast + redirect **sempre** à lista. |
 | **Rastreabilidade** | RF23 |
 
 #### A8 — Conta admin (`/admin/conta`)
@@ -348,10 +350,10 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|
 | **Objetivo** | Admin altera próprios dados de acesso. |
 | **Rota / auth** | Admin. |
-| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha (mock).”). No fim, após `Divider`, “Sair da conta” (`text`) → `/admin/entrar`. |
-| **Conteúdo e campos** | `email`, `telefone`, senha atual + nova (opcional: “deixe em branco para manter”; mock: senha UI-only, PATCH envia e-mail/telefone). Tooltips. |
+| **Layout** | Título + parágrafo de apoio (“Altere e-mail, telefone ou senha.”). No fim, após `Divider`, “Sair da conta” (`text` + `danger`) → `/admin/entrar`. |
+| **Conteúdo e campos** | `email`, `telefone`, senha atual + nova (opcional: “deixe em branco para manter”). Trocar a senha exige a atual. Tooltips. |
 | **Componentes** | `Form`, `Input`, `Input.Password`, `Button`, `Alert`, `notification`. |
-| **APIs** | `GET/PATCH` conta admin (espelho de `/api/conta` ou endpoint admin dedicado). |
+| **APIs** | `GET/PATCH /api/admin/conta`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Estados** | Erro: Alert. Sucesso: “Conta atualizada”. Loading auth: Spin. |
 | **Rastreabilidade** | RF26 |
@@ -363,13 +365,13 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Objetivo** | Ajustar pesos, λ e boost sem redeploy ([RNF13](02-REQUISITOS.md)) de forma intuitiva para o dono do catálogo, vendo **antes de salvar** o impacto nos clientes reais e a precisão das previsões. |
 | **Rota / auth** | Admin (dono do catálogo). |
 | **Layout** | Título “Como o sistema mede o interesse” + ações (Desfazer · Restaurar padrão (`Popconfirm`) · Salvar (N alterações)). Duas colunas (`xl` 14/10): à esquerda um `Card` com **abas** (Ações do cliente · Duração do interesse · Categorias), cada uma com seus controles e o visual que só ela altera; à direita a **Prévia com seus dados reais** (sticky), cujo corpo acompanha a aba aberta. Um ponto no rótulo da aba indica alteração não salva nela. Um único Salvar grava pesos e decaimento. |
-| **Ajustes** | **Ações do cliente:** barra com a fatia de cada ação no peso total + uma linha por ação de produto (cor, nome com tooltip, `Slider` 0–3 com o peso no tooltip, “+N pts” = `peso ÷ soma dos pesos de produto × 100`; Remover dos favoritos “−N pts”; Tempo/Rolagem “até +N pts”). “Pesquisar e abrir” soma no produto. **Duração do interesse:** frase “perde metade do valor em N dias” com λ discreto no canto, `Slider` 7–180 dias (λ = ln2/dias, 5 casas) e curva “quanto uma ação ainda vale” (hoje tracejado × novo), alternando sem/com contato ou compra. **Categorias:** peso de “Filtrar por categoria” (“+N pts” na categoria), bônus com contato ou compra recente (+0%–+100%) e ajustes por categoria (meia-vida e bônus próprios, remover, “Adicionar ajuste para uma categoria”; [13 — M13](13-MUDANCAS-DE-ESCOPO.md)). Explicações longas ficam nos ⓘ. |
-| **Prévia** | Simulação com debounce de 500 ms (`POST /api/admin/configuracao/simular`). **Linha-resumo sempre visível:** “N clientes mudam de nível · M mudam de categoria favorita” (ou “Nenhum cliente muda”). **Abas Ações e Duração:** `Segmented` Nível dos clientes | Precisão das previsões. Nível: barras 100% Hoje × Com os ajustes por nível, nota média e, recolhidos, os clientes que mais mudam. Precisão: 4 linhas “métrica — hoje → novo” com seta (explicação e frase no tooltip), aviso curto de confiança e ⓘ do método. **Aba Categorias:** barras agrupadas “categoria favorita dos clientes” Hoje × Com os ajustes (até 6 categorias) e, recolhidos, os clientes que mudam de categoria favorita. |
+| **Ajustes** | **Ações do cliente:** barra com a fatia de cada ação no peso total + uma linha por ação de produto (cor, nome com tooltip, `Slider` 0–3 com o peso no tooltip, “+N pts” = `peso ÷ soma dos pesos de produto × 100`; Remover dos favoritos “−N pts”; Tempo/Rolagem “até +N pts”). “Pesquisar e abrir” soma no produto. “Comprar” e “Voltar ao produto” ficam fora do total: mudá-los não muda as outras ações. **Duração do interesse:** duas linhas iguais (ícone, nome, ⓘ, `Slider`, valor): meia-vida (7–180 dias; λ = ln2/dias, 5 casas, na dica do valor) e pausa após contato ou compra (0–180 dias). Abaixo, a curva “Valor da ação” (só a de hoje ou, se a meia-vida muda, hoje tracejado × novo), alternando Sem contato | Com contato. **Categorias:** três linhas iguais (ícone, nome, ⓘ, `Slider`, valor): filtro por categoria (“+N pts”), contato ou compra e compra recorrente (bônus de 0% a +50%). Abaixo, ajustes por categoria ([13 — M13](13-MUDANCAS-DE-ESCOPO.md)): “Adicionar” ao lado do título e, só se houver ajuste, a tabela com meia-vida, os dois bônus (cabeçalho com o ícone da linha) e remover; λ, valor geral e “Ainda não salvo” ficam em dicas. Explicações longas ficam nos ⓘ. |
+| **Prévia** | Simulação com debounce de 500 ms (`POST /api/admin/configuracao/simular`). **Linha-resumo sempre visível:** “N clientes mudam de nível · M mudam de categoria favorita” (ou “Nenhum cliente muda”). **Abas Ações e Duração:** `Segmented` Nível | Precisão. Nível: barra 100% por nível, só de hoje ou, se algo muda, Hoje × Com os ajustes, nota média e, recolhidos, os clientes que mais mudam. Precisão: 4 linhas “métrica — hoje → novo” com seta (explicação e frase no tooltip), aviso curto de confiança e ⓘ do método. **Aba Categorias:** barras de “Categoria favorita” (até 6), só de hoje ou, se algo muda, Hoje × Com os ajustes, e, recolhida, a tabela dos clientes que mudam. |
 | **Componentes** | `Card`, `Slider`, `InputNumber`, `Segmented`, `Collapse`, abas do `Card` (`tabList`) com `Badge` de ponto, `Table`, `Alert`, `Line`/`Bar` (`@ant-design/charts`), `Popconfirm`, `modal.confirm` de `App.useApp()` (ajustes em linguagem de negócio “de → para” + checkbox “Recalcular agora as notas de todos”, marcado), `message`. |
 | **APIs** | `GET/PATCH /api/admin/configuracao/pesos`; `GET/PATCH /api/admin/configuracao/decay`; `POST …/simular`; `POST …/recalcular` ([11 §3.8](11-API-ENDPOINTS.md)). |
 | **Eventos / triggers** | Sem métrica de interesse (configura pesos das métricas da §4.0.1; não as dispara). |
 | **Estados** | Loading: Spin; prévia “atualizando…”; erro de prévia em `Alert`; precisão sem histórico → `Empty`; sucesso: “Ajustes salvos. Notas de N clientes e visitantes recalculadas.” |
-| **Mudanças de escopo** | Justificadas em [13 — Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) (M1–M15). |
+| **Mudanças de escopo** | Justificadas em [13 — Mudanças de escopo](13-MUDANCAS-DE-ESCOPO.md) (M1–M3, M5–M9 e M13). |
 | **Rastreabilidade** | RF25, RNF13 |
 
 #### A10 — Design system (`/admin/design-system`)
@@ -392,25 +394,33 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 | Item | Spec |
 |---|---|
-| **Objetivo** | Apresentação acadêmica do TCC (PAC): problema, scoring, modelos, cronograma. |
+| **Objetivo** | Apresentação da Renova Retífica de Motores. |
 | **Rota / auth** | Pública. Link no header “Sobre”. |
-| **Layout** | Seções empilhadas (coexistem com `PublicFooter` global): |
-| | **Hero:** eyebrow PAC VIII / instituição; H1; pitch; `Tag`s de stack; CTAs “Ver o Motor de Scoring” + GitHub; card ilustrativo de score (`Statistic` + métricas). |
-| | **About:** 4 cards (Problema, Solução, Diferencial, Conformidade) + `Alert` hipótese central. |
-| | **ScoringEngine:** card da fórmula Σ peso×evento×e⁻λt; 6 cards de peso com `Progress`; `Steps` verticais Camadas 1–4 (status implementado / futuro). |
-| | **ModelsTable:** `Table` comparando KNN, Grafo/PPR, Regras+Decay, Sequenciais, Matrix Factorization (colunas: interpretabilidade, esparsidade, vol. mín., anônimo, cold start, calibração B2B, escalabilidade, status). |
-| | **Timeline:** 4 fases (semanas 1–4 Fundação · 5–8 Motor · 9–12 Avançadas · 13–16 Validação) com bullets de entrega. |
-| | **Footer acadêmico:** autor, e-mail, instituição; âncoras internas; 4 referências DOI; PAC VIII / MIT. |
+| **Layout** | Hero (logo, H1, CTAs “Ver catálogo” e WhatsApp, foto) · **Peças, óleos e motores** (4 cards de venda + “Ver catálogo”) · 5 cards de **Serviços** · **Motores que atendemos** (carros e caminhões, com fotos) · chamada WhatsApp · 4 cards de **Contato e horário** (telefone, e-mail, horário, endereço + link Google Maps). |
+| **Eventos / triggers** | Sem métrica de interesse. |
+
+#### Sobre o projeto (`/admin/projeto`)
+
+| Item | Spec |
+|---|---|
+| **Objetivo** | Explicar ao dono do catálogo, em linguagem simples, o que o sistema faz e como a nota de interesse é calculada. |
+| **Rota / auth** | Admin. Item “Sobre o projeto” no menu lateral. |
+| **Layout** | H1 “Como o catálogo encontra clientes interessados” + parágrafo + CTAs “Ver clientes com alto interesse” (→ `/admin/usuarios?nivel=QUENTE&status=ativo`) e “Ajustar o cálculo” (→ A9). Em seguida, um `Card` com 3 passos em colunas iguais (navega com consentimento → ação vira pontos → nota vira nível). Cada seção, separada por `Divider`, tem a explicação à esquerda e um `Card` à direita (abaixo de 992 px, um embaixo do outro); largura máxima de 1.120 px. Seções, nesta ordem: **Quanto vale cada ação** (pontos com os pesos reais, mesma lógica de A9, em três grupos: Intenção de compra, Navegação e Diminui a nota; da maior para a menor, com o resumo visível e o detalhe no ícone de ajuda; peso 0 não aparece) · **O que a nota significa** (4 níveis + categoria favorita) · **Exemplo** (`Timeline` com nota acumulada e nível a cada ação) · **O interesse esfria com o tempo** (meia-vida; `Table` com quanto uma ação vale hoje/30/90/180 dias, com e sem contato; pausa após contato ou compra, com os dias configurados). Cor, só a do nível. |
+| **APIs** | `GET /api/admin/configuracao/pesos`; `GET /api/admin/configuracao/decay`. As seções compartilham um só estado de carregando/erro ([09 §21](09-NORMAS-DE-USABILIDADE.md)). |
 | **Eventos / triggers** | Sem métrica de interesse. |
 | **Rastreabilidade** | RNF12 (tom sóbrio) |
 
 #### S1 — Política de Privacidade (`/privacidade`)
 
-Texto legal LGPD (mock 1.0); link no cadastro e footer. Seções: **Dados coletados** · **Finalidade** · **Direitos do titular**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal LGPD (versão 1.0); modal do cadastro e footer. Fonte única em `components/LegalConteudo.tsx`, em redação formal e condensada, com numeração progressiva da ABNT NBR 6024 (seção `1 TÍTULO`, item `1.1`, alíneas `a)` com `;` e `.` na última) gerada pelo componente. Exibida no mesmo formato do modal do cadastro (`DocumentoLegalCompacto`): título centralizado, versão e data, seções com âncora em texto compacto. O mesmo bloco aparece no fim da aba Privacidade de `/conta`. Seções: **1 Controladora** · **2 Dados tratados** · **3 Finalidades e bases legais** · **4 Opções do Titular** · **5 Cookies** · **6 Compartilhamento** · **7 Retenção** · **8 Segurança** · **9 Direitos do Titular** · **10 Menores de idade** · **11 Alterações**. Na seção 4, quem tem conta vai para `/conta?aba=privacidade`; visitante liga ou desliga os cookies deste navegador. Mudou o texto: suba `VERSAO_TERMOS` (`lib/config.ts` e `ConsentimentoLgpd.java`) e a data. **Eventos / triggers:** sem métrica de interesse.
 
 #### S2 — Termos de Uso (`/termos`)
 
-Texto legal (mock 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Seções: **Objeto** · **Contas** · **Uso aceitável**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal (versão 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Mesma fonte, formato e layout de S1. Seções: **1 Objeto** · **2 Conta** · **3 Preços e disponibilidade** · **4 Recomendações e contato** · **5 Uso adequado** · **6 Propriedade intelectual** · **7 Responsabilidade** · **8 Encerramento** · **9 Disposições finais e foro**. **Eventos / triggers:** sem métrica de interesse.
+
+#### S5 — Ajuda (`/ajuda` e aba Ajuda de `/conta`)
+
+Um só componente (`components/Ajuda.tsx`) para os dois lugares; link no footer e em `/entrar`. Busca sem acento (pergunta, passos, observação e sinônimos), perguntas em `Collapse` por grupo (**Comprar e pedir orçamento** · **Acesso e conta** · **Favoritos e recomendações** · **Privacidade**). Cada resposta é um passo a passo numerado (com uma frase de contexto quando precisa e uma observação no fim) e, quando há, o botão que resolve; regras de escrita em [09 §20](09-NORMAS-DE-USABILIDADE.md). `Empty` quando nada casa. No fim, WhatsApp, telefone, e-mail e horário. **Eventos / triggers:** sem métrica de interesse.
 
 #### S3 — 404
 
@@ -418,7 +428,7 @@ Texto legal (mock 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md
 
 #### S4 — Banner de cookies (global)
 
-Ver §4.0 e §4.0.1. Componente no root layout; não é rota. Banner `sticky` inferior + Modal Personalizar. **Trigger de gate:** Aceitar todos / Personalizar com cookies comportamentais → habilita coleta; Apenas essenciais / rejeitar → zero `POST /api/eventos`, ordenação só Popularidade Global.
+Ver §4.0 e §4.0.1. Componente no root layout; não é rota. Banner `sticky` inferior com o botão **Aceitar cookies e continuar**. **Trigger de gate:** Aceitar → habilita coleta; switch desligado em `/privacidade` ou na conta → zero `POST /api/eventos`, ordenação só Popularidade Global.
 
 ---
 
@@ -428,7 +438,7 @@ Ver §4.0 e §4.0.1. Componente no root layout; não é rota. Banner `sticky` in
    Navega com cookie `visitante`; ao autenticar, Modal pergunta se associa histórico ([04 §7](04-ESPECIFICACAO-TECNICA.md), [RF19](02-REQUISITOS.md)).
 
 2. **Autenticado → WhatsApp no produto** (tela 6)
-   `CONTATO_WHATSAPP` + `conversao=LEVE`; pausa decay 60 dias ([04 §5.4](04-ESPECIFICACAO-TECNICA.md)); lead sobe no dashboard (A2).
+   `CONTATO_WHATSAPP` + `conversao=LEVE`; pausa o decay (60 dias por padrão; [04 §5.4](04-ESPECIFICACAO-TECNICA.md)); lead sobe no dashboard (A2).
 
 3. **Autenticado → WhatsApp nos favoritos** (tela 7)
    Mesmo evento com `conversao=FORTE` ([04 §8.1](04-ESPECIFICACAO-TECNICA.md)).

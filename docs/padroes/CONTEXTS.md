@@ -14,7 +14,7 @@ Use quando o estado é compartilhado entre **vários filhos de uma árvore React
 - Configurações de layout (tema do usuário, densidade da tabela).
 
 **Não use Context para:**
-- Dado que vem de API — isso é cache, use fetch/React Query.
+- Dado que vem de API — isso é cache, use hook de dados ([HOOKS.md](HOOKS.md) §4.3).
 - Estado de UI local a uma tela — `useState` no componente.
 - Dado estático — constante exportada em `lib/`.
 - Estado de formulário — `Form.useForm()` do antd.
@@ -41,6 +41,8 @@ Separe sempre em dois arquivos (`react-refresh` reclama se Provider + hook saír
 Provider global é montado em `app/providers.tsx` **dentro** do `ConfigProvider`.
 
 ## 4. Template
+
+Exemplo reduzido. O `CurrentUser` real tem também `loading`, `login`, `loginAdmin`, `signup`, `updateUser`, `isAuthenticated` e `isAdmin`, e os providers ficam dentro de `App` do antd.
 
 ### 4.1 Context + hook
 
@@ -168,7 +170,7 @@ Se quiser disparar `notification` de dentro de um hook de mutação, injeta a `a
 function useSalvarProduto(api: ReturnType<typeof useAppNotification>['api']) { /* … */ }
 ```
 
-## 8. Testes (quando chegar)
+## 8. Testes
 
 Testando componente consumidor:
 
@@ -189,7 +191,7 @@ Expor o Context cru é aceito **só para teste** — produção segue consumindo
 
 | Context | Pasta | Papel |
 |---|---|---|
-| `CurrentUser` | `lib/contexts/CurrentUser/` | Sessão PF/PJ/ADMIN (mock via `lib/api/auth` + localStorage) |
+| `CurrentUser` | `lib/contexts/CurrentUser/` | Sessão PF/PJ/ADMIN (`lib/api/auth` + localStorage) |
 | `CookieConsent` | `lib/contexts/CookieConsent/` | Preferência S4 (12 meses); `canTrackBehavioral` gate de `trackEvent` |
 
 Montados em `app/providers.tsx` dentro do `ConfigProvider`. Banner: `components/layout/CookieBanner.tsx`.

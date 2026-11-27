@@ -24,11 +24,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-amqp")
+    implementation("org.springframework.boot:spring-boot-starter-mail")
 
     runtimeOnly("org.postgresql:postgresql")
 
-    implementation("org.mapstruct:mapstruct:1.6.3")
-    annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
@@ -59,6 +58,7 @@ tasks.jacocoTestReport {
         xml.required.set(true)
         html.required.set(true)
     }
+    // Cobertura conta só a lógica: DTOs, entidades, repositórios e configs ficam de fora.
     classDirectories.setFrom(
         files(classDirectories.files.map {
             fileTree(it) {
@@ -79,6 +79,7 @@ tasks.jacocoTestReport {
     )
 }
 
+// Gate de qualidade: o build (check) falha se a cobertura de linhas ficar abaixo de 75%.
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
     violationRules {

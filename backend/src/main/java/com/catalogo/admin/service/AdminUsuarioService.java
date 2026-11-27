@@ -1,12 +1,16 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,10 +25,12 @@ import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.dto.ScoreCategoriaRow;
 import com.catalogo.admin.dto.ScoreProdutoRow;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
+import com.catalogo.admin.repository.AdminAnalyticsRepository.FiltroUsuarios;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.dto.UsuarioResponse;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.repository.UsuarioRepository;
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.catalog.repository.CompraRepository;
@@ -40,10 +46,12 @@ import com.catalogo.shared.PageResponse;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.TypedQuery;
 
 @Service
 public class AdminUsuarioService {
+
+    /** Limite da coluna compra.valor_total, numeric(12,2). */
+    private static final BigDecimal TOTAL_MAX = new BigDecimal("9999999999.99");
 
     @PersistenceContext
     private EntityManager em;
@@ -55,6 +63,7 @@ public class AdminUsuarioService {
     private final FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository;
     private final CompraRepository compraRepository;
     private final ProdutoRepository produtoRepository;
+    private final ConsentimentoService consentimentoService;
     private final ScoreEngine scoreEngine;
 
     public AdminUsuarioService(
@@ -65,6 +74,7 @@ public class AdminUsuarioService {
             FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository,
             CompraRepository compraRepository,
             ProdutoRepository produtoRepository,
+            ConsentimentoService consentimentoService,
             ScoreEngine scoreEngine
     ) {
         this.usuarioRepository = usuarioRepository;
@@ -74,6 +84,7 @@ public class AdminUsuarioService {
         this.faixaPrecoUsuarioRepository = faixaPrecoUsuarioRepository;
         this.compraRepository = compraRepository;
         this.produtoRepository = produtoRepository;
+        this.consentimentoService = consentimentoService;
         this.scoreEngine = scoreEngine;
     }
 
@@ -84,62 +95,28 @@ public class AdminUsuarioService {
             BigDecimal scoreMin,
             NivelInteresse nivel,
             String q,
+            Boolean ativo,
             Integer page,
-            Integer limit
+            Integer limit,
+            String sort
     ) {
         int pageIndex = page == null || page < 0 ? 0 : page;
         int size = limit == null || limit < 1 ? 20 : Math.min(limit, 100);
+        FiltroUsuarios filtro = new FiltroUsuarios(tipo, categoria, scoreMin, nivel, q, ativo);
 
-        StringBuilder jpql = new StringBuilder("SELECT u FROM Usuario u WHERE u.tipo <> :admin");
-        if (tipo != null) {
-            jpql.append(" AND u.tipo = :tipo");
-        }
-        if (q != null && !q.isBlank()) {
-            jpql.append("""
-                     AND (LOWER(u.email) LIKE :q
-                       OR LOWER(COALESCE(u.nomeCompleto, '')) LIKE :q
-                       OR LOWER(COALESCE(u.razaoSocial, '')) LIKE :q)
-                    """);
-        }
-        jpql.append(" ORDER BY u.id DESC");
+        List<Object[]> rows = analyticsRepository.usuarios(filtro, sort, size, (long) pageIndex * size);
+        long total = analyticsRepository.countUsuarios(filtro);
 
-        TypedQuery<Usuario> query = em.createQuery(jpql.toString(), Usuario.class);
-        query.setParameter("admin", TipoUsuario.ADMIN);
-        if (tipo != null) {
-            query.setParameter("tipo", tipo);
-        }
-        if (q != null && !q.isBlank()) {
-            query.setParameter("q", "%" + q.trim().toLowerCase(Locale.ROOT) + "%");
-        }
-
-        List<Usuario> all = query.getResultList();
-        List<AdminUsuarioListItem> enriched = new ArrayList<>();
-        for (Usuario u : all) {
-            if (u.getTipo() == TipoUsuario.ADMIN) {
-                continue;
-            }
-            Object[] row = analyticsRepository.usuarioEnrichment(u.getId()).stream().findFirst().orElse(null);
-            BigDecimal scoreMax = row != null ? toBd(row[0]) : null;
-            String topCat = row != null && row[1] != null ? String.valueOf(row[1]) : null;
-            OffsetDateTime ultima = row != null ? toOdt(row[2]) : null;
-
-            if (scoreMin != null && (scoreMax == null || scoreMax.compareTo(scoreMin) < 0)) {
-                continue;
-            }
-            if (nivel != null && NivelInteresse.of(scoreMax) != nivel) {
-                continue;
-            }
-            if (categoria != null && !categoria.isBlank()) {
-                if (topCat == null || !topCat.equalsIgnoreCase(categoria.trim())) {
-                    continue;
-                }
-            }
-            enriched.add(AdminUsuarioListItem.from(u, scoreMax, topCat, ultima));
-        }
-
-        int from = Math.min(pageIndex * size, enriched.size());
-        int to = Math.min(from + size, enriched.size());
-        return new PageResponse<>(enriched.subList(from, to), pageIndex, size, enriched.size());
+        Map<Long, Usuario> porId = usuarioRepository.findAllById(rows.stream().map(r -> toLong(r[0])).toList())
+                .stream()
+                .collect(Collectors.toMap(Usuario::getId, Function.identity()));
+        List<AdminUsuarioListItem> items = rows.stream()
+                .filter(r -> porId.containsKey(toLong(r[0])))
+                .map(r -> AdminUsuarioListItem.from(
+                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3]), (String) r[4],
+                        (Boolean) r[5], (Boolean) r[6]))
+                .toList();
+        return new PageResponse<>(items, pageIndex, size, total);
     }
 
     @Transactional(readOnly = true)
@@ -150,7 +127,10 @@ public class AdminUsuarioService {
             throw new ApiException("NOT_FOUND", "Usuário não encontrado", HttpStatus.NOT_FOUND);
         }
 
-        List<ScoreProduto> scores = scoreProdutoRepository.findByUsuarioId(id);
+        boolean contato = consentimentoService.aceitaContato(id);
+        boolean interesse = consentimentoService.aceitaCookies(id);
+
+        List<ScoreProduto> scores = interesse ? scoreProdutoRepository.findByUsuarioId(id) : List.of();
         List<ScoreProdutoRow> scoreRows = new ArrayList<>();
         for (ScoreProduto s : scores) {
             String nome = produtoRepository.findById(s.getProdutoId()).map(Produto::getNome).orElse("?");
@@ -158,7 +138,7 @@ public class AdminUsuarioService {
         }
 
         List<ScoreCategoriaRow> catRows = new ArrayList<>();
-        for (ScoreCategoria s : scoreCategoriaRepository.findByUsuarioId(id)) {
+        for (ScoreCategoria s : interesse ? scoreCategoriaRepository.findByUsuarioId(id) : List.<ScoreCategoria>of()) {
             String nome = em.createQuery("SELECT c.nome FROM Categoria c WHERE c.id = :id", String.class)
                     .setParameter("id", s.getCategoriaId())
                     .getResultStream().findFirst().orElse("?");
@@ -166,15 +146,21 @@ public class AdminUsuarioService {
         }
 
         FaixaPrecoRow faixa = FaixaPrecoRow.from(
-                faixaPrecoUsuarioRepository.findByUsuarioId(id).orElse(null)
+                interesse ? faixaPrecoUsuarioRepository.findByUsuarioId(id).orElse(null) : null
         );
         List<CompraResponse> compras = compraRepository.findByUsuarioIdAndDeletedAtIsNull(id).stream()
                 .map(CompraResponse::from)
                 .toList();
 
-        return new AdminUsuarioDetalhe(UsuarioResponse.from(u), scoreRows, catRows, faixa, compras);
+        UsuarioResponse usuario = UsuarioResponse.from(u);
+        return new AdminUsuarioDetalhe(
+                contato ? usuario : usuario.semContato(), contato, interesse, scoreRows, catRows, faixa, compras);
     }
 
+    /**
+     * Compra registrada pelo admin (não há checkout), com registrado_por = admin.
+     * Recalcula o score na hora, de forma síncrona, porque a compra muda a nota; editar e excluir também.
+     */
     @Transactional
     public CompraResponse registrarCompra(Long usuarioId, Long adminId, RegistrarCompraRequest request) {
         Usuario u = usuarioRepository.findById(usuarioId)
@@ -185,12 +171,7 @@ public class AdminUsuarioService {
 
         Compra compra = new Compra();
         compra.setUsuarioId(u.getId());
-        compra.setProduto(produto);
-        compra.setPrecoUnitario(request.precoUnitario());
-        compra.setQuantidade(request.quantidade());
-        compra.setValorTotal(request.valorTotal());
-        compra.setDataCompra(request.data());
-        compra.setObservacoes(request.observacoes());
+        preencher(compra, produto, request);
         compra.setRegistradoPor(adminId);
         compra = compraRepository.save(compra);
 
@@ -204,16 +185,28 @@ public class AdminUsuarioService {
         Produto produto = produtoRepository.findById(request.produtoId())
                 .orElseThrow(() -> new ApiException("NOT_FOUND", "Produto não encontrado", HttpStatus.NOT_FOUND));
 
-        compra.setProduto(produto);
-        compra.setPrecoUnitario(request.precoUnitario());
-        compra.setQuantidade(request.quantidade());
-        compra.setValorTotal(request.valorTotal());
-        compra.setDataCompra(request.data());
-        compra.setObservacoes(request.observacoes());
+        preencher(compra, produto, request);
         compra = compraRepository.save(compra);
 
         scoreEngine.recalc(usuarioId, null);
         return CompraResponse.from(compra);
+    }
+
+    private static void preencher(Compra compra, Produto produto, RegistrarCompraRequest request) {
+        if (request.data().isAfter(Fuso.hoje())) {
+            throw new ApiException("VALIDATION_ERROR", "A data da compra não pode ser futura", HttpStatus.BAD_REQUEST);
+        }
+        BigDecimal total = request.precoUnitario().multiply(BigDecimal.valueOf(request.quantidade()));
+        if (total.compareTo(TOTAL_MAX) > 0) {
+            throw new ApiException(
+                    "VALIDATION_ERROR", "O total da compra passa de R$ 9.999.999.999,99", HttpStatus.BAD_REQUEST);
+        }
+        compra.setProduto(produto);
+        compra.setPrecoUnitario(request.precoUnitario());
+        compra.setQuantidade(request.quantidade());
+        compra.setValorTotal(total);
+        compra.setDataCompra(request.data());
+        compra.setObservacoes(request.observacoes());
     }
 
     /** Soft delete: todas as leituras de compra já filtram {@code deleted_at}. */
@@ -229,6 +222,10 @@ public class AdminUsuarioService {
         return compraRepository.findById(compraId)
                 .filter(c -> c.getUsuarioId().equals(usuarioId) && c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("NOT_FOUND", "Compra não encontrada", HttpStatus.NOT_FOUND));
+    }
+
+    private static Long toLong(Object o) {
+        return ((Number) o).longValue();
     }
 
     private static BigDecimal toBd(Object o) {
@@ -247,6 +244,10 @@ public class AdminUsuarioService {
         }
         if (o instanceof OffsetDateTime odt) {
             return odt;
+        }
+        // Hibernate 6 devolve timestamptz de query nativa como Instant.
+        if (o instanceof Instant i) {
+            return i.atOffset(ZoneOffset.UTC);
         }
         if (o instanceof Timestamp ts) {
             return ts.toInstant().atOffset(ZoneOffset.UTC);

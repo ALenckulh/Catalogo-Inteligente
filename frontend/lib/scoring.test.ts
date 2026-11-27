@@ -4,8 +4,10 @@ import {
   EVENTOS_SCORING,
   LAMBDA_PADRAO,
   ORDEM_EVENTOS,
+  PAUSA_PADRAO,
   PESOS_PADRAO,
   decayGlobal,
+  descricaoCompleta,
   fatorDecaimento,
   formatPontos,
   lambdaDeMeiaVida,
@@ -19,11 +21,23 @@ describe('scoring', () => {
     expect([...ORDEM_EVENTOS].sort()).toEqual(Object.keys(EVENTOS_SCORING).sort())
   })
 
+  it('descricaoCompleta junta o resumo e o detalhe', () => {
+    expect(descricaoCompleta('VISUALIZACAO_PRODUTO')).toBe('O cliente abriu a página do produto. Cada visita soma.')
+    expect(descricaoCompleta('FAVORITAR')).toBe('O cliente marcou o produto como favorito.')
+  })
+
   it('scoreMax soma só pesos positivos de produto', () => {
-    // 0.2 + 0.5 + 0.1 + 1 + 0.5 + 0.3 + 0.5 (FILTRO_APLICADO é de categoria)
-    expect(scoreMax(PESOS_PADRAO)).toBeCloseTo(3.1)
+    // 0.1 + 1.2 + 0.1 + 1.5 + 0.4 + 0.3 + 0.2 (FILTRO_APLICADO é de categoria)
+    expect(scoreMax(PESOS_PADRAO)).toBeCloseTo(3.8)
     expect(scoreMax([{ tipoEvento: 'FAVORITAR', peso: 0 }])).toBe(1)
     expect(scoreMax([{ tipoEvento: 'FILTRO_APLICADO', peso: 2 }])).toBe(1)
+    // compra e retorno não diluem as outras: dobrar o peso deles não muda o divisor
+    expect(scoreMax(PESOS_PADRAO.map((p) => (p.tipoEvento === 'COMPRA' || p.tipoEvento === 'RETORNO_PAGINA' ? { ...p, peso: 9 } : p)))).toBeCloseTo(3.8)
+    expect(pontosPorAcao(PESOS_PADRAO).COMPRA).toBeCloseTo(100 / 3.8)
+  })
+
+  it('a meia-vida padrão é de 90 dias', () => {
+    expect(Math.round(meiaVidaDeLambda(LAMBDA_PADRAO))).toBe(90)
   })
 
   it('pontosPorAcao escala cada peso pelo divisor', () => {
@@ -56,14 +70,16 @@ describe('scoring', () => {
   })
 
   it('decayGlobal acha o parâmetro global ou usa o padrão', () => {
-    const global = { categoriaId: null, categoriaNome: null, lambda: 0.02, boostConversao: 1.5 }
-    const cat = { categoriaId: 1, categoriaNome: 'C1', lambda: 0.05, boostConversao: 1 }
+    const global = { categoriaId: null, categoriaNome: null, lambda: 0.02, boostConversao: 1.5, boostRecorrencia: 1, pausaDias: 60 }
+    const cat = { categoriaId: 1, categoriaNome: 'C1', lambda: 0.05, boostConversao: 1, boostRecorrencia: 1, pausaDias: 60 }
     expect(decayGlobal([cat, global])).toBe(global)
     expect(decayGlobal([cat])).toEqual({
       categoriaId: null,
       categoriaNome: null,
       lambda: LAMBDA_PADRAO,
       boostConversao: BOOST_PADRAO,
+      boostRecorrencia: BOOST_PADRAO,
+      pausaDias: PAUSA_PADRAO,
     })
   })
 

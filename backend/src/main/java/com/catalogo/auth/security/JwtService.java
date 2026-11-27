@@ -3,6 +3,7 @@ package com.catalogo.auth.security;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -29,9 +30,14 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
+    /**
+     * Claims: jti = id do token (para revogar no logout), sub = id do usuário, tipo (PF/PJ/ADMIN), email, iat e exp (catalogo.jwt.expiration-ms = 24 h).
+     * Assinado com HMAC-SHA256 usando catalogo.jwt.secret.
+     */
     public String generate(Usuario usuario) {
         Date now = new Date();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(usuario.getId()))
                 .claim("tipo", usuario.getTipo().name())
                 .claim("email", usuario.getEmail())
@@ -41,6 +47,7 @@ public class JwtService {
                 .compact();
     }
 
+    /** Valida assinatura e expiração; lança exceção se o token for inválido. */
     public Claims parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)

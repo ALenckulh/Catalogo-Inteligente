@@ -1,11 +1,15 @@
 'use client'
 
 import React from 'react'
+import { CloseCircleFilled } from '@ant-design/icons'
 import { Select as AntSelect, Spin } from 'antd'
 import type { SelectProps as AntSelectProps, RefSelectProps, DefaultOptionType } from 'antd/es/select'
 
 export type { RefSelectProps }
 export type SelectProps = AntSelectProps
+
+/** `allowClear` com nome em português (o padrão é "Clear"). Serve também ao TreeSelect. */
+export const LIMPAR = { label: 'Limpar', clearIcon: <CloseCircleFilled /> }
 
 export interface PageableSelectPage {
   items: DefaultOptionType[]
@@ -35,7 +39,6 @@ export function usePageableSelect({
 
   const abortRef = React.useRef<AbortController | null>(null)
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialLoadedRef = React.useRef(false)
 
   const load = React.useCallback(
     async (nextPage: number, searchTerm: string, append: boolean) => {
@@ -78,12 +81,13 @@ export function usePageableSelect({
 
   const onOpenChange = React.useCallback(
     (open: boolean) => {
-      if (!open) return
-      if (initialLoadedRef.current) return
-      initialLoadedRef.current = true
-      void load(0, search, false)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      // Ao fechar, o AntD limpa o campo de busca sem chamar onSearch: reabrir recarrega sem o termo antigo.
+      if (!open || (options.length > 0 && search === '')) return
+      setSearch('')
+      void load(0, '', false)
     },
-    [load, search],
+    [load, search, options.length],
   )
 
   React.useEffect(() => {
@@ -129,8 +133,8 @@ export const PageableSelect = React.forwardRef<RefSelectProps, PageableSelectPro
   },
 )
 
-const BaseSelect = React.forwardRef<RefSelectProps, SelectProps>(function Select(props, ref) {
-  return <AntSelect ref={ref} {...props} />
+const BaseSelect = React.forwardRef<RefSelectProps, SelectProps>(function Select({ allowClear, ...props }, ref) {
+  return <AntSelect ref={ref} allowClear={allowClear === true ? LIMPAR : allowClear} {...props} />
 })
 
 export const Select = Object.assign(BaseSelect, {

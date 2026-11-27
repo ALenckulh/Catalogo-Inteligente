@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -24,6 +23,7 @@ import com.catalogo.admin.service.AdminDashboardService;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.repository.UsuarioRepository;
 import com.catalogo.catalog.repository.ProdutoRepository;
+import com.catalogo.shared.Fuso;
 
 @ExtendWith(MockitoExtension.class)
 class AdminDashboardServiceTest {
@@ -70,7 +70,7 @@ class AdminDashboardServiceTest {
         when(analyticsRepository.countLeadsScoreAlto(anyDouble())).thenReturn(0L);
         when(analyticsRepository.topLeads(anyInt())).thenReturn(List.<Object[]>of(new Object[]{
                 7L, "a@x.c", "PF", "Ana", null, new java.math.BigDecimal("88.5"), "Cat",
-                java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z")
+                java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"), "Pistão"
         }));
         when(analyticsRepository.scoreDistribution(anyDouble(), anyDouble())).thenReturn(List.of());
         when(analyticsRepository.contatosPorDia(any())).thenReturn(List.<Object[]>of(
@@ -84,6 +84,7 @@ class AdminDashboardServiceTest {
         assertEquals(1, dash.leads().size());
         assertEquals(7L, dash.leads().getFirst().usuarioId());
         assertEquals(TipoUsuario.PF, dash.leads().getFirst().tipo());
+        assertEquals("Pistão", dash.leads().getFirst().proximaCompra());
         assertEquals(1, dash.series().contatosPorDia().size());
         assertEquals(1, dash.series().leadsPorCategoria().size());
     }
@@ -99,7 +100,7 @@ class AdminDashboardServiceTest {
 
         ArgumentCaptor<OffsetDateTime> since = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(analyticsRepository).contatosPorDia(since.capture());
-        assertEquals(LocalDate.now().minusDays(13), since.getValue().toLocalDate());
+        assertEquals(Fuso.hoje().minusDays(13), since.getValue().toLocalDate());
         assertEquals(LocalTime.MIDNIGHT, since.getValue().toLocalTime());
     }
 }

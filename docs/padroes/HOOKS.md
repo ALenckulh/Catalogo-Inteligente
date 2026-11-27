@@ -39,16 +39,17 @@ Promova de co-locado para global **só** quando a segunda rota precisar — não
 
 ### 4.1 Hooks de UI
 
-Envolvem um recurso visual do antd que precisa de `contextHolder`. Exemplo canônico:
+Envolvem um recurso visual do antd. Exemplo canônico:
 
 ```ts
 // lib/hooks/useAppNotification.ts
 'use client'
-import { notification } from 'antd'
+import { App } from '@/components/ui'
 
+/** Avisos do <App> da raiz: continuam na tela depois de navegar. */
 export function useAppNotification() {
-  const [api, contextHolder] = notification.useNotification()
-  return { api, contextHolder }
+  const { notification: api } = App.useApp()
+  return { api }
 }
 ```
 
@@ -59,114 +60,66 @@ Uso:
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 
 function MinhaTela() {
-  const { api, contextHolder } = useAppNotification()
-  return (
-    <>
-      {contextHolder}
-      <Button onClick={() => api.success({ message: 'Salvo!' })}>Salvar</Button>
-    </>
-  )
+  const { api } = useAppNotification()
+  return <Button onClick={() => api.success({ title: 'Salvo!' })}>Salvar</Button>
 }
 ```
 
-### 4.2 Hooks de estado derivado
+### 4.2 Hooks de acesso
 
-Pequenos, sem efeito pesado. Exemplos clássicos:
+Exigem um estado para a tela existir. `useRequireAdmin` redireciona para `/admin/entrar?next=…` quem não é admin; `useTrackEvent` devolve uma função que só envia evento com consentimento.
+
+### 4.3 Hooks de dados
+
+Chamam funções de `lib/api` ([SERVICES.md](SERVICES.md)) e descartam resposta atrasada. Exemplo do projeto: `useTabelaPaginada`, que guarda só a página pedida e numera as buscas:
 
 ```ts
-// lib/hooks/useDebounce.ts
-'use client'
-import { useEffect, useState } from 'react'
+const seq = useRef(0)
 
-export function useDebounce<T>(value: T, delayMs = 300): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(t)
-  }, [value, delayMs])
-  return debounced
+async function reload() {
+  const id = ++seq.current
+  const res = await buscar({ page, limit: PAGE_SIZE, sort })
+  if (id !== seq.current) return // chegou depois de uma busca mais nova
+  setItems(res.items)
 }
 ```
 
-### 4.3 Hooks de dados (fetch nativo)
-
-Padrão enquanto o projeto **não** adotar React Query:
+Para uma carga simples na própria tela, use uma flag no efeito:
 
 ```ts
-// app/produtos/_hooks/useProdutos.ts
-'use client'
-import { useEffect, useState } from 'react'
-
-interface Produto { id: number; nome: string; preco: number }
-
-export function useProdutos(categoriaId?: number) {
-  const [data, setData] = useState<Produto[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    const ac = new AbortController()
-    setLoading(true)
-    setError(null)
-    const url = categoriaId ? `/api/produtos?categoriaId=${categoriaId}` : '/api/produtos'
-    fetch(url, { signal: ac.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json() as Promise<Produto[]>
-      })
-      .then(setData)
-      .catch((e) => { if (e.name !== 'AbortError') setError(e as Error) })
-      .finally(() => setLoading(false))
-    return () => ac.abort()
-  }, [categoriaId])
-
-  return { data, loading, error }
-}
+useEffect(() => {
+  let cancelled = false
+  listProdutos(query)
+    .then((p) => { if (!cancelled) setData(p.items) })
+    .catch(() => { if (!cancelled) setFalhou(true) })
+  return () => { cancelled = true }
+}, [query])
 ```
 
 Pontos obrigatórios:
-- `AbortController` + `signal` no `fetch`.
-- `cleanup` cancela a request pendente ao desmontar / mudar deps.
-- Erro de `AbortError` **não** vai para `setError`.
-- Tipagem explícita do retorno (`Promise<Produto[]>`).
-
-### 4.4 Hooks compostos
-
-Combinam o hook de dados com UI (ex: carregar + notificar erro):
-
-```ts
-export function useProdutosWithFeedback(categoriaId?: number) {
-  const { data, loading, error } = useProdutos(categoriaId)
-  const { api, contextHolder } = useAppNotification()
-  useEffect(() => {
-    if (error) api.error({ message: 'Erro ao carregar produtos', description: error.message })
-  }, [error, api])
-  return { data, loading, error, contextHolder }
-}
-```
-
-> **Nota:** se adotarmos **React Query**, este doc será expandido com padrões `useQuery`/`useMutation`, `queryKeys` tipados, invalidação. Até lá, `useState` + `useEffect` + `fetch` é a norma.
+- Dados só por `@/lib/api`, nunca `fetch` ou axios na tela.
+- Resposta atrasada descartada (flag `cancelled` ou contador).
+- Erro tratado: a tela mostra `PageError`, não lista vazia ([09 §21](../09-NORMAS-DE-USABILIDADE.md)).
 
 ## 5. Anti-padrões
 
-- ❌ `useState` + `useEffect(() => fetch(...), [])` **sem** `AbortController` nem cleanup — vaza request e warning de `setState` em componente desmontado.
+- ❌ Carga em `useEffect` **sem** descarte de resposta atrasada — a tela mostra dado antigo ou atualiza depois de desmontada.
 - ❌ Hook que apenas encapsula `useState` sem adicionar lógica — polui a API para nada.
 - ❌ `queryKey`/URL hardcoded em string dentro do effect — extrai para constante.
 - ❌ String de mensagem solta (`'Erro ao salvar'`) espalhada por hooks — centralizar em `lib/messages.ts` quando houver 3+ ocorrências.
 - ❌ Hook de dados importando outro hook de UI diretamente — mantém hook de dados "puro"; UI compõe no uso.
 
-## 6. Testes (opcional por enquanto)
+## 6. Testes
 
-Sem framework de teste instalado. Quando chegar (Vitest + Testing Library sugeridos):
-- Testar borda do service (`fetch` mock), não detalhe interno do hook.
-- `renderHook` da Testing Library + `waitFor` para estados assíncronos.
-- Mutações: testar payload enviado e callback de sucesso.
+Vitest + Testing Library. Exemplo: `lib/hooks/useTabelaPaginada.test.ts`.
+- Testar o comportamento que a tela vê, não detalhe interno do hook.
+- `renderHook` + `waitFor` para estados assíncronos.
 
 ## 7. Checklist
 
 - [ ] Nome `useAlgo` que descreve papel, não implementação.
 - [ ] Posição correta: `lib/hooks/` se global, `_hooks/` se co-locado.
-- [ ] Fetch com `AbortController` + cleanup.
+- [ ] Resposta atrasada descartada.
 - [ ] Retorno tipado explícito.
 - [ ] Sem string de mensagem repetida — centralizada se precisar.
 - [ ] Dependências do `useEffect` corretas (nada ausente, nada supérfluo).

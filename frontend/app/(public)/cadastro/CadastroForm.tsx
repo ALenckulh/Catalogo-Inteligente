@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toApiError } from '@/lib/api/client'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
-import { PrivacidadeConteudo, TermosConteudo } from '@/components/LegalConteudo'
+import { DocumentoLegalCompacto, PRIVACIDADE, TERMOS } from '@/components/LegalConteudo'
 import { formatCnpj, formatCpf, formatTelefone, onlyDigits } from '@/lib/formatters'
 import { entrarHref, safeNext } from '@/lib/navigation'
 import {
@@ -32,7 +32,6 @@ import {
   Modal,
   Radio,
   Row,
-  Tabs,
   Typography,
 } from '@/components/ui'
 
@@ -43,7 +42,7 @@ export function CadastroForm() {
   const next = safeNext(useSearchParams().get('next'))
   const { message } = App.useApp()
   const { signup, isAuthenticated, loading: authLoading } = useCurrentUser()
-  const { canTrackBehavioral } = useCookieConsent()
+  const { acceptIfUndecided } = useCookieConsent()
   const [form] = Form.useForm()
   const tipo = Form.useWatch('tipo', form) as 'PF' | 'PJ' | undefined
   const [submitting, setSubmitting] = useState(false)
@@ -71,10 +70,6 @@ export function CadastroForm() {
           : undefined,
         aceitaTermos: Boolean(values.aceite),
         aceitaPrivacidade: Boolean(values.aceite),
-        // Consentimentos opcionais não entram no aceite (LGPD): cookies vêm do banner
-        // e contato começa desligado; os dois ficam revogáveis em /conta.
-        cookiesComportamentais: canTrackBehavioral,
-        contatoProativo: false,
       }
       if (body.tipo === 'PF') {
         body.cpf = onlyDigits(String(values.cpf ?? ''))
@@ -87,6 +82,7 @@ export function CadastroForm() {
         body.razaoSocial = String(values.razaoSocial ?? '').trim()
       }
       await signup(body)
+      acceptIfUndecided()
       message.success('Conta criada')
       router.replace(next)
     } catch (e) {
@@ -122,7 +118,7 @@ export function CadastroForm() {
           tooltip="Pessoa jurídica (CNPJ) ou física (CPF)"
           rules={[{ required: true, message: 'Selecione o tipo de conta' }]}
         >
-          <Radio.Group id="cadastro-tipo">
+          <Radio.Group id="cadastro-tipo" aria-label="Tipo de conta">
             <Radio value="PJ">Pessoa jurídica</Radio>
             <Radio value="PF">Pessoa física</Radio>
           </Radio.Group>
@@ -147,7 +143,7 @@ export function CadastroForm() {
                     },
                   ]}
                 >
-                  <Input id="cadastro-razao" placeholder="Informe a razão social" />
+                  <Input id="cadastro-razao" placeholder="Informe a razão social" maxLength={255} />
                 </FormItem>
               </Col>
               <Col xs={24} sm={12}>
@@ -196,7 +192,7 @@ export function CadastroForm() {
                     },
                   ]}
                 >
-                  <Input id="cadastro-nome" placeholder="Informe o nome completo" />
+                  <Input id="cadastro-nome" placeholder="Informe o nome completo" maxLength={255} />
                 </FormItem>
               </Col>
               <Col xs={24} sm={12}>
@@ -248,6 +244,7 @@ export function CadastroForm() {
               rules={[
                 { required: true, message: 'Informe a senha' },
                 { min: 6, message: 'A senha deve ter no mínimo 6 caracteres' },
+                { max: 72, message: 'A senha deve ter no máximo 72 caracteres' },
               ]}
             >
               <Input.Password
@@ -327,8 +324,7 @@ export function CadastroForm() {
                           id="cadastro-idade"
                           type="number"
                           placeholder="Informe a idade"
-                          min={18}
-                          max={120}
+                          // Sem min/max nativos: geravam o balão do navegador além da mensagem do Form.
                         />
                       </FormItem>
                     </Col>
@@ -342,6 +338,13 @@ export function CadastroForm() {
         <FormItem
           name="aceite"
           valuePropName="checked"
+          // Marcar passa pelo modal, para a pessoa ler antes: só "Li e aceito" marca. Desmarcar é direto.
+          getValueFromEvent={(e: { target: { checked: boolean } }) => {
+            if (e.target.checked) setTermosOpen(true)
+            return false
+          }}
+          // No envio, e não na mudança: o erro apareceria junto com o modal.
+          validateTrigger="onSubmit"
           rules={[
             {
               validator: (_, v) =>
@@ -353,7 +356,7 @@ export function CadastroForm() {
         >
           <Checkbox id="cadastro-termos">
             Li e aceito os{' '}
-            {/* href é fallback (clique do meio); o clique normal abre o modal sem marcar */}
+            {/* href é fallback (clique do meio); o clique normal abre o mesmo modal */}
             <TextLink
               id="cadastro-ver-termos"
               href="/termos"
@@ -380,6 +383,7 @@ export function CadastroForm() {
         title="Termos de Uso e Política de Privacidade"
         open={termosOpen}
         centered
+        width={720}
         okText="Li e aceito"
         cancelText="Fechar"
         onCancel={() => setTermosOpen(false)}
@@ -387,14 +391,22 @@ export function CadastroForm() {
           form.setFields([{ name: 'aceite', value: true, errors: [] }])
           setTermosOpen(false)
         }}
-        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
       >
-        <Tabs
-          items={[
-            { key: 'termos', label: 'Termos de Uso', children: <TermosConteudo nivel={4} /> },
-            { key: 'privacidade', label: 'Privacidade', children: <PrivacidadeConteudo nivel={4} /> },
-          ]}
-        />
+        <div
+          role="region"
+          aria-label="Termos de Uso e Política de Privacidade"
+          // Rola com o teclado; os botões do modal ficam sempre à vista.
+          tabIndex={0} // NOSONAR: região rolável precisa de foco pelo teclado (WCAG 2.1.1)
+          style={{
+            maxHeight: 'clamp(240px, calc(100dvh - 240px), 560px)',
+            overflowY: 'auto',
+            paddingRight: 'var(--space-2)',
+          }}
+        >
+          {[TERMOS, PRIVACIDADE].map((doc) => (
+            <DocumentoLegalCompacto key={doc.id} doc={doc} titulo={3} />
+          ))}
+        </div>
       </Modal>
     </Card>
   )

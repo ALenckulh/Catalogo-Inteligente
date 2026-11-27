@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Divider, Flex, Layout, Space, Typography } from '@/components/ui'
+import { Logo } from './Logo'
 
 const { Footer } = Layout
 const { Text } = Typography
@@ -9,7 +10,9 @@ const { Text } = Typography
 const LINKS = [
   { href: '/produtos', label: 'Catálogo' },
   { href: '/sobre', label: 'Sobre' },
+  { href: '/ajuda', label: 'Ajuda' },
   { href: '/privacidade', label: 'Privacidade' },
+  { href: '/privacidade#privacidade-escolhas', label: 'Preferências de cookies' },
   { href: '/termos', label: 'Termos de Uso' },
 ] as const
 
@@ -26,14 +29,14 @@ export function PublicFooter() {
     >
       <Flex vertical gap="middle" className="shell-inner">
         <Flex justify="space-between" wrap="wrap" gap="middle">
-          <Text strong>Catálogo Inteligente</Text>
+          <Logo size="sm" />
           <nav aria-label="Rodapé">
             <Space size="large" wrap>
               {LINKS.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  id={`footer-link-${item.href.replace('/', '')}`}
+                  id={`footer-link-${item.href.replace('/', '').replace('#', '-')}`}
                   style={{ color: 'var(--text-neutral-default)', textDecoration: 'none' }}
                 >
                   {item.label}
@@ -44,7 +47,7 @@ export function PublicFooter() {
         </Flex>
         <Divider style={{ margin: 0 }} />
         <Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>
-          © {new Date().getFullYear()} Catálogo Inteligente · Uso acadêmico (TCC)
+          © {new Date().getFullYear()} Renova Retífica de Motores
         </Text>
       </Flex>
     </Footer>

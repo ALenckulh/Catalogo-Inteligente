@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CookieConsentLevel } from '@/lib/types'
-import { abrirSessaoVisitante } from '@/lib/api/visitantes'
 import {
   CookieConsentContext,
   type CookieConsentPreferences,
@@ -10,6 +9,7 @@ import {
 } from './CookieConsentContext'
 
 const STORAGE_KEY = 'ci_cookie_consent'
+// Escolha do banner vale 12 meses; depois o banner volta a aparecer.
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000
 
 const defaultPrefs: CookieConsentPreferences = {
@@ -52,7 +52,6 @@ interface Props {
 export function CookieConsentProvider({ children }: Props) {
   const [preferences, setPreferences] = useState<CookieConsentPreferences>(defaultPrefs)
   const [hydrated, setHydrated] = useState(false)
-  const sessaoBootstrapped = useRef(false)
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -62,13 +61,7 @@ export function CookieConsentProvider({ children }: Props) {
     return () => window.clearTimeout(t)
   }, [])
 
-  useEffect(() => {
-    if (!hydrated || !preferences.behavioral || sessaoBootstrapped.current) return
-    sessaoBootstrapped.current = true
-    void abrirSessaoVisitante().catch(() => {
-      sessaoBootstrapped.current = false
-    })
-  }, [hydrated, preferences.behavioral])
+  // Não abre sessão de visitante: ela nasce no primeiro evento (trackEvent), que só sai com o aceite.
 
   const persist = useCallback((level: CookieConsentLevel, behavioral: boolean) => {
     const decidedAt = new Date().toISOString()
@@ -80,12 +73,6 @@ export function CookieConsentProvider({ children }: Props) {
     } catch {
       /* ignore */
     }
-    if (behavioral) {
-      sessaoBootstrapped.current = true
-      void abrirSessaoVisitante().catch(() => {
-        sessaoBootstrapped.current = false
-      })
-    }
   }, [])
 
   const acceptAll = useCallback(() => persist('all', true), [persist])
@@ -94,6 +81,10 @@ export function CookieConsentProvider({ children }: Props) {
     (behavioral: boolean) => persist('custom', behavioral),
     [persist],
   )
+  // Lê o que está gravado, e não o estado: uma recusa durante o envio do cadastro não pode ser desfeita.
+  const acceptIfUndecided = useCallback(() => {
+    if (readStored().decidedAt === null) persist('custom', true)
+  }, [persist])
 
   const value = useMemo<CookieConsentValue>(
     () => ({
@@ -102,9 +93,10 @@ export function CookieConsentProvider({ children }: Props) {
       acceptAll,
       acceptEssential,
       acceptCustom,
+      acceptIfUndecided,
       canTrackBehavioral: preferences.behavioral,
     }),
-    [preferences, hydrated, acceptAll, acceptEssential, acceptCustom],
+    [preferences, hydrated, acceptAll, acceptEssential, acceptCustom, acceptIfUndecided],
   )
 
   return (

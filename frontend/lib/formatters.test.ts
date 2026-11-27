@@ -6,6 +6,8 @@ import {
   formatDateTime,
   formatTelefone,
   onlyDigits,
+  parsePrecoDigitado,
+  precoInputProps,
   toMoney,
   toMoneyBRL,
 } from '@/lib/formatters'
@@ -20,6 +22,28 @@ describe('formatters', () => {
     expect(toMoney(10)).toMatch(/10[,.]00/)
     expect(toMoneyBRL(10)).toMatch(/^R\$ /)
     expect(toMoneyBRL(undefined)).toBe('—')
+  })
+
+  it.each([
+    ['1234,50', '1234.50'],
+    ['1.234,50', '1234.50'],
+    ['1.234.567,89', '1234567.89'],
+    ['1234.50', '1234.50'],
+    ['1.234', '1234'],
+    ['R$ 10,5', '10.5'],
+    ['0,01', '0.01'],
+    ['-5', '-5'],
+    ['', ''],
+  ])('parsePrecoDigitado %s -> %s', (texto, esperado) => {
+    expect(parsePrecoDigitado(texto)).toBe(esperado)
+  })
+
+  it('precoInputProps formata em pt-BR e preserva o texto durante a digitação', () => {
+    const { formatter } = precoInputProps()
+    expect(formatter(1234.5, { userTyping: false, input: '' })).toBe('1.234,50')
+    expect(formatter(1234.5, { userTyping: true, input: '1234,5' })).toBe('1234,5')
+    expect(formatter('', { userTyping: false, input: '' })).toBe('')
+    expect(precoInputProps(0).formatter(1234, { userTyping: false, input: '' })).toBe('1.234')
   })
 
   it('formatCpf and formatCnpj', () => {

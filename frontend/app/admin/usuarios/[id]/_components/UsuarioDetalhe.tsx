@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DeleteOutlined, EditOutlined, PlusOutlined, WhatsAppOutlined } from '@ant-design/icons'
-import { deleteCompra, getAdminUsuario, listAdminProdutos } from '@/lib/api/admin'
+import { deleteCompra, getAdminUsuario } from '@/lib/api/admin'
 import { toApiError } from '@/lib/api/client'
-import { whatsappUrl } from '@/lib/config'
+import { whatsappClienteUrl } from '@/lib/config'
 import { formatDate, formatTelefone, toMoney, toMoneyBRL } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
-import type { AdminUsuarioDetalhe, Compra, Produto } from '@/lib/types'
+import type { AdminUsuarioDetalhe, Compra } from '@/lib/types'
+import { TextoCelula } from '@/components/admin/celulas'
 import { PageError, PageLoading } from '@/components/layout/PageStates'
 import {
   Alert,
@@ -24,7 +25,6 @@ import {
   Row,
   Table,
   Tabs,
-  Tooltip,
   Typography,
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
@@ -39,6 +39,18 @@ const isAba = (v: string | null): v is Aba => ABAS.includes(v as Aba)
 type ScoreProduto = AdminUsuarioDetalhe['scoresProduto'][number]
 type ScoreCategoria = AdminUsuarioDetalhe['scoresCategoria'][number]
 
+const INTERESSE_OCULTO = 'O cliente optou por não compartilhar seus interesses'
+
+const COLUNA_NOTA = {
+  title: 'Nota',
+  dataIndex: 'valor',
+  align: 'right',
+  width: 96,
+  defaultSortOrder: 'descend',
+  sorter: (a: { valor: number }, b: { valor: number }) => a.valor - b.valor,
+  render: (v: number) => toMoney(v),
+} as const
+
 export function UsuarioDetalhe() {
   const params = useParams<{ id: string }>()
   const id = Number(params.id)
@@ -48,9 +60,8 @@ export function UsuarioDetalhe() {
   const aba: Aba = isAba(abaUrl) ? abaUrl : 'scores'
 
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [data, setData] = useState<AdminUsuarioDetalhe | null>(null)
-  const [produtos, setProdutos] = useState<Produto[]>([])
   const [erroCarga, setErroCarga] = useState(false)
   const [tentativa, setTentativa] = useState(0)
   const [modal, setModal] = useState<{ open: boolean; compra?: Compra }>({ open: false })
@@ -60,12 +71,8 @@ export function UsuarioDetalhe() {
     let cancelled = false
     const t = window.setTimeout(() => {
       setErroCarga(false)
-      void Promise.all([getAdminUsuario(id), listAdminProdutos({ limit: 100 })])
-        .then(([detalhe, prods]) => {
-          if (cancelled) return
-          setData(detalhe)
-          setProdutos(prods.items)
-        })
+      void getAdminUsuario(id)
+        .then((detalhe) => !cancelled && setData(detalhe))
         .catch(() => !cancelled && setErroCarga(true))
     }, 0)
     return () => {
@@ -104,16 +111,20 @@ export function UsuarioDetalhe() {
   }
   if (authLoading || !isAdmin || !data) {
     return (
-      <>
-        {contextHolder}
-        <PageLoading />
-      </>
+      <PageLoading />
     )
   }
 
-  const { usuario, compras } = data
-  const nome = usuario.nomeCompleto ?? usuario.razaoSocial ?? usuario.email
+  const { usuario, compras, contatoVisivel, interesseVisivel } = data
+  const nome = usuario.nomeCompleto ?? usuario.razaoSocial ?? usuario.email ?? `Cliente ${usuario.id}`
   const tel = usuario.telefone
+  const whatsapp = whatsappClienteUrl(tel, `Olá ${nome}!`)
+  const abrirWhatsapp = () => whatsapp && window.open(whatsapp, '_blank', 'noopener,noreferrer')
+  const motivoSemWhatsapp = !contatoVisivel
+    ? 'O cliente optou por não compartilhar o contato'
+    : tel
+      ? 'Telefone inválido'
+      : 'Cliente sem telefone cadastrado'
   const totalCompras = compras.reduce((acc, c) => acc + c.valorTotal, 0)
   const abrirNovaCompra = () => setModal({ open: true })
 
@@ -121,19 +132,10 @@ export function UsuarioDetalhe() {
     {
       title: 'Produto',
       dataIndex: 'produtoNome',
-      ellipsis: { showTitle: false },
       sorter: (a, b) => a.produtoNome.localeCompare(b.produtoNome),
-      render: (v: string) => <Tooltip title={v}>{v}</Tooltip>,
+      render: (v: string) => <TextoCelula texto={v} />,
     },
-    {
-      title: 'Nota',
-      dataIndex: 'valor',
-      align: 'right',
-      width: 96,
-      defaultSortOrder: 'descend',
-      sorter: (a, b) => a.valor - b.valor,
-      render: (v: number) => toMoney(v),
-    },
+    COLUNA_NOTA,
   ]
 
   const scoreCategoriaCols: TableProps<ScoreCategoria>['columns'] = [
@@ -141,25 +143,17 @@ export function UsuarioDetalhe() {
       title: 'Categoria',
       dataIndex: 'categoriaNome',
       sorter: (a, b) => a.categoriaNome.localeCompare(b.categoriaNome),
+      render: (v: string) => <TextoCelula texto={v} />,
     },
-    {
-      title: 'Nota',
-      dataIndex: 'valor',
-      align: 'right',
-      width: 96,
-      defaultSortOrder: 'descend',
-      sorter: (a, b) => a.valor - b.valor,
-      render: (v: number) => toMoney(v),
-    },
+    COLUNA_NOTA,
   ]
 
   const compraCols: TableProps<Compra>['columns'] = [
     {
       title: 'Produto',
       dataIndex: 'produtoNome',
-      ellipsis: { showTitle: false },
       sorter: (a, b) => (a.produtoNome ?? '').localeCompare(b.produtoNome ?? ''),
-      render: (v?: string) => <Tooltip title={v}>{v ?? '—'}</Tooltip>,
+      render: (v?: string) => <TextoCelula texto={v} />,
     },
     {
       title: 'Qtd',
@@ -172,6 +166,7 @@ export function UsuarioDetalhe() {
       title: 'Preço unit.',
       dataIndex: 'precoUnitario',
       align: 'right',
+      width: 124,
       sorter: (a, b) => a.precoUnitario - b.precoUnitario,
       render: (v: number) => toMoneyBRL(v),
     },
@@ -179,6 +174,7 @@ export function UsuarioDetalhe() {
       title: 'Total',
       dataIndex: 'valorTotal',
       align: 'right',
+      width: 124,
       sorter: (a, b) => a.valorTotal - b.valorTotal,
       render: (v: number) => toMoneyBRL(v),
     },
@@ -210,6 +206,8 @@ export function UsuarioDetalhe() {
             okText="Excluir"
             cancelText="Cancelar"
             okButtonProps={{ danger: true }}
+            // À esquerda: o tooltip "Excluir compra" abre em cima do botão e cobria o "Excluir".
+            placement="left"
             onConfirm={() => excluir(row)}
           >
             <Button
@@ -243,7 +241,7 @@ export function UsuarioDetalhe() {
           <Alert
             type="info"
             showIcon
-            title="Com menos de 3 compras, o histórico de compras ainda não influencia a nota deste cliente."
+            title="Com menos de 3 compras, elas ainda não somam pontos na nota. Já valem para o bônus da categoria, a faixa de preço e a duração do interesse."
           />
         )}
         <Flex justify="space-between" align="center" wrap gap="small">
@@ -255,11 +253,10 @@ export function UsuarioDetalhe() {
           </Button>
         </Flex>
         <Table
-          size="small"
           rowKey="id"
           columns={compraCols}
           dataSource={compras}
-          scroll={{ x: 640 }}
+          scroll={{ x: 760 }}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           expandable={{
             rowExpandable: (r) => !!r.observacoes,
@@ -271,29 +268,28 @@ export function UsuarioDetalhe() {
 
   return (
     <Flex vertical gap="middle">
-      {contextHolder}
       <Breadcrumb
+        className="quebra-texto"
         items={[{ title: <Link href="/admin/usuarios">Usuários</Link> }, { title: nome }]}
       />
       <Flex justify="space-between" align="center" wrap gap="middle">
-        <Flex vertical gap={4} style={{ minWidth: 0 }}>
+        <Flex vertical gap={4} className="quebra-texto" style={{ minWidth: 0 }}>
           <Title level={1} style={{ margin: 0 }} id="admin-user-detail-title">
             {nome}
           </Title>
           <Text type="secondary">
-            {[usuario.tipo, usuario.email, tel && formatTelefone(tel)].filter(Boolean).join(' · ')}
+            {[usuario.tipo, usuario.email, tel && formatTelefone(tel), !contatoVisivel && 'Contato oculto']
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         </Flex>
         <Button
           id="admin-user-whatsapp"
           color="primary"
           icon={<WhatsAppOutlined />}
-          disabled={!tel}
-          tooltip={!tel ? 'Cliente sem telefone cadastrado' : undefined}
-          onClick={() => {
-            if (!tel) return
-            window.open(whatsappUrl(`Olá ${nome}!`), '_blank', 'noopener,noreferrer')
-          }}
+          disabled={!whatsapp}
+          tooltip={whatsapp ? undefined : motivoSemWhatsapp}
+          onClick={abrirWhatsapp}
         >
           WhatsApp
         </Button>
@@ -306,11 +302,12 @@ export function UsuarioDetalhe() {
           {
             key: 'scores',
             label: 'Notas de interesse',
-            children: (
+            children: !interesseVisivel ? (
+              <Empty description={INTERESSE_OCULTO} />
+            ) : (
               <Row gutter={[24, 24]}>
                 <Col xs={24} lg={12}>
                   <Table
-                    size="small"
                     rowKey="produtoId"
                     title={() => <Text strong>Por produto</Text>}
                     columns={scoreProdutoCols}
@@ -321,7 +318,6 @@ export function UsuarioDetalhe() {
                 </Col>
                 <Col xs={24} lg={12}>
                   <Table
-                    size="small"
                     rowKey="categoriaId"
                     title={() => <Text strong>Por categoria</Text>}
                     columns={scoreCategoriaCols}
@@ -336,7 +332,9 @@ export function UsuarioDetalhe() {
           {
             key: 'preco',
             label: 'Faixa de preço',
-            children: (
+            children: !interesseVisivel ? (
+              <Empty description={INTERESSE_OCULTO} />
+            ) : (
               <Flex vertical gap="middle" style={{ maxWidth: 640 }}>
                 <Descriptions
                   bordered
@@ -382,7 +380,6 @@ export function UsuarioDetalhe() {
         open={modal.open}
         usuarioId={id}
         compra={modal.compra}
-        produtos={produtos}
         onClose={() => setModal((m) => ({ ...m, open: false }))}
         onSaved={(mensagem) => {
           setModal((m) => ({ ...m, open: false }))

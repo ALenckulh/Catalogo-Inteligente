@@ -35,4 +35,10 @@ public record UsuarioResponse(
                 u.getUpdatedAt()
         );
     }
+
+    /** Visão do admin quando o cliente desligou o contato: só o que identifica a relação comercial. */
+    public UsuarioResponse semContato() {
+        return new UsuarioResponse(
+                id, tipo, null, null, null, null, nomeCompleto, null, null, razaoSocial, createdAt, updatedAt);
+    }
 }

@@ -1,12 +1,15 @@
 package com.catalogo.admin;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.security.JwtService;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.catalogo.admin.dto.PatchAdminContaRequest;
@@ -31,12 +35,14 @@ class AdminContaServiceTest {
     UsuarioRepository usuarioRepository;
     @Mock
     PasswordEncoder passwordEncoder;
+    @Mock
+    JwtService jwtService;
 
     AdminContaService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminContaService(usuarioRepository, passwordEncoder);
+        service = new AdminContaService(usuarioRepository, passwordEncoder, jwtService);
     }
 
     @Test
@@ -60,7 +66,7 @@ class AdminContaServiceTest {
         when(usuarioRepository.existsByEmailIgnoreCase("new@x.c")).thenReturn(false);
         when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        UsuarioResponse r = service.patch(1L, new PatchAdminContaRequest("new@x.c", "11999999999", null, null));
+        UsuarioResponse r = service.patch(1L, new PatchAdminContaRequest("new@x.c", "11999999999", null, null)).usuario();
         assertEquals("new@x.c", r.email());
         assertEquals("11999999999", r.telefone());
     }
@@ -81,8 +87,25 @@ class AdminContaServiceTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
         when(passwordEncoder.matches("wrong", "hashed")).thenReturn(false);
 
-        assertThrows(ApiException.class, () ->
+        ApiException ex = assertThrows(ApiException.class, () ->
                 service.patch(1L, new PatchAdminContaRequest(null, null, "wrong", "novaSenha1")));
+        // 400 e não 401: 401 faria o front limpar a sessão do admin.
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("INVALID_PASSWORD", ex.getCode());
+    }
+
+    @Test
+    void patchTelefoneVazioLimpa() {
+        Usuario u = admin(1L, "a@x.c");
+        u.setTelefone("47999999999");
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.patch(1L, new PatchAdminContaRequest(null, null, null, null));
+        assertEquals("47999999999", u.getTelefone());
+
+        service.patch(1L, new PatchAdminContaRequest(null, "", null, null));
+        assertNull(u.getTelefone());
     }
 
     @Test
@@ -94,8 +117,11 @@ class AdminContaServiceTest {
         when(passwordEncoder.encode("novaSenha1")).thenReturn("newhash");
         when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.patch(1L, new PatchAdminContaRequest(null, null, "atual", "novaSenha1"));
+        when(jwtService.generate(u)).thenReturn("novo");
+
+        assertEquals("novo", service.patch(1L, new PatchAdminContaRequest(null, null, "atual", "novaSenha1")).token());
         assertEquals("newhash", u.getSenhaHash());
+        assertNotNull(u.getSessoesValidasDesde());
     }
 
     private static Usuario admin(Long id, String email) {

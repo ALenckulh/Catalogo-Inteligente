@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toApiError } from '@/lib/api/client'
+import { safeAdminNext } from '@/lib/navigation'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import {
   Alert,
@@ -18,6 +19,11 @@ import { LoginOutlined } from '@ant-design/icons'
 
 const { Title, Paragraph } = Typography
 
+/** Lido só no navegador, depois do login: dispensa useSearchParams e o Suspense que ele exige. */
+function destino(): string {
+  return safeAdminNext(new URLSearchParams(window.location.search).get('next'))
+}
+
 export default function AdminEntrarPage() {
   const router = useRouter()
   const { loginAdmin, isAdmin, loading: authLoading } = useCurrentUser()
@@ -26,7 +32,7 @@ export default function AdminEntrarPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!authLoading && isAdmin) router.replace('/admin')
+    if (!authLoading && isAdmin) router.replace(destino())
   }, [authLoading, isAdmin, router])
 
   async function onFinish(values: { email: string; senha: string }) {
@@ -34,7 +40,7 @@ export default function AdminEntrarPage() {
     setSubmitting(true)
     try {
       await loginAdmin(values)
-      router.replace('/admin')
+      router.replace(destino())
     } catch (e) {
       setError(toApiError(e).message)
     } finally {

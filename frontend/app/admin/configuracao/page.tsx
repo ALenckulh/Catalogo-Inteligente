@@ -9,14 +9,16 @@ import {
   BOOST_PADRAO,
   EVENTOS_SCORING,
   LAMBDA_PADRAO,
+  PAUSA_PADRAO,
   PESOS_PADRAO,
   decayGlobal,
   formatPontos,
   meiaVidaDeLambda,
   pontosPorAcao,
 } from '@/lib/scoring'
-import type { Categoria, ParametroDecay, PesoMetrica, TipoEvento } from '@/lib/types'
-import { App, Badge, Button, Card, Checkbox, Col, Flex, Popconfirm, Row, Space, Spin, Typography, message } from '@/components/ui'
+import type { Categoria, ParametroDecay, PesoMetrica, TipoMetrica } from '@/lib/types'
+import { PageError } from '@/components/layout/PageStates'
+import { App, Badge, Button, Card, Checkbox, Col, Flex, Popconfirm, Row, Space, Spin, Typography } from '@/components/ui'
 import { CategoriasSecao, MeiaVidaSecao } from './_components/DecaimentoSecoes'
 import { PesosSecao } from './_components/PesosSecao'
 import { Previa, type AbaConfig } from './_components/Previa'
@@ -28,6 +30,10 @@ type Alteracao = { nome: string; de: string; para: string }
 
 function dias(lambda: number): string {
   return `${Math.round(meiaVidaDeLambda(lambda))} dias`
+}
+
+function pausa(d: number): string {
+  return d > 0 ? `${d} dias` : 'sem pausa'
 }
 
 function bonus(boost: number): string {
@@ -87,6 +93,16 @@ function listarAlteracoes(
         para: bonus(d.boostConversao),
       })
     }
+    if (!antes || antes.boostRecorrencia !== d.boostRecorrencia) {
+      out.push({
+        nome: `Bônus de recorrência${escopo}`,
+        de: antes ? bonus(antes.boostRecorrencia) : '—',
+        para: bonus(d.boostRecorrencia),
+      })
+    }
+    if (d.categoriaId == null && antes?.pausaDias !== d.pausaDias) {
+      out.push({ nome: 'Pausa depois de contato ou compra', de: antes ? pausa(antes.pausaDias) : '—', para: pausa(d.pausaDias) })
+    }
   }
   return out
 }
@@ -121,7 +137,7 @@ function ConfirmacaoConteudo({
 
 export default function AdminConfiguracaoPage() {
   const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { modal } = App.useApp()
+  const { message, modal } = App.useApp()
   const [pesos, setPesos] = useState<PesoMetrica[]>([])
   const [decay, setDecay] = useState<ParametroDecay[]>([])
   /** Últimos valores salvos: base do "Desfazer", da prévia ("hoje") e da confirmação. */
@@ -130,10 +146,14 @@ export default function AdminConfiguracaoPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [aba, setAba] = useState<AbaConfig>('acoes')
   const [loading, setLoading] = useState(true)
+  const [falhou, setFalhou] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     if (!isAdmin) return
     const t = window.setTimeout(() => {
+      setFalhou(false)
+      setLoading(true)
       void Promise.all([getPesos(), getDecay()])
         .then(([p, d]) => {
           setPesos(p)
@@ -141,6 +161,7 @@ export default function AdminConfiguracaoPage() {
           setPesosSalvos(p)
           setDecaySalvo(d)
         })
+        .catch(() => setFalhou(true))
         .finally(() => setLoading(false))
       // Só alimenta "Adicionar ajuste para uma categoria"; uma falha aqui não bloqueia a tela.
       void listCategorias()
@@ -148,9 +169,11 @@ export default function AdminConfiguracaoPage() {
         .catch(() => setCategorias([]))
     }, 0)
     return () => window.clearTimeout(t)
-  }, [isAdmin])
+  }, [isAdmin, tentativa])
 
-  const simulacao = useSimulacao(pesos, decay, isAdmin && !loading)
+  const simulacao = useSimulacao(pesos, decay, isAdmin && !loading && !falhou)
+
+  if (isAdmin && falhou) return <PageError onRetry={() => setTentativa((n) => n + 1)} />
 
   if (authLoading || !isAdmin || loading) {
     return (
@@ -164,15 +187,16 @@ export default function AdminConfiguracaoPage() {
   const global = decayGlobal(decay)
   const globalSalvo = decayGlobal(decaySalvo)
   const overrides = decay.filter((d) => d.categoriaId != null)
-  const pesoMudou = (t: TipoEvento) =>
+  const pesoMudou = (t: TipoMetrica) =>
     pesos.find((p) => p.tipoEvento === t)?.peso !== pesosSalvos.find((p) => p.tipoEvento === t)?.peso
   /** Abas com alteração não salva (ponto no rótulo), já que os controles ficam escondidos nas outras abas. */
   const abaMudou: Record<AbaConfig, boolean> = {
     acoes: pesos.some((p) => EVENTOS_SCORING[p.tipoEvento]?.alvo !== 'categoria' && pesoMudou(p.tipoEvento)),
-    duracao: global.lambda !== globalSalvo.lambda,
+    duracao: global.lambda !== globalSalvo.lambda || global.pausaDias !== globalSalvo.pausaDias,
     categorias:
       pesoMudou('FILTRO_APLICADO') ||
       global.boostConversao !== globalSalvo.boostConversao ||
+      global.boostRecorrencia !== globalSalvo.boostRecorrencia ||
       JSON.stringify(overrides) !== JSON.stringify(decaySalvo.filter((d) => d.categoriaId != null)),
   }
   const rotuloAba = (k: AbaConfig, texto: string) => (
@@ -181,13 +205,13 @@ export default function AdminConfiguracaoPage() {
     </Badge>
   )
 
-  function alterarPeso(tipo: TipoEvento, peso: number) {
+  function alterarPeso(tipo: TipoMetrica, peso: number) {
     setPesos((prev) => prev.map((p) => (p.tipoEvento === tipo ? { ...p, peso: Math.round(peso * 100) / 100 } : p)))
   }
 
   function alterarDecay(
     categoriaId: number | null,
-    patch: Partial<Pick<ParametroDecay, 'lambda' | 'boostConversao'>>,
+    patch: Partial<Pick<ParametroDecay, 'lambda' | 'boostConversao' | 'boostRecorrencia' | 'pausaDias'>>,
   ) {
     setDecay((prev) => {
       const existe = prev.some((d) => d.categoriaId === categoriaId)
@@ -208,7 +232,12 @@ export default function AdminConfiguracaoPage() {
     setPesos((prev) =>
       prev.map((p) => ({ ...p, peso: PESOS_PADRAO.find((d) => d.tipoEvento === p.tipoEvento)?.peso ?? p.peso })),
     )
-    alterarDecay(null, { lambda: LAMBDA_PADRAO, boostConversao: BOOST_PADRAO })
+    alterarDecay(null, {
+      lambda: LAMBDA_PADRAO,
+      boostConversao: BOOST_PADRAO,
+      boostRecorrencia: BOOST_PADRAO,
+      pausaDias: PAUSA_PADRAO,
+    })
   }
 
   function salvar() {
@@ -244,6 +273,8 @@ export default function AdminConfiguracaoPage() {
           } else {
             void message.success('Ajustes salvos. As notas mudam conforme os clientes interagirem.')
           }
+          // O "Hoje" mudou no servidor; sem refazer, a prévia seguia comparando com o estado antigo.
+          simulacao.refazer()
         } catch {
           void message.error('Não foi possível salvar. Tente novamente.')
         }
@@ -277,7 +308,7 @@ export default function AdminConfiguracaoPage() {
           </Button>
           <Popconfirm
             title="Restaurar os valores iniciais?"
-            description="Pesos, meia-vida e bônus voltam ao padrão do sistema. Os ajustes por categoria são mantidos. Nada é salvo até você clicar em Salvar."
+            description="Pesos, meia-vida, pausa e bônus voltam ao padrão do sistema. Os ajustes por categoria são mantidos. Nada é salvo até você clicar em Salvar."
             okText="Restaurar"
             cancelText="Cancelar"
             onConfirm={restaurarPadrao}
@@ -317,14 +348,15 @@ export default function AdminConfiguracaoPage() {
                 lambdaSalvo={globalSalvo.lambda}
                 lambda={global.lambda}
                 onChange={(lambda) => alterarDecay(null, { lambda })}
+                pausaDias={global.pausaDias}
+                onPausaChange={(pausaDias) => alterarDecay(null, { pausaDias })}
               />
             )}
             {aba === 'categorias' && (
               <CategoriasSecao
                 pesos={pesos}
                 onPesoChange={alterarPeso}
-                boost={global.boostConversao}
-                onBoostChange={(boostConversao) => alterarDecay(null, { boostConversao })}
+                onGlobalChange={(patch) => alterarDecay(null, patch)}
                 overrides={overrides}
                 global={global}
                 idsSalvos={new Set(decaySalvo.flatMap((d) => (d.categoriaId != null ? [d.categoriaId] : [])))}

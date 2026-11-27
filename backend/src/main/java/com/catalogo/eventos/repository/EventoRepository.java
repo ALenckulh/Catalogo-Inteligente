@@ -20,12 +20,25 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
             """, nativeQuery = true)
     int attachUsuarioToVisitanteEventos(@Param("usuarioId") Long usuarioId, @Param("visitanteId") Long visitanteId);
 
+    /** Apaga também o que a pessoa digitou na busca (metadados.termo e metadados.filtros.q): texto livre pode identificar. */
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            UPDATE evento SET deleted_at = now()
-            WHERE usuario_id = :usuarioId AND deleted_at IS NULL
+            UPDATE evento
+            SET deleted_at = COALESCE(deleted_at, now()),
+                metadados = (metadados - 'termo') #- '{filtros,q}'
+            WHERE usuario_id = :usuarioId
             """, nativeQuery = true)
     int softDeleteByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    /** Visitante recusou levar o histórico: some dos cálculos e perde o texto buscado. */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE evento
+            SET deleted_at = COALESCE(deleted_at, now()),
+                metadados = (metadados - 'termo') #- '{filtros,q}'
+            WHERE visitante_id = :visitanteId AND usuario_id IS NULL
+            """, nativeQuery = true)
+    int descartarDoVisitante(@Param("visitanteId") Long visitanteId);
 
     @Query("""
             SELECT e FROM Evento e
@@ -36,18 +49,19 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
             """)
     List<Evento> findAtivosByUsuarioId(@Param("usuarioId") Long usuarioId);
 
+    /** Só eventos ainda anônimos: os migrados para uma conta contam na nota do usuário, não na do visitante. */
     @Query("""
             SELECT e FROM Evento e
             LEFT JOIN FETCH e.produto p
             LEFT JOIN FETCH p.categoria
-            WHERE e.visitante.id = :visitanteId AND e.deletedAt IS NULL
+            WHERE e.visitante.id = :visitanteId AND e.usuario IS NULL AND e.deletedAt IS NULL
             ORDER BY e.ocorridoEm DESC
             """)
     List<Evento> findAtivosByVisitanteId(@Param("visitanteId") Long visitanteId);
 
     long countByUsuario_IdAndDeletedAtIsNull(Long usuarioId);
 
-    long countByVisitante_IdAndDeletedAtIsNull(Long visitanteId);
+    long countByVisitante_IdAndUsuarioIsNullAndDeletedAtIsNull(Long visitanteId);
 
     @Query(value = """
             SELECT produto_id, tipo, COUNT(*)

@@ -1,5 +1,6 @@
 package com.catalogo.scoring.engine;
 
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -28,6 +29,9 @@ public class PopularidadeGlobalService {
 
     /**
      * Raw then normalize to [0,100] vs max in map. Keys = produtoId.
+     * Camada 1 (popularidade global): eventos dos últimos 30 dias (visualização 0,2, favorito 0,5,
+     * WhatsApp 1,0) + compras dos últimos 90 dias (1 cada). O mais popular fica com 100.
+     * Pesos fixos aqui no código, não lidos da peso_metrica.
      */
     @Transactional(readOnly = true)
     public Map<Long, BigDecimal> scoresByProduto() {
@@ -47,7 +51,7 @@ public class PopularidadeGlobalService {
             raw.merge(produtoId, weight * count, Double::sum);
         }
 
-        LocalDate since90 = LocalDate.now().minusDays(90);
+        LocalDate since90 = Fuso.hoje().minusDays(90);
         for (Object[] row : compraRepository.countByProdutoSince(since90)) {
             Long produtoId = ((Number) row[0]).longValue();
             long count = ((Number) row[1]).longValue();

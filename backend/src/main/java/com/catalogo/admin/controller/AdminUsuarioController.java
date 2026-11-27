@@ -23,6 +23,8 @@ import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.service.AdminUsuarioService;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.security.UsuarioPrincipal;
+import com.catalogo.lgpd.dto.ExportacaoResponse;
+import com.catalogo.lgpd.service.ContaService;
 import com.catalogo.shared.ApiException;
 import com.catalogo.shared.PageResponse;
 
@@ -33,9 +35,11 @@ import jakarta.validation.Valid;
 public class AdminUsuarioController {
 
     private final AdminUsuarioService usuarioService;
+    private final ContaService contaService;
 
-    public AdminUsuarioController(AdminUsuarioService usuarioService) {
+    public AdminUsuarioController(AdminUsuarioService usuarioService, ContaService contaService) {
         this.usuarioService = usuarioService;
+        this.contaService = contaService;
     }
 
     @GetMapping
@@ -45,15 +49,24 @@ public class AdminUsuarioController {
             @RequestParam(required = false) BigDecimal scoreMin,
             @RequestParam(required = false) NivelInteresse nivel,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean ativo,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer limit
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String sort
     ) {
-        return usuarioService.listar(tipo, categoria, scoreMin, nivel, q, page, limit);
+        return usuarioService.listar(tipo, categoria, scoreMin, nivel, q, ativo, page, limit, sort);
     }
 
     @GetMapping("/{id}")
     public AdminUsuarioDetalhe detalhe(@PathVariable Long id) {
         return usuarioService.detalhe(id);
+    }
+
+    /** Cópia dos dados que o titular pediu por e-mail (LGPD art. 18); fica registrada como solicitação atendida. */
+    @GetMapping("/{id}/exportar")
+    public ExportacaoResponse exportar(@PathVariable Long id, Authentication authentication) {
+        requireAdmin(authentication);
+        return contaService.exportar(id);
     }
 
     @PostMapping("/{id}/compras")

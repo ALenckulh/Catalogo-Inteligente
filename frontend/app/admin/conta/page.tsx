@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { updateAdminConta } from '@/lib/api/admin'
 import { toApiError } from '@/lib/api/client'
+import { isValidTelefone } from '@/lib/validators'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
@@ -22,9 +23,10 @@ import { LogoutOutlined, SaveOutlined } from '@ant-design/icons'
 const { Title, Paragraph } = Typography
 
 export default function AdminContaPage() {
-  const { isAdmin, loading: authLoading } = useRequireAdmin()
-  const { user, logout } = useCurrentUser()
-  const { api, contextHolder } = useAppNotification()
+  const [saindo, setSaindo] = useState(false)
+  const { isAdmin, loading: authLoading } = useRequireAdmin(!saindo)
+  const { user, logout, updateUser } = useCurrentUser()
+  const { api } = useAppNotification()
   const [form] = Form.useForm()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -37,9 +39,17 @@ export default function AdminContaPage() {
   async function onFinish(values: { email: string; telefone?: string; senhaAtual?: string; novaSenha?: string }) {
     setError(null)
     setSaving(true)
+    const trocarSenha = Boolean(values.novaSenha)
     try {
-      await updateAdminConta({ email: values.email, telefone: values.telefone || null })
-      api.success({ title: 'Conta atualizada' })
+      const updated = await updateAdminConta({
+        email: values.email,
+        // '' limpa o telefone no backend; null seria "não alterar".
+        telefone: values.telefone?.trim() ?? '',
+        ...(trocarSenha ? { senhaAtual: values.senhaAtual, novaSenha: values.novaSenha } : {}),
+      })
+      updateUser(updated)
+      form.setFieldsValue({ senhaAtual: undefined, novaSenha: undefined })
+      api.success({ title: trocarSenha ? 'Conta e senha atualizadas' : 'Conta atualizada' })
     } catch (e) {
       setError(toApiError(e).message)
     } finally {
@@ -49,9 +59,11 @@ export default function AdminContaPage() {
 
   /** useRequireAdmin leva para /admin/entrar assim que a sessão acaba. */
   async function sair() {
+    setSaindo(true)
     try {
       await logout()
     } catch (e) {
+      setSaindo(false)
       api.error({ title: toApiError(e).message })
     }
   }
@@ -59,7 +71,6 @@ export default function AdminContaPage() {
   if (authLoading || !isAdmin) {
     return (
       <Flex justify="center" style={{ padding: 48 }}>
-        {contextHolder}
         <Spin />
       </Flex>
     )
@@ -67,11 +78,10 @@ export default function AdminContaPage() {
 
   return (
     <Flex vertical gap={16} style={{ maxWidth: 480 }}>
-      {contextHolder}
       <Title level={2} style={{ margin: 0 }} id="admin-conta-title">
         Minha conta
       </Title>
-      <Paragraph type="secondary">Altere e-mail, telefone ou senha (mock).</Paragraph>
+      <Paragraph type="secondary">Altere e-mail, telefone ou senha.</Paragraph>
       {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <FormItem
@@ -82,14 +92,46 @@ export default function AdminContaPage() {
         >
           <Input id="admin-conta-email" placeholder="Informe o e-mail" />
         </FormItem>
-        <FormItem name="telefone" label="Telefone" tooltip="Contato do admin">
+        <FormItem
+          name="telefone"
+          label="Telefone"
+          tooltip="Contato do admin"
+          rules={[
+            {
+              validator: (_, v) =>
+                isValidTelefone(v) ? Promise.resolve() : Promise.reject(new Error('Telefone inválido')),
+            },
+          ]}
+        >
           <Input id="admin-conta-telefone" placeholder="Informe o telefone" />
         </FormItem>
-        <FormItem name="senhaAtual" label="Senha atual" tooltip="Necessária para trocar a senha (mock)">
-          <Input.Password id="admin-conta-senha-atual" placeholder="Informe a senha atual" />
+        <FormItem
+          name="senhaAtual"
+          label="Senha atual"
+          tooltip="Necessária para trocar a senha"
+          dependencies={['novaSenha']}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator: (_, v) =>
+                !getFieldValue('novaSenha') || v
+                  ? Promise.resolve()
+                  : Promise.reject(new Error('Informe a senha atual para trocar a senha')),
+            }),
+          ]}
+        >
+          <Input.Password id="admin-conta-senha-atual" placeholder="Informe a senha atual" autoComplete="current-password" />
         </FormItem>
-        <FormItem name="novaSenha" label="Nova senha" tooltip="Deixe em branco para manter">
-          <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" />
+        <FormItem
+          name="novaSenha"
+          label="Nova senha"
+          tooltip="Deixe em branco para manter"
+          rules={[
+            { min: 6, message: 'A nova senha deve ter pelo menos 6 caracteres' },
+            { max: 72, message: 'A senha deve ter no máximo 72 caracteres' },
+          ]}
+        >
+          {/* new-password: o navegador não preenche sozinho, o que trocaria a senha ao salvar. */}
+          <Input.Password id="admin-conta-nova-senha" placeholder="Informe a nova senha" autoComplete="new-password" />
         </FormItem>
         <Button
           id="admin-conta-salvar"
@@ -106,6 +148,7 @@ export default function AdminContaPage() {
       <Button
         id="admin-conta-sair"
         variant="text"
+        color="danger"
         icon={<LogoutOutlined />}
         style={{ alignSelf: 'flex-start' }}
         onClick={() => void sair()}

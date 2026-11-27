@@ -1,15 +1,20 @@
 package com.catalogo.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -26,11 +31,13 @@ import com.catalogo.admin.service.AdminUsuarioService;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.repository.UsuarioRepository;
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.catalog.repository.CompraRepository;
 import com.catalogo.catalog.repository.ProdutoRepository;
 import com.catalogo.scoring.engine.ScoreEngine;
+import com.catalogo.scoring.entity.ScoreProduto;
 import com.catalogo.scoring.repository.FaixaPrecoUsuarioRepository;
 import com.catalogo.scoring.repository.ScoreCategoriaRepository;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
@@ -54,6 +61,8 @@ class AdminUsuarioServiceCompraTest {
     @Mock
     ProdutoRepository produtoRepository;
     @Mock
+    ConsentimentoService consentimentoService;
+    @Mock
     ScoreEngine scoreEngine;
 
     AdminUsuarioService service;
@@ -68,8 +77,51 @@ class AdminUsuarioServiceCompraTest {
                 faixaPrecoUsuarioRepository,
                 compraRepository,
                 produtoRepository,
+                consentimentoService,
                 scoreEngine
         );
+    }
+
+    /** Cada opção esconde só o seu: contato não mexe nas notas, e interesse não mexe no contato. */
+    @Test
+    void detalheEscondeSoOQueOClienteDesligou() {
+        Usuario u = new Usuario();
+        u.setId(5L);
+        u.setTipo(TipoUsuario.PF);
+        u.setNomeCompleto("Ana");
+        u.setEmail("ana@x.c");
+        u.setEmailAlternativo("alt@x.c");
+        u.setTelefone("47999990000");
+        u.setCpf("52998224725");
+        u.setIdade((short) 30);
+        ScoreProduto nota = new ScoreProduto();
+        nota.setProdutoId(2L);
+        nota.setValor(new BigDecimal("80"));
+        Compra compra = new Compra();
+        compra.setProduto(new Produto());
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(u));
+        when(scoreProdutoRepository.findByUsuarioId(5L)).thenReturn(List.of(nota));
+        when(compraRepository.findByUsuarioIdAndDeletedAtIsNull(5L)).thenReturn(List.of(compra));
+        when(consentimentoService.aceitaContato(5L)).thenReturn(false, true);
+        when(consentimentoService.aceitaCookies(5L)).thenReturn(true, false);
+
+        var semContato = service.detalhe(5L);
+        assertFalse(semContato.contatoVisivel());
+        assertEquals("Ana", semContato.usuario().nomeCompleto());
+        assertNull(semContato.usuario().email());
+        assertNull(semContato.usuario().emailAlternativo());
+        assertNull(semContato.usuario().telefone());
+        assertNull(semContato.usuario().cpf());
+        assertNull(semContato.usuario().idade());
+        assertEquals(1, semContato.scoresProduto().size());
+
+        var semInteresse = service.detalhe(5L);
+        assertFalse(semInteresse.interesseVisivel());
+        assertEquals("ana@x.c", semInteresse.usuario().email());
+        assertTrue(semInteresse.scoresProduto().isEmpty());
+        assertTrue(semInteresse.scoresCategoria().isEmpty());
+        assertNull(semInteresse.faixaPreco().gapPreco());
+        assertEquals(1, semInteresse.compras().size());
     }
 
     @Test
@@ -90,12 +142,13 @@ class AdminUsuarioServiceCompraTest {
         });
 
         service.registrarCompra(5L, 99L, new RegistrarCompraRequest(
-                2L, BigDecimal.TEN, 1, BigDecimal.TEN, LocalDate.of(2026, 1, 15), null
+                2L, new BigDecimal("10.50"), 3, LocalDate.of(2026, 1, 15), null
         ));
 
         ArgumentCaptor<Compra> cap = ArgumentCaptor.forClass(Compra.class);
         verify(compraRepository).save(cap.capture());
         assertEquals(99L, cap.getValue().getRegistradoPor());
+        assertEquals(new BigDecimal("31.50"), cap.getValue().getValorTotal());
         verify(scoreEngine).recalc(5L, null);
     }
 
@@ -110,14 +163,33 @@ class AdminUsuarioServiceCompraTest {
         when(compraRepository.save(any(Compra.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var res = service.atualizarCompra(5L, 1L, new RegistrarCompraRequest(
-                3L, BigDecimal.ONE, 4, new BigDecimal("4"), LocalDate.of(2026, 2, 1), "obs"
+                3L, BigDecimal.ONE, 4, LocalDate.of(2026, 2, 1), "obs"
         ));
 
         assertEquals(3L, res.produtoId());
         assertEquals(4, res.quantidade());
         assertEquals("obs", res.observacoes());
+        assertEquals(new BigDecimal("4"), c.getValorTotal());
         assertEquals(99L, c.getRegistradoPor());
         verify(scoreEngine).recalc(5L, null);
+    }
+
+    /** Hoje (em Brasília) vale; amanhã não, nem ao editar. Total acima da coluna é recusado antes do banco. */
+    @Test
+    void compraFuturaOuGrandeDemaisRecusada() {
+        LocalDate hoje = Fuso.hoje();
+        when(compraRepository.findById(1L)).thenReturn(Optional.of(compra(1L, 5L)));
+        when(compraRepository.save(any(Compra.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(produtoRepository.findById(2L)).thenReturn(Optional.of(compra(1L, 5L).getProduto()));
+
+        service.atualizarCompra(5L, 1L, new RegistrarCompraRequest(2L, BigDecimal.ONE, 1, hoje, null));
+        for (RegistrarCompraRequest r : List.of(
+                new RegistrarCompraRequest(2L, BigDecimal.ONE, 1, hoje.plusDays(1), null),
+                new RegistrarCompraRequest(2L, new BigDecimal("9999999999.99"), 2, hoje, null))) {
+            ApiException ex = assertThrows(ApiException.class, () -> service.atualizarCompra(5L, 1L, r));
+            assertEquals("VALIDATION_ERROR", ex.getCode());
+        }
+        verify(compraRepository).save(any());
     }
 
     @Test

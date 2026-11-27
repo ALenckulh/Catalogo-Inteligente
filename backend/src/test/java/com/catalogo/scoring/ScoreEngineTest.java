@@ -3,11 +3,12 @@ package com.catalogo.scoring;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.catalog.entity.Compra;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -77,9 +78,6 @@ class ScoreEngineTest {
         Evento view = evento(TipoEvento.VISUALIZACAO_PRODUTO, produto, OffsetDateTime.now().minusDays(1));
 
         when(eventoRepository.findAtivosByUsuarioId(1L)).thenReturn(List.of(view));
-        when(compraRepository.countByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(0L);
-        when(scoreProdutoRepository.findByUsuarioIdAndProdutoId(1L, 10L)).thenReturn(Optional.empty());
-        when(scoreCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 1L)).thenReturn(Optional.empty());
         when(faixaPrecoUsuarioRepository.findByUsuarioId(1L)).thenReturn(Optional.empty());
         when(scoreProdutoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(scoreCategoriaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -94,16 +92,14 @@ class ScoreEngineTest {
     }
 
     @Test
-    void compraBelowThresholdIgnored() {
+    void compraAbaixoDoMinimoNaoSomaPontos() {
         stubPesosAndDecay();
         Categoria cat = cat(1L);
         Produto produto = produto(10L, cat, "50.00");
         Evento view = evento(TipoEvento.VISUALIZACAO_PRODUTO, produto, OffsetDateTime.now());
 
         when(eventoRepository.findAtivosByUsuarioId(1L)).thenReturn(List.of(view));
-        when(compraRepository.countByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(2L);
-        when(scoreProdutoRepository.findByUsuarioIdAndProdutoId(1L, 10L)).thenReturn(Optional.empty());
-        when(scoreCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 1L)).thenReturn(Optional.empty());
+        when(compraRepository.findByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(List.of(compra(produto), compra(produto)));
         when(faixaPrecoUsuarioRepository.findByUsuarioId(1L)).thenReturn(Optional.empty());
         when(scoreProdutoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(scoreCategoriaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -111,7 +107,53 @@ class ScoreEngineTest {
 
         engine.recalc(1L, null);
 
-        verify(compraRepository, never()).findByUsuarioIdAndDeletedAtIsNull(any());
+        ArgumentCaptor<ScoreProduto> cap = ArgumentCaptor.forClass(ScoreProduto.class);
+        verify(scoreProdutoRepository).save(cap.capture());
+        // só a visualização: 0,2 / (0,2 + 1,0 + 0,5 + 0,1) * 100
+        assertEquals(new BigDecimal("11.11"), cap.getValue().getValor());
+    }
+
+    @Test
+    void notaSemSinalEApagadaEAExistenteEReaproveitada() {
+        stubPesosAndDecay();
+        Produto produto = produto(10L, cat(1L), "50.00");
+        ScoreProduto mantida = new ScoreProduto();
+        mantida.setUsuarioId(1L);
+        mantida.setProdutoId(10L);
+        ScoreProduto velha = new ScoreProduto();
+        velha.setUsuarioId(1L);
+        velha.setProdutoId(99L);
+        ScoreCategoria catVelha = new ScoreCategoria();
+        catVelha.setUsuarioId(1L);
+        catVelha.setCategoriaId(77L);
+        when(eventoRepository.findAtivosByUsuarioId(1L)).thenReturn(
+                List.of(evento(TipoEvento.VISUALIZACAO_PRODUTO, produto, OffsetDateTime.now())));
+        when(scoreProdutoRepository.findByUsuarioId(1L)).thenReturn(List.of(mantida, velha));
+        when(scoreCategoriaRepository.findByUsuarioId(1L)).thenReturn(List.of(catVelha));
+        when(faixaPrecoUsuarioRepository.findByUsuarioId(1L)).thenReturn(Optional.empty());
+
+        engine.recalc(1L, null);
+
+        verify(scoreProdutoRepository).save(mantida);
+        assertEquals(new BigDecimal("11.11"), mantida.getValor());
+        assertApagadas(scoreProdutoRepository, velha);
+        assertApagadas(scoreCategoriaRepository, catVelha);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void assertApagadas(org.springframework.data.jpa.repository.JpaRepository repo, Object esperada) {
+        ArgumentCaptor<Iterable> cap = ArgumentCaptor.forClass(Iterable.class);
+        verify(repo).deleteAllInBatch(cap.capture());
+        List<Object> apagadas = new java.util.ArrayList<>();
+        cap.getValue().forEach(apagadas::add);
+        assertEquals(List.of(esperada), apagadas);
+    }
+
+    private static Compra compra(Produto p) {
+        Compra c = new Compra();
+        c.setProduto(p);
+        c.setDataCompra(LocalDate.now());
+        return c;
     }
 
     @Test
@@ -127,9 +169,6 @@ class ScoreEngineTest {
         Evento contact = evento(TipoEvento.CONTATO_WHATSAPP, produto, OffsetDateTime.now().minusDays(2));
 
         when(eventoRepository.findAtivosByUsuarioId(1L)).thenReturn(List.of(contact));
-        when(compraRepository.countByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(0L);
-        when(scoreProdutoRepository.findByUsuarioIdAndProdutoId(1L, 10L)).thenReturn(Optional.empty());
-        when(scoreCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 1L)).thenReturn(Optional.empty());
         when(faixaPrecoUsuarioRepository.findByUsuarioId(1L)).thenReturn(Optional.empty());
         when(scoreProdutoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(scoreCategoriaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

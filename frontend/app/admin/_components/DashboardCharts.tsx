@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { Bar, Line } from '@ant-design/charts'
 import type { DashboardSeries } from '@/lib/types'
 import { formatDate } from '@/lib/formatters'
-import { palette } from '@/lib/theme/tokens'
+import { palette, text } from '@/lib/theme/tokens'
 import { Card, Col, Empty, Flex, Row } from '@/components/ui'
 import { NIVEIS_INTERESSE, isNivelInteresse, type NivelInteresse } from '@/lib/nivelInteresse'
 import { HelpTitle } from './HelpTitle'
@@ -214,7 +214,7 @@ export function DashboardCharts({ series }: Props) {
               y: { title: CHART_META.categorias.yTitle, tickFilter: integerTicks },
             }}
             style={{ fill: palette.primary[500], maxWidth: 40 }}
-            label={{ text: 'quantidade', position: 'inside', fill: '#fff', fontWeight: 600 }}
+            label={{ text: 'quantidade', position: 'inside', fill: text.inverse, fontWeight: 600 }}
             tooltip={{
               title: (d: { categoria: string }) => d.categoria,
               items: [

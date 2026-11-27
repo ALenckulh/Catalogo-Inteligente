@@ -30,7 +30,7 @@ export default function FavoritosPage() {
   const router = useRouter()
   const { user, isAuthenticated, loading: authLoading } = useCurrentUser()
   const track = useTrackEvent()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [items, setItems] = useState<Favorito[]>([])
   const [loading, setLoading] = useState(true)
   const [falhou, setFalhou] = useState(false)
@@ -131,7 +131,6 @@ export default function FavoritosPage() {
 
   return (
     <Flex vertical className="page" style={{ gap: 'var(--space-4)' }}>
-      {contextHolder}
       <div>
         <Title level={1} id="favoritos-title" style={{ marginBottom: 'var(--space-1)' }}>
           Favoritos

@@ -98,7 +98,7 @@
   --text-warning: var(--warning-400);
   --text-error: var(--error-400);
   --text-accent: var(--primary-400);
-  --text-neutral-subtle: var(--neutral-600);
+  --text-neutral-subtle: var(--neutral-700);
   --text-neutral-default: var(--neutral-700);
   --text-neutral-strong: var(--neutral-900);
   --text-inverse: var(--neutral-0);
@@ -108,7 +108,7 @@
   --text-success-hover: var(--success-300);
   --text-warning-hover: var(--warning-300);
   --text-error-hover: var(--error-300);
-  --text-neutral-subtle-hover: var(--neutral-500);
+  --text-neutral-subtle-hover: var(--neutral-600);
   --text-neutral-default-hover: var(--neutral-600);
   --text-neutral-strong-hover: var(--neutral-800);
 

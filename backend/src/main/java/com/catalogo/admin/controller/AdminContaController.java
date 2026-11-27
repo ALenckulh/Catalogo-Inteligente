@@ -1,5 +1,7 @@
 package com.catalogo.admin.controller;
 
+import com.catalogo.admin.dto.AdminContaResponse;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,7 +33,7 @@ public class AdminContaController {
     }
 
     @PatchMapping
-    public UsuarioResponse patch(Authentication authentication, @RequestBody PatchAdminContaRequest request) {
+    public AdminContaResponse patch(Authentication authentication, @Valid @RequestBody PatchAdminContaRequest request) {
         return contaService.patch(requireAdmin(authentication), request);
     }
 

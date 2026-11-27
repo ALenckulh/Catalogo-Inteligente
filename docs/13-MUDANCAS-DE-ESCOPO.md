@@ -1,183 +1,176 @@
 # 13 — Mudanças de escopo e justificativas
 
-Registro das mudanças de escopo feitas depois da especificação original. Como este é um projeto de TCC e o escopo já foi enxugado, **nenhuma mudança entra sem justificativa** e nenhuma feature é removida sem motivo registrado aqui.
+Registro do que mudou em relação à especificação original (docs 01 a 12). Entra aqui só o que **altera algo especificado** ou **acrescenta uma funcionalidade**. Refatoração, correção de bug e detalhe de tela ficam no código e nos docs de cada assunto.
 
-Cada item traz:
-- **Contexto:** o que existia;
-- **Decisão:** o que mudou;
-- **Justificativa:** por que mudou;
-- **Rastreabilidade:** requisitos e seções afetados;
-- **Código:** onde está implementado.
+A numeração tem lacunas (M4, M10 a M12, M14 e M15 saíram por esse critério) para manter válidas as citações no código e nos outros docs.
 
----
+## Resumo
 
-## A9 — Configuração de scoring (novembro de 2026)
-
-**Motivação geral:** a tela original ([03 §A9](03-PAGINAS-E-UX.md)) era uma tabela de números crus (`VISUALIZACAO_PRODUTO 0.2`, `λ 0.01`, `boost 1.00`). Só quem conhecia o motor entendia o efeito de uma mudança. O objetivo foi que o **dono do catálogo**, público do RF25, conseguisse ajustar os parâmetros com segurança, vendo o efeito antes de salvar. Isso atende ao RF25 e ao RNF13 sem ampliar o problema que o TCC resolve.
-
-### Resumo
-
-| # | Mudança | Tipo |
-|---|---|---|
-| M1 | Pesquisa conta na nota do produto quando o cliente abre um resultado | Correção de regra (a métrica não tinha efeito) |
-| M2 | Filtro por categoria conta na nota da categoria | Correção de regra (a métrica não tinha efeito) |
-| M3 | O divisor da nota de produto deixa de incluir o filtro, que é métrica de categoria | Correção de regra |
-| M4 | Cálculo extraído para uma função pura compartilhada (`ScoreCalculator`) | Refatoração |
-| M5 | Prévia com dados reais e medição de precisão (`POST /simular`) | Adição |
-| M6 | Recálculo de todas as notas ao salvar (`POST /recalcular`) | Adição |
-| M7 | Salvar único na tela (antes, um por aba) | Mudança de interface |
-| M8 | Restaurar padrão cobre pesos, meia-vida e bônus (antes, só pesos) | Mudança de interface |
-| M9 | Meia-vida em dias como controle principal, λ exibido discretamente | Mudança de interface |
-| M10 | Lista de pesos em ordem fixa (antes, tabela ordenável) | Mudança de interface |
-| M11 | Valores padrão do frontend iguais aos da seed | Correção |
-| M12 | λ com 5 casas decimais | Correção |
-| M13 | Criar e remover ajuste por categoria na tela (`DELETE …/decay/{categoriaId}`) | Correção de lacuna (RF25) |
-| M14 | Backtest avalia só quem tinha histórico no corte; aviso de sobreajuste | Correção de método |
-| M15 | Tela em abas, prévia que acompanha a aba e categoria favorita na prévia | Mudança de interface + adição |
+| # | Mudança | Tipo | Especificação afetada |
+|---|---|---|---|
+| M1 | Pesquisa conta na nota do produto quando o cliente abre um resultado | Regra | [04 §3](04-ESPECIFICACAO-TECNICA.md) |
+| M2 | Filtro por categoria conta na nota da categoria | Regra | [04 §3 e §4](04-ESPECIFICACAO-TECNICA.md) |
+| M3 | O divisor da nota de produto deixa de incluir o filtro | Regra | [04 §4](04-ESPECIFICACAO-TECNICA.md) |
+| M5 | Prévia com dados reais e medição de precisão | Adição | RF25, RNF13 |
+| M6 | Recálculo de todas as notas ao salvar | Adição | RNF13 |
+| M7 | Salvar único na configuração | Interface | [03 §A9](03-PAGINAS-E-UX.md) |
+| M8 | Restaurar padrão cobre pesos, meia-vida e bônus | Interface | [03 §A9](03-PAGINAS-E-UX.md) |
+| M9 | Meia-vida em dias como controle principal | Interface | RF25 |
+| M13 | Criar e remover ajuste por categoria | Lacuna | RF25 |
+| M16 | Upload de imagens guardadas no Postgres | Adição | RF23, [11](11-API-ENDPOINTS.md) |
+| M17 | Serviços de retífica no catálogo | Adição | [01](01-VISAO-GERAL.md), RF23 |
+| M18 | Compra e retorno fora do divisor; retorno começa em 0 | Regra | [04 §3 e §9](04-ESPECIFICACAO-TECNICA.md), RF16 |
+| M19 | Associar o histórico recalcula as notas | Regra | [04 §7.3](04-ESPECIFICACAO-TECNICA.md), RF19 |
+| M20 | Sem fingerprint e sem IP | Remoção | [04 §7.2](04-ESPECIFICACAO-TECNICA.md), RF18 |
+| M21 | Nova calibração padrão dos pesos e da meia-vida | Regra | [04 §3.1 e §5](04-ESPECIFICACAO-TECNICA.md), RF25 |
+| M22 | Opções de privacidade ligadas por legítimo interesse, ocultação no admin e cópia por e-mail | Regra | [04 §10](04-ESPECIFICACAO-TECNICA.md), RF04, RF21, RF22, RF29 |
+| M23 | Banner de cookies só com "Aceitar"; Política no formato do modal, também na conta | Interface | [03 §4.0 e S4](03-PAGINAS-E-UX.md), RF27, RF28 |
 
 ---
+
+## Regras do score
 
 ### M1 — Pesquisa conta no produto quando o cliente abre um resultado
 
-- **Contexto:** a spec ([04 §3](04-ESPECIFICACAO-TECNICA.md)) lista "Pesquisas do usuário — termos buscados indicam interesse por categoria/produto" com peso **Médio**, e o peso é configurável. Mas o evento `PESQUISA` era enviado só com o termo, sem produto, e a nota de produto só soma eventos que têm produto. **O peso existia, mas nunca tinha efeito.**
-- **Decisão:** quando há termo de busca e o cliente **clica num produto do resultado**, o frontend envia um `PESQUISA` com `produtoId` e `metadados.origem = "resultado_pesquisa"`. Esse evento soma na nota do produto com o peso de "Pesquisar e abrir". A pesquisa sem clique continua sendo registrada, como antes, e não soma.
-- **Justificativa:** "pesquisou e abriu um item" é um sinal forte e específico de interesse naquele produto, como a spec descreve. A API e o banco já aceitavam `produtoId` em qualquer evento ([11 `POST /api/eventos`](11-API-ENDPOINTS.md)), então não foi preciso migration nem um tipo de evento novo.
-- **Alternativa rejeitada:** um tipo novo `CLIQUE_RESULTADO_PESQUISA`. Exigiria migration do enum `tipo_evento`, uma linha a mais em `peso_metrica` e mais um controle na tela, sem ganho para o TCC.
-- **Limitação:** eventos antigos não têm esse vínculo, então só as pesquisas feitas a partir da mudança contam.
-- **Rastreabilidade:** RF14–RF18 (coleta), RF25 (peso configurável), 04 §3.
-- **Código:** `frontend/app/(public)/produtos/ProdutosCatalogo.tsx` (`onClickCapture` do resultado); o motor já soma qualquer evento com produto (`ScoreCalculator`).
+- **Especificação:** pesquisa com peso **Médio**, indicando interesse por categoria ou produto.
+- **Situação anterior:** o evento `PESQUISA` levava só o termo. Como a nota soma apenas eventos com produto, o peso configurável não tinha efeito.
+- **Decisão:** ao abrir um produto do resultado, o frontend envia `PESQUISA` com `produtoId`, que soma na nota. A pesquisa sem clique continua registrada e não soma.
+- **Justificativa:** pesquisar e abrir um item é um sinal forte e específico. A API e o banco já aceitavam `produtoId` em qualquer evento.
+- **Limitação:** vale só para pesquisas feitas depois da mudança.
+- **Rastreabilidade:** RF17, RF25.
 
 ### M2 — Filtro por categoria conta na nota da categoria
 
-- **Contexto:** a spec lista "Filtros aplicados — refinamento de busca indica preferência específica" com peso **Médio**. O `FILTRO_APLICADO` levava a categoria só dentro de `metadados.filtros.categoria_id`, e o motor não o usava. **O peso não tinha efeito.**
-- **Decisão:** o frontend passa a enviar `categoriaId` no evento quando o filtro é por categoria. O motor soma, na **nota da categoria**, `peso(Filtro) × decaimento ÷ Score_máximo × 100` pontos por filtro, na mesma escala da nota de produto e com o λ da categoria. Uma categoria só filtrada, sem produto visto, também passa a ter nota.
-- **Justificativa:** filtrar por uma categoria indica interesse nela. Somar na categoria, e não em produtos, respeita o que o cliente de fato demonstrou. O efeito aparece em "Categoria favorita dos clientes", na coluna "Top categoria" e na ordem das categorias. O nível de interesse do cliente não muda, porque vem da nota de produto.
-- **Alternativa rejeitada (por ora):** casar o termo pesquisado com o nome da categoria. Fica como trabalho futuro, porque depende de normalização de texto e sinônimos.
-- **Limitação:** só os filtros feitos a partir da mudança contam.
-- **Rastreabilidade:** RF25, 04 §3 e §4.
-- **Código:** `ScoreCalculator.pontosDeFiltro` e `calcularCategorias`; `frontend/lib/api/eventos.ts` (`categoriaId`); `ProdutosCatalogo.tsx`.
+- **Especificação:** filtros com peso **Médio**, indicando preferência.
+- **Situação anterior:** a categoria ia só nos metadados e o motor não a usava.
+- **Decisão:** o evento `FILTRO_APLICADO` leva `categoriaId` e soma `peso × decaimento ÷ Score_máximo × 100` na nota da categoria. Uma categoria só filtrada também recebe nota.
+- **Justificativa:** filtrar indica interesse na categoria, não em um produto específico.
+- **Limitação:** vale só para filtros feitos depois da mudança.
+- **Rastreabilidade:** RF17, RF25.
 
 ### M3 — Divisor da nota de produto sem o filtro
 
-- **Contexto:** a nota é `Σ(peso × valor × decaimento) ÷ Score_máximo × 100`, e a spec ([04 §4](04-ESPECIFICACAO-TECNICA.md)) define o `Score_máximo` como "o valor teórico obtido se todas as métricas atingissem seu valor máximo", ou seja, o máximo que **um produto** pode somar. A implementação somava no divisor os pesos de **todas** as métricas, inclusive as que nunca somam em produto.
-- **Decisão:** o divisor soma só os pesos positivos das **métricas de produto**. O filtro, que é métrica de categoria (M2), fica fora; a pesquisa, que passou a ser de produto (M1), fica dentro.
-- **Justificativa:** com os pesos atuais da seed, antes de M1 e M2:
+- **Especificação:** `Score_máximo` é o valor que **um produto** pode somar.
+- **Situação anterior:** o divisor somava os pesos de todas as métricas, inclusive as que nunca somam em produto. Com os pesos padrão, um cliente que fez uma vez cada ação de produto ficava com 69 (Morno).
+- **Decisão:** o divisor soma só os pesos positivos das métricas de produto. O filtro fica fora; a pesquisa, que passou a ser de produto (M1), fica dentro.
+- **Justificativa:** segue a definição da especificação. Antes, aumentar o peso do filtro reduzia todas as notas de produto.
+- **Rastreabilidade:** RF25.
 
-  | | Antes (pesquisa e filtro no divisor, sem efeito) | Depois |
-  |---|---|---|
-  | Divisor | 0,2 + 0,5 + 0,1 + 1,0 + **0,5 + 0,5** + 0,3 + 0,5 = 3,6 | sem o filtro: 3,1 |
-  | Cliente que fez **uma vez cada ação de produto** (ver, favoritar, WhatsApp, rolar, 2 min) | 2,5 ÷ 3,6 = **69 → Morno**, mesmo tendo feito tudo | com a pesquisa também: 3,0 ÷ 3,1 = **97 → Quente** |
-  | Admin sobe o peso do filtro de 0,5 para 3 | divisor sobe e **todas as notas de produto caem cerca de 40%**, sem nenhum filtro contar para ninguém | nenhuma nota de produto muda; só a nota da categoria filtrada sobe |
+### M18 — Compra e retorno fora do divisor
 
-  Ou seja, uma métrica no divisor que não soma em produto só **reduzia todas as notas** e tornava o máximo inalcançável. A correção faz a implementação seguir a definição da spec.
-- **Rastreabilidade:** 04 §4.
-- **Código:** `ScoringParams.TIPOS_DE_CATEGORIA` e `ScoringParams.scoreMax()`; `frontend/lib/scoring.ts` (`scoreMax`).
+- **Especificação:** o dono do catálogo define o peso do histórico de compras, e voltar ao produto pontua.
+- **Situação anterior:** a compra usava o peso do WhatsApp, e o retorno não pontuava.
+- **Decisão:** os dois têm peso próprio, **fora do divisor** da nota. A compra começa com o peso do WhatsApp e o retorno em 0.
+- **Justificativa:** dentro do divisor, mudar um desses pesos baixaria as notas de todos os produtos. Os valores iniciais não mudam nenhuma nota; quem quiser liga o retorno na Configuração. A sequência de navegação segue como trabalho futuro.
+- **Rastreabilidade:** RF16, RF25; [08 §4.15](08-MODELO-DE-DADOS.md).
 
-### M4 — Cálculo extraído para `ScoreCalculator`
+### M19 — Associar o histórico recalcula as notas
 
-- **Contexto:** o cálculo vivia dentro de `ScoreEngine.recalc`, misturado com a gravação no banco.
-- **Decisão:** o cálculo virou uma função pura, `ScoreCalculator.calcular(eventos, compras, parâmetros, agora)`. O `ScoreEngine` passa a carregar os dados, chamar o `ScoreCalculator` e gravar.
-- **Justificativa:** a prévia (M5) precisa usar **exatamente a mesma conta** que o motor; uma cópia da lógica divergiria com o tempo. O comportamento não mudou: o `ScoreEngineTest` continua passando, e o `ScoreCalculatorTest` cobre a fórmula.
-- **Código:** `backend/.../scoring/engine/ScoreCalculator.java`, `ScoringParams.java`.
+- **Especificação:** em conflito, média ponderada entre a nota da conta e a do visitante.
+- **Situação anterior:** ficava a maior das duas, até o próximo evento recalcular.
+- **Decisão:** os eventos passam para a conta e as notas são recalculadas na hora, com o histórico inteiro.
+- **Justificativa:** uma média de duas notas prontas valeria só até o próximo evento. O recálculo já dá a nota definitiva, e o decaimento dá mais peso ao que é recente.
+- **Rastreabilidade:** RF19; [08 §5.3](08-MODELO-DE-DADOS.md).
 
-### M5 — Prévia com dados reais e precisão (`POST /api/admin/configuracao/simular`)
+### M20 — Sem fingerprint e sem IP
 
-- **Contexto:** não havia como saber o efeito de um ajuste antes de salvar.
-- **Decisão:** um endpoint **somente leitura** que recalcula as notas com os parâmetros salvos e com os propostos. Devolve:
-  - o **impacto:** distribuição por nível, nota média e os clientes que mais mudam;
-  - a **precisão:** um backtest. As notas são calculadas com o histórico até um corte (percentil 70 dos horários dos eventos), e o acerto é medido por quem converteu depois. São quatro métricas: acerto dos Quentes, interessados encontrados, qualidade da ordenação (AUC) e acerto da recomendação (top 3). Vem com um indicador de confiança pela quantidade de conversões.
-- **Justificativa:** foi pedida explicitamente para tornar o RF25 utilizável por quem não é desenvolvedor. **Não é o "A/B testing de pesos"** listado como trabalho futuro ([06 §4.3](06-METODOLOGIA-E-CRONOGRAMA.md)): não divide usuários reais entre configurações nem expõe ninguém a pesos diferentes. É uma avaliação offline sobre o histórico, que não altera nada.
+- **Especificação:** fingerprint como reserva do cookie e IP no registro de consentimento.
+- **Situação anterior:** as colunas `visitante.fingerprint` e `consentimento_lgpd.ip_origem` existiam sem uso.
+- **Decisão:** as duas foram removidas (V022).
+- **Justificativa:** coletar menos dados pessoais. O identificador do navegador e o login bastam, e o consentimento tem data, versão e conta.
+- **Rastreabilidade:** RF18, RNF09; [08 §4.2 e §4.3](08-MODELO-DE-DADOS.md).
+
+### M21 — Nova calibração padrão
+
+- **Especificação:** pesos por faixa (Baixo 0,2 a Alto 1,0) e λ = 0,01.
+- **Situação anterior:** os clientes da demonstração caíam no nível pretendido, mas só navegar já levava a Quente. Ler o mesmo produto 3 vezes dava 89, e 8 dos 14 clientes Mornos e Frios virariam Quentes com uma leitura a mais.
+- **Decisão:** novos valores iniciais (V023). WhatsApp 1,5; favoritar 1,2; pesquisar 0,4; tempo 0,2; ver 0,1; meia-vida de 90 dias (λ = 0,0077). Os demais não mudam. Quem já tinha ajustado algum valor mantém os seus.
+- **Resultado:** os níveis da demonstração são os mesmos (6 Quentes, 8 Mornos, 6 Frios). Só 1 dos 14 viraria Quente com uma leitura a mais; ler 3 vezes dá 45 e olhar 5 vezes, 38; ler, favoritar e chamar no WhatsApp dá 86. A menor folga até os limites (40 e 70) passou de 2,2 para 3,7 pontos, e os níveis se mantêm por 7 dias depois da carga.
+- **Justificativa:** navegar mostra curiosidade; favoritar e chamar mostram intenção. A compra não subiu porque não esfria: com peso alto, um cliente antigo ficaria Quente para sempre.
+- **Limites:** a amostra é pequena (5 conversões no teste de precisão; a calibração nova encontra 4 antes de acontecerem, a anterior 5, as duas sem falso positivo), e o nível pretendido de cada cliente foi definido com os pesos anteriores. Os bônus ficam em 0% por falta de dado. Ler o mesmo produto 5 vezes na semana ainda dá Quente (75).
+- **Rastreabilidade:** RF25; `CalibracaoPadraoTest`.
+
+### M22 — Privacidade: legítimo interesse, ocultação e cópia por e-mail
+
+- **Especificação:** consentimentos opcionais fora do aceite; contato proativo inicia desligado; exportação em JSON ou CSV na tela Conta.
+- **Situação anterior:** o admin via contato e nota de quem desligava as opções, e o catálogo continuava personalizado. Visitante não tinha como desfazer o "Aceitar todos".
+- **Decisão:** conta nova começa com as duas opções ligadas, por legítimo interesse e com aviso antes do aceite; cada opção desligada oculta o seu dado do admin, na consulta; a cópia dos dados é pedida por e-mail e gerada pela API do admin; visitante muda a escolha de cookies na Política. Contas existentes não mudam.
+- **Justificativa:** a loja precisa do sinal de interesse para atender, e quem cria conta espera o contato; a saída é simples e tem efeito real.
+- **Limites:** para cookies, legítimo interesse é mais frágil que consentimento ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)). Faltam na Política o CNPJ e, se houver, o nome do encarregado. Rever com advogado antes de uso comercial.
+- **Rastreabilidade:** RF04, RF21, RF22, RF28, RF29, RNF08; `AdminUsuarioServiceCompraTest`, `AdminAnalyticsRepositoryTest`, `CatalogServiceTest`.
+
+### M23 — Banner de cookies só com "Aceitar"
+
+- **Especificação:** banner com Aceitar todos, Apenas essenciais e Personalizar (modal).
+- **Situação anterior:** três botões e um modal repetiam o switch que já existe na Política e na conta.
+- **Decisão:** o banner tem só **Aceitar cookies e continuar** e o link Privacidade. Recusar ou mudar a escolha é no switch da seção 4 da Política (visitante) ou na aba Privacidade da conta. A Política passa a usar o formato do modal do cadastro e aparece também no fim dessa aba.
+- **Justificativa:** um único lugar para a escolha, e o banner fica mais leve.
+- **Limites:** a ANPD orienta que recusar seja tão fácil quanto aceitar; sem um botão de recusa no banner, a recusa fica a um clique a mais. Rever com advogado antes de uso comercial.
+- **Rastreabilidade:** RF27, RF28; `CookieBanner.test.tsx`, `app/(public)/privacidade/page.test.tsx`.
+
+## Configuração do score (A9)
+
+A tela original era uma tabela de números (`λ 0.01`, `boost 1.00`) que só quem conhecia o motor entendia. O público do RF25 é o dono do catálogo.
+
+### M5 — Prévia com dados reais e precisão
+
+- **Situação anterior:** não havia como saber o efeito de um ajuste antes de salvar.
+- **Decisão:** `POST /api/admin/configuracao/simular`, somente leitura, devolve o **impacto** (clientes que mudam de nível ou de categoria favorita) e a **precisão** por backtest: notas com o histórico até um corte, comparadas com quem entrou em contato ou comprou depois.
+- **Justificativa:** torna o RF25 utilizável por quem não desenvolve. **Não é o A/B testing** listado como trabalho futuro ([06 §4.3](06-METODOLOGIA-E-CRONOGRAMA.md)): não divide usuários reais entre configurações.
+- **Limitação:** usa um único corte temporal e avalia só quem tinha histórico antes dele. O mesmo histórico serve para ajustar e para medir, então ganhos pequenos podem não se repetir.
 - **Rastreabilidade:** RF25, RNF13.
-- **Código:** `AdminScoringService.simular`; `frontend/app/admin/configuracao/_components/Previa*.tsx`.
 
-### M6 — Recálculo ao salvar (`POST /api/admin/configuracao/recalcular`)
+### M6 — Recálculo ao salvar
 
-- **Contexto:** salvar os parâmetros não recalculava nada. A nota de cada cliente só mudava na próxima ação dele, então o dashboard parecia "não mudar".
-- **Decisão:** o modal de confirmação traz a opção "Recalcular agora as notas de todos os clientes e visitantes", marcada por padrão, que chama o novo endpoint.
-- **Justificativa:** sem isso o RNF13 ("configuráveis sem redeploy") era cumprido só pela metade, porque o efeito demorava indefinidamente. O processamento é síncrono, adequado ao volume do TCC.
-- **Alternativa adiada:** recálculo por fila (RabbitMQ). O ponto de troca está comentado em `AdminScoringService.recalcularTodos`.
+- **Situação anterior:** a nota de cada cliente só mudava na próxima ação dele, então o RNF13 ("configuráveis sem redeploy") era atendido pela metade.
+- **Decisão:** o modal de confirmação oferece "Recalcular agora as notas de todos", que chama `POST /api/admin/configuracao/recalcular`.
+- **Limitação:** síncrono, adequado ao volume do TCC.
 - **Rastreabilidade:** RNF13.
 
-### M7 — Salvar único (antes, "Salvar independente por aba")
+### M7 — Salvar único
 
-- **Decisão:** um botão Salvar grava os pesos e o decaimento. O PATCH de cada grupo só é enviado se ele mudou.
-- **Justificativa:** a prévia mostra o efeito **combinado** dos ajustes, então salvar só parte deixaria o resultado gravado diferente do que foi visto. Mantido por decisão da autora.
+- **Especificação:** duas abas (Pesos; Decaimento), com "Salvar independente por aba".
+- **Decisão:** um botão Salvar grava tudo. As abas passam a ser Ações do cliente, Duração do interesse e Categorias.
+- **Justificativa:** a prévia (M5) mostra o efeito combinado. Salvar só parte gravaria algo diferente do que foi visto.
+- **Rastreabilidade:** RF25.
 
-### M8 — Restaurar padrão cobre pesos, meia-vida e bônus
+### M8 — Restaurar padrão cobre tudo
 
-- **Decisão:** "Restaurar padrão" volta pesos, meia-vida e bônus globais aos valores da seed. Os ajustes por categoria são preservados e nada é gravado antes de Salvar.
-- **Justificativa:** dá um ponto de partida único e conhecido para toda a configuração. Mantido por decisão da autora.
+- **Especificação:** "Reset defaults" só dos pesos.
+- **Decisão:** volta pesos, meia-vida e bônus globais aos valores da seed. Os ajustes por categoria são preservados e nada é gravado antes de Salvar.
+- **Justificativa:** um ponto de partida único e conhecido.
+- **Rastreabilidade:** RF25.
 
-### M9 — Meia-vida como controle principal, λ discreto
+### M9 — Meia-vida como controle principal
 
-- **Decisão:** o decaimento é ajustado por **meia-vida em dias** ("uma ação perde metade do valor em 69 dias"), com λ = ln 2 ÷ dias, e um gráfico de quanto uma ação vale com o tempo. O λ continua visível em texto pequeno no canto.
-- **Justificativa:** λ é abstrato para o dono do catálogo; a meia-vida é a mesma informação em linguagem de negócio. O termo da spec (RF25) segue visível, sem chamar atenção.
-
-### M10 — Lista de pesos em ordem fixa
-
-- **Decisão:** a tabela ordenável virou uma lista com controles deslizantes, do sinal mais forte (WhatsApp) para o mais fraco.
-- **Justificativa:** com controles de ajuste, a ordem fixa por força do sinal é mais útil que reordenar colunas. Nenhum dado deixou de ser exibido.
-
-### M11 — Valores padrão iguais aos da seed
-
-- **Contexto:** o "Reset defaults" do frontend usava valores próprios, incluindo `DESFAVORITAR = −1`. O motor já trata esse evento como valor −1, então o peso negativo fazia **remover dos favoritos somar pontos**.
-- **Decisão:** os padrões passam a ser os de `database/migrations/V010__seed_config.sql`, a fonte da verdade.
-
-### M12 — λ com 5 casas decimais
-
-- **Contexto:** com λ arredondado em 4 casas, 52 das meias-vidas entre 7 e 180 dias não voltavam ao mesmo número de dias (ex.: 150 dias → λ 0,0046 → 151 dias), e o controle deslizante "brigava" com o valor.
-- **Decisão:** 5 casas, a precisão da coluna `parametro_decay.lambda` (`NUMERIC(6,5)`). Com isso, todas as meias-vidas de 7 a 180 dias fazem o caminho de ida e volta sem erro.
+- **Especificação:** edição direta de λ.
+- **Decisão:** o ajuste é pela **meia-vida em dias** (λ = ln 2 ÷ dias). O λ continua visível, em segundo plano: na dica do valor.
+- **Justificativa:** é a mesma informação em linguagem de negócio.
+- **Rastreabilidade:** RF25.
 
 ### M13 — Criar e remover ajuste por categoria
 
-- **Contexto:** o RF25 pede λ e boost configuráveis **por categoria** ([02](02-REQUISITOS.md)). O [04 §4.3](04-ESPECIFICACAO-TECNICA.md) orienta reduzir o boost de categorias de bens duráveis, e a tabela `parametro_decay` ([08 §4.16](08-MODELO-DE-DADOS.md)) tem uma linha por categoria mais a global. O motor e o `PATCH /decay` já tratavam categorias, mas a seed cria só a linha global e a tela (a antiga e a nova) só editava ajustes que já existiam. **Na prática, não havia como criar um ajuste por categoria.**
-- **Decisão:**
-  - em "Ajustes por categoria (avançado)", um seletor "Adicionar ajuste para uma categoria" cria a linha com os valores gerais atuais;
-  - cada linha tem um botão para remover o ajuste;
-  - nada é gravado antes de Salvar, e a prévia já simula a mudança;
-  - a criação usa o `PATCH /decay` existente (upsert). A remoção usa o novo `DELETE /api/admin/configuracao/decay/{categoriaId}`, que não tem rota para a linha global.
-- **Justificativa:** sem isso, a parte "por categoria" do RF25 não podia ser exercida pelo dono do catálogo. O endpoint de remoção só completa o CRUD de uma tabela já modelada; não há coluna nem tabela nova.
-- **Rastreabilidade:** RF25, RNF13; 04 §4.3; 08 §4.16; [11](11-API-ENDPOINTS.md).
-- **Código:** `AdminConfigService.removerDecay`, `AdminConfigController.removerDecay`; `OverridesCategoria` em `frontend/app/admin/configuracao/_components/DecaimentoSecoes.tsx`.
+- **Especificação:** λ e boost configuráveis **por categoria**.
+- **Situação anterior:** a tela só editava ajustes existentes, e a seed cria apenas o global. Na prática, não havia como criar um ajuste por categoria.
+- **Decisão:** a tela adiciona e remove ajustes. A criação usa o `PATCH /decay` existente; a remoção, o novo `DELETE /api/admin/configuracao/decay/{categoriaId}`.
+- **Justificativa:** completa o RF25 sem tabela nem coluna nova.
+- **Rastreabilidade:** RF25, RNF13; [08 §4.16](08-MODELO-DE-DADOS.md).
 
-### M14 — Rigor do backtest de precisão
+## Catálogo
 
-- **Contexto:** a dúvida era se deveríamos "treinar com dados de teste e depois usar os dados reais" para evitar resultados enganosos.
-- **Análise:**
-  - **Não há treino.** O modelo é de regras: os pesos são escolhidos por uma pessoa, não ajustados a partir dos dados.
-  - **Dados sintéticos não servem para medir acerto.** Eles refletem as suposições de quem os gerou, então só confirmariam os próprios pesos. A validação precisa ser feita no comportamento real.
-  - **O backtest já separa treino e teste no tempo.** As notas usam só os eventos antes do corte (percentil 70 dos horários), e o rótulo é a conversão depois do corte. Nenhuma informação do período de teste entra nas notas.
-  - **Risco real:** se o dono ajusta os parâmetros até as métricas melhorarem, os valores ficam sob medida para aquela janela (sobreajuste) e o acerto pode não se repetir.
-- **Decisão:**
-  - **Correção:** antes, quem só tinha eventos depois do corte entrava na avaliação com nota 0. Nenhum parâmetro consegue prever esse caso (cliente novo, sem histórico), e ele derrubava "interessados encontrados" e a AUC sem dizer nada sobre os parâmetros. Agora o backtest avalia só quem tinha pelo menos um evento antes do corte.
-  - **Aviso na aba Precisão:** o teste usa o mesmo histórico que está sendo ajustado, e ajustes finos só para melhorar os números podem não se repetir com clientes novos.
-- **Limitação e trabalho futuro:** com poucos dados, um único corte é sensível à janela escolhida. Validação com vários cortes (walk-forward) ou com um período reservado só para a avaliação final ficam como trabalho futuro, junto ao A/B testing ([06 §4.3](06-METODOLOGIA-E-CRONOGRAMA.md)).
-- **Rastreabilidade:** RF25; 06 §4.3.
-- **Código:** `AdminScoringService.calcularPrecisao`; `AdminScoringServiceTest.quemSoApareceDepoisDoCorteFicaForaDaAvaliacao`; `PreviaPrecisao.tsx`.
+### M16 — Upload de imagens guardadas no Postgres
 
-### M15 — Tela em abas e prévia que acompanha a aba
+- **Especificação:** "URLs externas apenas no MVP".
+- **Situação anterior:** o dono do catálogo precisava hospedar as fotos em outro lugar.
+- **Decisão:** o admin envia o arquivo, guardado como `BYTEA` em `imagem_arquivo`. URLs externas continuam aceitas.
+- **Justificativa:** dispensa infraestrutura nova (bucket, credenciais), e arquivo e produto ficam no mesmo backup. O volume do TCC é pequeno para o Postgres, e o cache do navegador reduz a leitura.
+- **Quando migrar para object storage:** quando as imagens passarem de alguns GB, pesarem no pool de conexões ou for preciso uma CDN.
+- **Rastreabilidade:** RF23; [08 §4.6 e §4.19](08-MODELO-DE-DADOS.md); [11](11-API-ENDPOINTS.md).
 
-- **Contexto:** todos os controles ficavam empilhados numa coluna (pesos, meia-vida com gráfico, bônus, ajustes por categoria), ao lado da prévia. A tela ficou poluída. Além disso, três controles (peso do filtro, bônus global e bônus por categoria) não tinham nenhum retorno visual: eles só mudam a nota da categoria, e a prévia mostrava apenas nível e precisão, que dependem da nota de produto.
-- **Decisão:**
-  - **Abas:** Ações do cliente · Duração do interesse · Categorias. Cada aba traz seus controles e o visual que só ela altera: a barra de composição dos pesos e a curva da meia-vida. Um ponto no rótulo marca a aba com alteração não salva.
-  - **Prévia fixa** à direita, porque é afetada por quase todos os campos. Fica visível só o que importa para a aba aberta: nível e precisão nas abas Ações e Duração, e categoria favorita na aba Categorias. Uma linha-resumo sempre visível lembra o efeito de ajustes feitos em outras abas. O resto fica em segundo plano: listas de clientes recolhidas e explicações nos tooltips.
-  - **Categoria favorita na simulação:** o `POST /simular` passa a devolver, por cliente, a categoria de maior nota nos dois cenários, a contagem por categoria e quem muda.
-  - **O campo numérico de peso sai:** ele duplicava o slider. O peso aparece no tooltip do slider, que aceita as setas do teclado (passo 0,05). O valor e a forma de ajustá-lo continuam; só sai o segundo controle.
-- **Justificativa:** reduzir a carga visual para o dono do catálogo, público do RF25 (RNF13 e normas de usabilidade, [09](09-NORMAS-DE-USABILIDADE.md)), e dar retorno a todos os parâmetros configuráveis. A categoria favorita já é exibida no dashboard ("Categoria favorita dos clientes") e na coluna Top categoria; a prévia só mostra o efeito antes de salvar. Não há tabela, endpoint ou parâmetro novo.
-- **Rastreabilidade:** RF25, RNF13; [03 §A9](03-PAGINAS-E-UX.md); [11](11-API-ENDPOINTS.md).
-- **Código:** `frontend/app/admin/configuracao/page.tsx`, `_components/Previa.tsx`, `PreviaCategorias.tsx`; `AdminScoringService.calcularImpacto` (`favorita`, `topCategorias`); `AdminScoringServiceTest.bonusMudaCategoriaFavoritaSemMudarNivel`.
+### M17 — Serviços de retífica no catálogo
 
-### M16 — Upload de imagens de produto guardadas como BLOB no Postgres
-
-- **Contexto:** no MVP o admin digitava URLs externas para as imagens ([11](11-API-ENDPOINTS.md), "URLs externas apenas no MVP"). Isso exige que o dono do catálogo hospede as fotos em outro lugar, e URLs quebradas somem da vitrine sem aviso.
-- **Decisão:** o admin envia o arquivo, que é guardado como `BYTEA` na tabela `imagem_arquivo` (V014). `produto_imagem.url` passa a guardar a referência `produtos/imagens/{id}`. URLs externas continuam aceitas, como as do seed.
-  - **BLOB × object storage (S3/GCS/Azure Blob):**
-    - BLOB não exige infra nova (bucket, credenciais, MinIO no dev).
-    - Arquivo e produto ficam na mesma transação e no mesmo backup.
-    - O volume estimado do TCC, de 30MB a 1GB após a compressão, é pequeno para o Postgres.
-    - O custo de servir as imagens pelo backend é mitigado com cache `immutable`: cada foto sai do banco cerca de uma vez por navegador.
-  - **Peso:** os bytes ficam numa tabela sem FK e nunca entram nos `JOIN FETCH` de produto, então o JSON das listagens não muda. O front comprime para WebP (até 1MB, 1600px) com `browser-image-compression`, e o backend limita a 5MB e valida o tipo real com Apache Tika `tika-core`.
-- **Quando migrar para object storage:** quando as imagens passarem de alguns GB, quando o tráfego de imagens pesar no pool de conexões ou quando for preciso uma CDN. A troca se limita ao `ImagemArquivoService` (put/get no bucket) e a um `302` no `GET /api/produtos/imagens/{id}`; produto, DTO e telas não mudam.
-- **Arquivos órfãos:** sobram arquivos quando o admin envia uma foto e não salva o produto, troca ou remove a foto, ou quando o produto é apagado. Um job diário (`ImagemArquivoService.limparOrfas`, às 3h) apaga os arquivos com mais de 24h que nenhum `produto_imagem.url` referencia. As 24h protegem o upload de um formulário ainda aberto. Produto inativo continua referenciando as fotos, então elas ficam.
-- **Rastreabilidade:** RF23; [08 §4.6, §4.19](08-MODELO-DE-DADOS.md); [11](11-API-ENDPOINTS.md).
-- **Código:** `database/migrations/V014__imagem_arquivo.sql`; `ImagemArquivoService`, `ProdutoController.imagem`, `AdminProdutoController.uploadImagem`; `ImagemArquivoServiceTest`; `frontend/app/admin/produtos/_components/ImagemUploadField.tsx`, `lib/api/config.ts` (`imagemSrc`).
+- **Especificação:** catálogo de produtos.
+- **Situação anterior:** a seed trazia itens genéricos de indústria. A empresa da demonstração, a Renova Retífica, vende peças, mas o negócio principal é o serviço.
+- **Decisão:** o catálogo ganha a categoria raiz **Serviços de retífica**, com preço "a partir de" e o mesmo fluxo de contato pelo WhatsApp.
+- **Justificativa:** quem procura um serviço é um lead tão relevante quanto quem procura uma peça. Não há tabela, campo nem endpoint novo.
+- **Rastreabilidade:** RF08–RF12, RF23; [03 §5–6](03-PAGINAS-E-UX.md).

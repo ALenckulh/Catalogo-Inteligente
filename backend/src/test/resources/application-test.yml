@@ -11,6 +11,8 @@ spring:
           time_zone: UTC
   flyway:
     enabled: false
+  # Testes rodam sem RabbitMQ: exclui a autoconfiguração e desliga RabbitConfig/EventoPersistWorker
+  # (@ConditionalOnProperty em catalogo.rabbit.enabled); o publisher é mockado nos testes.
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration

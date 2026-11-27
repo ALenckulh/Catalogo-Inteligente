@@ -35,7 +35,7 @@ export default function ProdutoPage() {
   const slug = params.slug
   const track = useTrackEvent()
   const { user, isAuthenticated } = useCurrentUser()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
 
   const [produto, setProduto] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -77,6 +77,7 @@ export default function ProdutoPage() {
       .catch(() => setFavorito(false))
   }, [produto, user, isAuthenticated])
 
+  // Uma visualização por abertura da ficha (a ordem das views também forma a sequência de navegação).
   useEffect(() => {
     if (!produto || viewed.current) return
     viewed.current = true
@@ -86,6 +87,7 @@ export default function ProdutoPage() {
   useEffect(() => {
     if (!produto) return
 
+    // Um SCROLL_DEPTH por marco (25/50/75/100%), uma vez cada por visita; no backend cada um vale 1/4.
     function onScroll() {
       const doc = document.documentElement
       const max = doc.scrollHeight - window.innerHeight
@@ -103,6 +105,7 @@ export default function ProdutoPage() {
       }
     }
 
+    // Tempo ativo: soma só enquanto a aba está visível; o total vai num TEMPO_PAGINA ao sair da página.
     function tick() {
       if (document.visibilityState === 'visible') {
         const now = Date.now()
@@ -113,26 +116,49 @@ export default function ProdutoPage() {
       }
     }
 
+    // Um TEMPO_PAGINA por visita, no que vier primeiro: pagehide (recarregar, fechar a aba, digitar
+    // outra URL) ou unmount (navegação interna). Antes só o unmount enviava e recarregar perdia o tempo.
+    // Não envia em visibilitychange: a visita seguiria e viraria vários eventos parciais.
+    let enviado = false
+    function enviarTempo(keepalive: boolean) {
+      if (enviado) return
+      enviado = true
+      tick()
+      const seconds = Math.round(activeMs.current / 1000)
+      activeMs.current = 0
+      if (seconds > 0) {
+        track(
+          { tipo: 'TEMPO_PAGINA', produtoId: produto!.id, metadados: { segundos_ativos: seconds } },
+          { keepalive },
+        )
+      }
+    }
+    const onPageHide = () => enviarTempo(true)
+    // Voltou pelo cache do navegador (bfcache): é uma nova visita, o tempo conta de novo.
+    function onPageShow(e: PageTransitionEvent) {
+      if (!e.persisted) return
+      enviado = false
+      lastTick.current = Date.now()
+    }
+
     lastTick.current = Date.now()
     const interval = window.setInterval(tick, 1000)
     window.addEventListener('scroll', onScroll, { passive: true })
     document.addEventListener('visibilitychange', tick)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
 
     return () => {
       window.clearInterval(interval)
       window.removeEventListener('scroll', onScroll)
       document.removeEventListener('visibilitychange', tick)
-      const seconds = Math.round(activeMs.current / 1000)
-      if (seconds > 0) {
-        track({
-          tipo: 'TEMPO_PAGINA',
-          produtoId: produto.id,
-          metadados: { segundos_ativos: seconds },
-        })
-      }
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+      enviarTempo(false)
     }
   }, [produto, track])
 
+  // Favoritar faz duas chamadas: /api/favoritos guarda o estado e o evento FAVORITAR é o sinal para o score.
   const toggleFav = useCallback(async () => {
     if (!produto || !user) return
     setFavLoading(true)
@@ -184,7 +210,6 @@ export default function ProdutoPage() {
 
   return (
     <Flex vertical className="page page--has-fixed-cta" style={{ gap: 'var(--space-6)' }}>
-      {contextHolder}
       <Breadcrumb
         items={[
           { title: <Link href="/">Vitrine</Link> },

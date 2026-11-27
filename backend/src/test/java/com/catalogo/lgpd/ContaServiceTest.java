@@ -9,6 +9,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.security.JwtService;
+import com.catalogo.catalog.entity.Compra;
+import com.catalogo.catalog.entity.Produto;
+import com.catalogo.catalog.repository.CompraRepository;
+import com.catalogo.visitante.repository.SessaoRepository;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -60,6 +68,12 @@ class ContaServiceTest {
     EventoRepository eventoRepository;
     @Mock
     CompraAnonymizeRepository compraAnonymizeRepository;
+    @Mock
+    CompraRepository compraRepository;
+    @Mock
+    SessaoRepository sessaoRepository;
+    @Mock
+    JwtService jwtService;
 
     PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     ContaService service;
@@ -73,7 +87,10 @@ class ContaServiceTest {
                 favoritoRepository,
                 eventoRepository,
                 compraAnonymizeRepository,
-                passwordEncoder
+                compraRepository,
+                sessaoRepository,
+                passwordEncoder,
+                jwtService
         );
     }
 
@@ -83,7 +100,7 @@ class ContaServiceTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
         ConsentimentoLgpd old = consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, false, OffsetDateTime.now().minusDays(2));
         ConsentimentoLgpd neu = consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, true, OffsetDateTime.now());
-        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(1L)).thenReturn(List.of(neu, old));
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of(neu, old));
 
         var conta = service.getConta(1L);
 
@@ -93,15 +110,30 @@ class ContaServiceTest {
     }
 
     @Test
-    void patchWrongPasswordUnauthorized() {
+    void patchWrongPasswordBadRequest() {
         Usuario u = usuario(1L);
         u.setSenhaHash(passwordEncoder.encode("secret"));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
 
         ApiException ex = assertThrows(ApiException.class, () ->
                 service.patchConta(1L, new PatchContaRequest(null, null, null, null, "wrong", "nova1234")));
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("INVALID_PASSWORD", ex.getCode());
         verify(usuarioRepository, never()).save(any());
+    }
+
+    /** Trocar a senha derruba as outras sessões; esta recebe um token novo. */
+    @Test
+    void trocarSenhaDevolveTokenNovo() {
+        Usuario u = usuario(1L);
+        u.setSenhaHash(passwordEncoder.encode("secret"));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(jwtService.generate(u)).thenReturn("novo");
+
+        assertNull(service.patchConta(1L, new PatchContaRequest("47999990000", null, null, null, null, null)).token());
+        assertNull(u.getSessoesValidasDesde());
+        assertEquals("novo", service.patchConta(1L, new PatchContaRequest(null, null, null, null, "secret", "nova1234")).token());
+        assertTrue(u.getSessoesValidasDesde() != null);
     }
 
     @Test
@@ -111,20 +143,50 @@ class ContaServiceTest {
         when(consentimentoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.salvarConsentimentos(1L, new ConsentimentosBatchRequest(List.of(
-                new ConsentimentoItemRequest(TipoConsentimento.CONTATO_PROATIVO, true, "1.0", null)
+                new ConsentimentoItemRequest(TipoConsentimento.CONTATO_PROATIVO, true, "1.0")
         )));
 
         assertEquals(1, result.size());
         ArgumentCaptor<ConsentimentoLgpd> cap = ArgumentCaptor.forClass(ConsentimentoLgpd.class);
         verify(consentimentoRepository).save(cap.capture());
         assertEquals(TipoConsentimento.CONTATO_PROATIVO, cap.getValue().getTipo());
+        // Hora do servidor, nunca a do navegador.
+        assertTrue(Duration.between(cap.getValue().getAceitoEm(), OffsetDateTime.now()).abs().toSeconds() < 10);
+    }
+
+    /** Aba aberta como PF salvando com o token da PJ gravava o nome da pessoa na empresa. */
+    @Test
+    void pjNaoAceitaNomeNemIdade() {
+        Usuario pj = usuario(2L);
+        pj.setTipo(TipoUsuario.PJ);
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(pj));
+
+        for (PatchContaRequest r : List.of(
+                new PatchContaRequest(null, null, "Ana", null, null, null),
+                new PatchContaRequest(null, null, null, (short) 30, null, null))) {
+            ApiException ex = assertThrows(ApiException.class, () -> service.patchConta(2L, r));
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        }
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void contaDoAdminNaoEAnonimizada() {
+        Usuario admin = usuario(1L);
+        admin.setTipo(TipoUsuario.ADMIN);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(admin));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.excluirConta(1L));
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+        assertNull(admin.getDeletedAt());
+        verify(usuarioRepository, never()).save(any());
     }
 
     @Test
     void exportJsonMarksSolicitacaoAtendida() {
         Usuario u = usuario(1L);
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
-        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDesc(1L)).thenReturn(List.of());
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of());
         when(favoritoRepository.findAtivosByUsuarioId(1L)).thenReturn(List.of());
         Evento e = new Evento();
         e.setTipo(TipoEvento.VISUALIZACAO_PRODUTO);
@@ -143,6 +205,58 @@ class ContaServiceTest {
         verify(solicitacaoRepository).save(cap.capture());
         assertEquals(TipoSolicitacaoLgpd.EXPORTACAO, cap.getValue().getTipo());
         assertEquals(StatusSolicitacaoLgpd.ATENDIDA, cap.getValue().getStatus());
+    }
+
+    @Test
+    void exportTrazComprasESolicitacoesESemFormulaNoCsv() {
+        Usuario u = usuario(1L);
+        u.setNomeCompleto("=HYPERLINK(\"http://x\",\"y\")");
+        u.setEmailAlternativo("@SUM(1)");
+        Produto p = new Produto();
+        p.setId(7L);
+        p.setNome("-2+3, filtro");
+        Compra c = new Compra();
+        c.setId(1L);
+        c.setProduto(p);
+        c.setQuantidade(2);
+        c.setPrecoUnitario(new BigDecimal("10.50"));
+        c.setValorTotal(new BigDecimal("21.00"));
+        c.setDataCompra(LocalDate.of(2026, 1, 15));
+        c.setObservacoes("anotação interna");
+        SolicitacaoLgpd s = new SolicitacaoLgpd();
+        s.setTipo(TipoSolicitacaoLgpd.CORRECAO);
+        s.setStatus(StatusSolicitacaoLgpd.PENDENTE);
+        s.setObservacoes("corrigir nome");
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(compraRepository.findByUsuarioIdAndDeletedAtIsNull(1L)).thenReturn(List.of(c));
+        when(solicitacaoRepository.findByUsuario_IdOrderBySolicitadoEmDescIdDesc(1L)).thenReturn(List.of(s));
+
+        var export = service.exportar(1L);
+        assertEquals("-2+3, filtro", export.compras().getFirst().produtoNome());
+        assertEquals("corrigir nome", export.solicitacoes().getFirst().observacoes());
+
+        String csv = service.exportarCsv(1L);
+        assertTrue(csv.contains("usuario,nomeCompleto,\"'=HYPERLINK(\"\"http://x\"\",\"\"y\"\")\"\n"), csv);
+        assertTrue(csv.contains("usuario,emailAlternativo,'@SUM(1)\n"), csv);
+        assertTrue(csv.contains("compra,\"'-2+3, filtro\",2026-01-15|2 x 10.50|total=21.00\n"), csv);
+        assertTrue(csv.contains("solicitacao,CORRECAO,PENDENTE|"), csv);
+        assertTrue(!csv.contains("interna"), csv);
+    }
+
+    /** Só grava o que ainda não estava recusado: o histórico não ganha linha repetida. */
+    @Test
+    void revogacaoRecusaCookiesEContato() {
+        Usuario u = usuario(1L);
+        when(consentimentoRepository.findByUsuario_IdOrderByAceitoEmDescIdDesc(1L)).thenReturn(List.of(
+                consent(u, TipoConsentimento.COOKIES_COMPORTAMENTAIS, true, OffsetDateTime.now()),
+                consent(u, TipoConsentimento.CONTATO_PROATIVO, false, OffsetDateTime.now())));
+
+        service.revogarConsentimentos(u);
+
+        ArgumentCaptor<ConsentimentoLgpd> cap = ArgumentCaptor.forClass(ConsentimentoLgpd.class);
+        verify(consentimentoRepository).save(cap.capture());
+        assertEquals(TipoConsentimento.COOKIES_COMPORTAMENTAIS, cap.getValue().getTipo());
+        assertTrue(!cap.getValue().isAceito());
     }
 
     @Test
@@ -175,9 +289,13 @@ class ContaServiceTest {
         assertNull(u.getNomeCompleto());
         assertNull(u.getCpf());
         assertNotNullDeleted(u);
+        var ordem = org.mockito.Mockito.inOrder(usuarioRepository, eventoRepository);
+        ordem.verify(usuarioRepository).travarParaExcluir(1L);
+        ordem.verify(eventoRepository).softDeleteByUsuarioId(1L);
         verify(favoritoRepository).softDeleteByUsuarioId(1L);
         verify(eventoRepository).softDeleteByUsuarioId(1L);
         verify(compraAnonymizeRepository).softDeleteByUsuarioId(1L);
+        verify(sessaoRepository).limparUserAgentByUsuarioId(1L);
     }
 
     private static void assertNotNullDeleted(Usuario u) {

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -10,10 +11,12 @@ import {
   TeamOutlined,
   UserOutlined,
   LoginOutlined,
+  ReadOutlined,
 } from '@ant-design/icons'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { Button, Flex, Layout, Menu, Typography } from '@/components/ui'
 import type { MenuProps } from 'antd'
+import { Logo } from './Logo'
 
 const { Sider, Content, Header } = Layout
 const { Text } = Typography
@@ -36,6 +39,11 @@ const MENU_ITEMS: MenuProps['items'] = [
     label: <Link href="/admin/configuracao">Configuração</Link>,
   },
   {
+    key: '/admin/projeto',
+    icon: <ReadOutlined />,
+    label: <Link href="/admin/projeto">Sobre o projeto</Link>,
+  },
+  {
     key: '/admin/design-system',
     icon: <BgColorsOutlined />,
     label: <Link href="/admin/design-system">Design system</Link>,
@@ -53,6 +61,7 @@ interface Props {
 
 export function AdminShell({ children }: Props) {
   const pathname = usePathname()
+  const [recolhido, setRecolhido] = useState(false)
   const { user, isAdmin, loading } = useCurrentUser()
 
   const isLoginPage = pathname === '/admin/entrar'
@@ -73,16 +82,17 @@ export function AdminShell({ children }: Props) {
         width={240}
         breakpoint="lg"
         collapsedWidth={64}
+        onCollapse={setRecolhido}
         style={{ background: 'var(--surface-base)', borderRight: '1px solid var(--border-neutral-subtle)' }}
       >
-        <div style={{ padding: '16px 20px' }}>
-          <Text strong style={{ fontSize: 14 }}>
-            Catálogo Inteligente
-          </Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Admin
-          </Text>
+        {/* Recolhido (abaixo de 992px) só cabe o símbolo: o texto quebrava e invadia o cabeçalho. */}
+        <div style={{ padding: recolhido ? '16px 18px' : '16px 20px' }}>
+          <Logo size="sm" iconOnly={recolhido} />
+          {!recolhido && (
+            <Text type="secondary" style={{ display: 'block', fontSize: 'var(--font-size-base)' }}>
+              Admin
+            </Text>
+          )}
         </div>
         <Menu
           mode="inline"
@@ -104,7 +114,9 @@ export function AdminShell({ children }: Props) {
           <Flex justify="flex-end" align="center" style={{ height: '100%' }}>
             {!loading &&
               (isAdmin && user ? (
-                <Text type="secondary">{user.email}</Text>
+                <Text type="secondary" ellipsis={{ tooltip: user.email }}>
+                  {user.email}
+                </Text>
               ) : (
                 <Link href="/admin/entrar">
                   <Button id="admin-login-link" icon={<LoginOutlined />}>

@@ -86,7 +86,8 @@ export const text = {
   warning: palette.warning[400],
   error: palette.error[400],
   accent: palette.primary[400],
-  neutralSubtle: palette.neutral[600],
+  // 700, e não 600: com neutral[600] o contraste no fundo claro era 2,88:1; o mínimo AA é 4,5:1.
+  neutralSubtle: palette.neutral[700],
   neutralDefault: palette.neutral[700],
   neutralStrong: palette.neutral[900],
   inverse: palette.neutral[0],

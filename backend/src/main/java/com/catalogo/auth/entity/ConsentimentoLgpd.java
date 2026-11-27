@@ -23,6 +23,9 @@ import jakarta.persistence.Table;
 @Table(name = "consentimento_lgpd")
 public class ConsentimentoLgpd {
 
+    /** Versão vigente dos Termos e da Política; espelha VERSAO_TERMOS do front (lib/config.ts). */
+    public static final String VERSAO_TERMOS = "1.0";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

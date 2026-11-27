@@ -1,11 +1,11 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.shared.Fuso;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,10 +49,7 @@ public class AdminDashboardService {
     @Transactional(readOnly = true)
     public AdminDashboardResponse dashboard() {
         OffsetDateTime since7 = OffsetDateTime.now().minusDays(7);
-        OffsetDateTime since14Dias = LocalDate.now()
-                .minusDays(CONTATOS_SERIE_DIAS - 1L)
-                .atStartOfDay(ZoneId.systemDefault())
-                .toOffsetDateTime();
+        OffsetDateTime since14Dias = Fuso.inicioDoDia(Fuso.hoje().minusDays(CONTATOS_SERIE_DIAS - 1L));
 
         AdminKpis kpis = new AdminKpis(
                 usuarioRepository.countByTipoNotAndDeletedAtIsNull(TipoUsuario.ADMIN),
@@ -71,7 +68,8 @@ public class AdminDashboardService {
                     row[4] != null ? String.valueOf(row[4]) : null,
                     toBigDecimal(row[5]),
                     row[6] != null ? String.valueOf(row[6]) : null,
-                    toOffset(row[7])
+                    toOffset(row[7]),
+                    row[8] != null ? String.valueOf(row[8]) : null
             ));
         }
 

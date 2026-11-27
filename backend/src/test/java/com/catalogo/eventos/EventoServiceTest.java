@@ -1,13 +1,22 @@
 package com.catalogo.eventos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.auth.service.ConsentimentoService;
+import com.catalogo.eventos.domain.TipoConversao;
+import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +28,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
@@ -26,6 +37,8 @@ import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.auth.security.UsuarioPrincipal;
+import com.catalogo.catalog.repository.CategoriaRepository;
+import com.catalogo.catalog.repository.ProdutoRepository;
 import com.catalogo.eventos.dto.EventoAceitoResponse;
 import com.catalogo.eventos.dto.EventoMessage;
 import com.catalogo.eventos.dto.EventoRequest;
@@ -45,18 +58,35 @@ class EventoServiceTest {
     @Mock
     ConsentimentoLgpdRepository consentimentoRepository;
     @Mock
+    ProdutoRepository produtoRepository;
+    @Mock
+    CategoriaRepository categoriaRepository;
+    @Mock
     EventoPublisher eventoPublisher;
 
     EventoService service;
 
     @BeforeEach
     void setUp() {
-        service = new EventoService(visitanteService, consentimentoRepository, eventoPublisher);
+        service = new EventoService(
+                visitanteService, new ConsentimentoService(consentimentoRepository), produtoRepository, categoriaRepository,
+                eventoPublisher);
+        lenient().when(produtoRepository.existsByIdAndAtivoTrue(9L)).thenReturn(true);
+        lenient().when(produtoRepository.existsById(6L)).thenReturn(true); // inativo
+    }
+
+    /** aceitar pode criar sessão (resolveOrCreateForUsuario): transação somente leitura dava 500. */
+    @Test
+    void aceitarNaoEhReadOnly() throws Exception {
+        Transactional tx = EventoService.class
+                .getMethod("aceitar", EventoRequest.class, Authentication.class, String.class)
+                .getAnnotation(Transactional.class);
+        assertFalse(tx.readOnly());
     }
 
     @Test
     void authWithoutConsent403() {
-        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDesc(
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
                 1L, TipoConsentimento.COOKIES_COMPORTAMENTAIS
         )).thenReturn(Optional.empty());
 
@@ -70,7 +100,7 @@ class EventoServiceTest {
     void authWithConsentPublishes202() {
         ConsentimentoLgpd c = new ConsentimentoLgpd();
         c.setAceito(true);
-        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDesc(
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
                 1L, TipoConsentimento.COOKIES_COMPORTAMENTAIS
         )).thenReturn(Optional.of(c));
         Sessao sessao = new Sessao();
@@ -100,6 +130,17 @@ class EventoServiceTest {
     }
 
     @Test
+    void visitanteSemAceite403() {
+        UUID cookie = UUID.randomUUID();
+        when(visitanteService.requireByCookie(cookie)).thenReturn(new Visitante());
+
+        ApiException ex = assertThrows(ApiException.class, () ->
+                service.aceitar(req(TipoEvento.PESQUISA), null, cookie.toString()));
+        assertEquals("CONSENT_REQUIRED", ex.getCode());
+        verify(eventoPublisher, never()).publish(any());
+    }
+
+    @Test
     void malformedCookieHeader400() {
         ApiException ex = assertThrows(ApiException.class, () ->
                 service.aceitar(req(TipoEvento.PESQUISA), null, "not-uuid"));
@@ -112,6 +153,7 @@ class EventoServiceTest {
         Visitante v = new Visitante();
         v.setId(3L);
         v.setCookieId(cookie);
+        v.setAceiteCookiesEm(OffsetDateTime.now());
         Sessao sessao = new Sessao();
         sessao.setId(8L);
         when(visitanteService.requireByCookie(cookie)).thenReturn(v);
@@ -123,6 +165,81 @@ class EventoServiceTest {
         verify(eventoPublisher).publish(cap.capture());
         assertEquals(3L, cap.getValue().visitanteId());
         assertEquals(com.catalogo.config.RabbitConfig.QUEUE_PRODUCT_CONTACT, EventoRouting.queueFor(cap.getValue().tipo()));
+    }
+
+    /** Antes respondia 202 e a mensagem ficava em repetição sem fim no worker. */
+    @Test
+    void eventoQueNaoDaParaGravar400() {
+        assertRecusado(new EventoRequest(TipoEvento.VISUALIZACAO_PRODUTO, 777L, null, null, null, null));
+        assertRecusado(new EventoRequest(TipoEvento.FILTRO_APLICADO, null, 99999L, null, null, null));
+        assertRecusado(new EventoRequest(TipoEvento.PESQUISA, null, null, null, Map.of("termo", "a\0b"), null));
+        assertRecusado(new EventoRequest(TipoEvento.PESQUISA, null, null, null, Map.of("f", Map.of("q", List.of("x", "\0"))), null));
+        assertRecusado(new EventoRequest(TipoEvento.PESQUISA, null, null, null, Map.of("k\0", 1), null));
+        verifyNoInteractions(visitanteService, eventoPublisher);
+    }
+
+    @Test
+    void eventoSemSentido400() {
+        for (TipoEvento tipo : TipoEvento.values()) {
+            boolean livre = tipo == TipoEvento.PESQUISA || tipo == TipoEvento.FILTRO_APLICADO;
+            if (!livre) {
+                assertRecusado(new EventoRequest(tipo, null, null, null, null, null));
+            }
+            if (tipo != TipoEvento.CONTATO_WHATSAPP) {
+                assertRecusado(new EventoRequest(tipo, 9L, null, TipoConversao.LEVE, null, null));
+            }
+            assertRecusado(new EventoRequest(tipo, 9L, null, TipoConversao.CONFIRMADA, null, null));
+            assertRecusado(new EventoRequest(tipo, 6L, null, null, null, null));
+            assertRecusado(new EventoRequest(tipo, 9L, null, null, Map.of("x", "y".repeat(10_000)), null));
+        }
+        assertRecusado(req(TipoEvento.FAVORITAR));
+        assertRecusado(req(TipoEvento.DESFAVORITAR));
+        verifyNoInteractions(visitanteService, eventoPublisher);
+    }
+
+    /** Produto que saiu do catálogo ainda pode sair dos favoritos de quem está logado. */
+    @Test
+    void desfavoritarInativoPassa() {
+        ConsentimentoLgpd c = new ConsentimentoLgpd();
+        c.setAceito(true);
+        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
+                1L, TipoConsentimento.COOKIES_COMPORTAMENTAIS)).thenReturn(Optional.of(c));
+        Sessao sessao = new Sessao();
+        sessao.setId(50L);
+        when(visitanteService.resolveOrCreateForUsuario(1L, null)).thenReturn(sessao);
+
+        service.aceitar(new EventoRequest(TipoEvento.DESFAVORITAR, 6L, null, null, null, null), auth(), null);
+        ApiException ex = assertThrows(ApiException.class, () -> service.aceitar(
+                new EventoRequest(TipoEvento.FAVORITAR, 6L, null, null, null, null), auth(), null));
+        assertEquals("VALIDATION_ERROR", ex.getCode());
+        verify(eventoPublisher).publish(any());
+    }
+
+    private void assertRecusado(EventoRequest request) {
+        ApiException ex = assertThrows(ApiException.class, () ->
+                service.aceitar(request, null, UUID.randomUUID().toString()));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("VALIDATION_ERROR", ex.getCode());
+    }
+
+    @Test
+    void metadadosComunsENulosPassam() {
+        UUID cookie = UUID.randomUUID();
+        Visitante v = new Visitante();
+        v.setId(3L);
+        v.setAceiteCookiesEm(OffsetDateTime.now());
+        Sessao sessao = new Sessao();
+        sessao.setId(8L);
+        when(visitanteService.requireByCookie(cookie)).thenReturn(v);
+        when(visitanteService.resolveSessaoForVisitante(v, null)).thenReturn(sessao);
+        Map<String, Object> filtros = new HashMap<>();
+        filtros.put("precoMin", null);
+        filtros.put("q", "pistão");
+
+        service.aceitar(new EventoRequest(
+                TipoEvento.FILTRO_APLICADO, null, null, null, Map.of("filtros", filtros), null), null, cookie.toString());
+
+        verify(eventoPublisher).publish(any());
     }
 
     @Test

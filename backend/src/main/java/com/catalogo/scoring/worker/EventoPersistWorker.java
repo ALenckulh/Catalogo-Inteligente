@@ -1,5 +1,6 @@
 package com.catalogo.scoring.worker;
 
+import com.catalogo.auth.repository.UsuarioRepository;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -10,8 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.catalogo.auth.entity.Usuario;
-import com.catalogo.catalog.entity.Categoria;
-import com.catalogo.catalog.entity.Produto;
+import com.catalogo.catalog.repository.CategoriaRepository;
+import com.catalogo.catalog.repository.ProdutoRepository;
 import com.catalogo.config.RabbitConfig;
 import com.catalogo.eventos.dto.EventoMessage;
 import com.catalogo.eventos.entity.Evento;
@@ -20,6 +21,11 @@ import com.catalogo.scoring.engine.ScoreEngine;
 import com.catalogo.visitante.entity.Sessao;
 import com.catalogo.visitante.entity.Visitante;
 
+/**
+ * Consumidor das filas de eventos: grava o evento e recalcula o score do sujeito.
+ * Roda no mesmo processo da API (ADR-B07, um JAR só); como a fila desacopla os dois, extrair este worker
+ * para outro serviço é mudança de deploy, não de lógica.
+ */
 @Component
 @ConditionalOnProperty(name = "catalogo.rabbit.enabled", havingValue = "true", matchIfMissing = true)
 public class EventoPersistWorker {
@@ -27,25 +33,47 @@ public class EventoPersistWorker {
     private static final Logger log = LoggerFactory.getLogger(EventoPersistWorker.class);
 
     private final EventoRepository eventoRepository;
+    private final ProdutoRepository produtoRepository;
+    private final CategoriaRepository categoriaRepository;
     private final ScoreEngine scoreEngine;
+    private final UsuarioRepository usuarioRepository;
 
-    public EventoPersistWorker(EventoRepository eventoRepository, ScoreEngine scoreEngine) {
+    public EventoPersistWorker(
+            EventoRepository eventoRepository,
+            ProdutoRepository produtoRepository,
+            CategoriaRepository categoriaRepository,
+            ScoreEngine scoreEngine,
+            UsuarioRepository usuarioRepository
+    ) {
         this.eventoRepository = eventoRepository;
+        this.produtoRepository = produtoRepository;
+        this.categoriaRepository = categoriaRepository;
         this.scoreEngine = scoreEngine;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @RabbitListener(queues = {
             RabbitConfig.QUEUE_PRODUCT_VIEW,
             RabbitConfig.QUEUE_PRODUCT_FAVORITE,
             RabbitConfig.QUEUE_PRODUCT_CONTACT,
-            RabbitConfig.QUEUE_SEARCH,
-            RabbitConfig.QUEUE_SESSION
+            RabbitConfig.QUEUE_SEARCH
     })
+    // @Transactional: INSERT do evento e recálculo do score commitam juntos; se o recálculo falhar,
+    // o evento sofre rollback e a mensagem é rejeitada (nunca fica evento gravado sem score atualizado).
     @Transactional
     public void persist(EventoMessage message) {
+        // Conta excluída com o evento ainda na fila: gravá-lo deixaria um evento ativo na conta anonimizada,
+        // e o recálculo apagaria as notas dela.
+        if (message.usuarioId() != null
+                && usuarioRepository.travarAtivoParaGravarEvento(message.usuarioId()).isEmpty()) {
+            log.info("Evento descartado: conta {} excluída", message.usuarioId());
+            return;
+        }
         Evento evento = new Evento();
         evento.setTipo(message.tipo());
 
+        // Entidades "vazias" só com o id: o Hibernate precisa apenas do id para gravar a FK,
+        // então não faz um SELECT de cada relação.
         Sessao sessao = new Sessao();
         sessao.setId(message.sessaoId());
         evento.setSessao(sessao);
@@ -61,14 +89,11 @@ public class EventoPersistWorker {
             evento.setVisitante(v);
         }
         if (message.produtoId() != null) {
-            Produto p = new Produto();
-            p.setId(message.produtoId());
-            evento.setProduto(p);
+            // Referência, e não um Produto vazio: o recálculo, na mesma transação, lê preço e categoria deste objeto.
+            evento.setProduto(produtoRepository.getReferenceById(message.produtoId()));
         }
         if (message.categoriaId() != null) {
-            Categoria c = new Categoria();
-            c.setId(message.categoriaId());
-            evento.setCategoria(c);
+            evento.setCategoria(categoriaRepository.getReferenceById(message.categoriaId()));
         }
 
         evento.setConversao(message.conversao());

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MenuOutlined } from '@ant-design/icons'
 import { displayName } from '@/lib/api/auth'
+import { Logo } from './Logo'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
 import { useTrackEvent } from '@/lib/hooks/useTrackEvent'
 import { entrarHref } from '@/lib/navigation'
@@ -116,6 +117,9 @@ export function PublicHeader() {
             href="/"
             id="header-logo"
             style={{
+              // inline-flex: como <a> inline, a logo ficava na linha de base do texto e descia em relação ao menu.
+              display: 'inline-flex',
+              alignItems: 'center',
               textDecoration: 'none',
               color: 'var(--text-neutral-strong)',
               fontWeight: 'var(--font-weight-semibold)',
@@ -123,7 +127,7 @@ export function PublicHeader() {
               whiteSpace: 'nowrap',
             }}
           >
-            Catálogo Inteligente
+            <Logo />
           </Link>
           <nav aria-label="Principal" className="hide-below-md">
             <Space size="middle">

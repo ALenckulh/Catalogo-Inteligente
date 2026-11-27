@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.catalog.repository.ImagemArquivoRepository;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -14,10 +16,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.catalogo.admin.dto.PatchProdutoRequest;
 import com.catalogo.admin.dto.ProdutoInput;
@@ -35,12 +39,72 @@ class AdminProdutoServiceTest {
     ProdutoRepository produtoRepository;
     @Mock
     CategoriaRepository categoriaRepository;
+    @Mock
+    ImagemArquivoRepository imagemArquivoRepository;
 
     AdminProdutoService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminProdutoService(produtoRepository, categoriaRepository);
+        service = new AdminProdutoService(produtoRepository, categoriaRepository, imagemArquivoRepository);
+    }
+
+    @Test
+    void fichaTecnica_vaziaLimpa_ausenteMantem_brancosDescartados() {
+        Produto p = new Produto();
+        p.setId(9L);
+        p.setNome("N");
+        p.setSlug("n");
+        p.setPreco(BigDecimal.TEN);
+        Categoria cat = new Categoria();
+        cat.setId(1L);
+        p.setCategoria(cat);
+        p.setFichaTecnica(new LinkedHashMap<>(Map.of("Marca", "X")));
+        when(produtoRepository.findByIdWithDetails(9L)).thenReturn(Optional.of(p));
+
+        service.patch(9L, patchFicha(null));
+        assertEquals(Map.of("Marca", "X"), p.getFichaTecnica());
+
+        Map<String, Object> suja = new LinkedHashMap<>();
+        suja.put(" Medida ", " STD ");
+        suja.put("  ", "sem chave");
+        suja.put("Vazio", "   ");
+        suja.put("Nulo", null);
+        suja.put("Peso", 2);
+        service.patch(9L, patchFicha(suja));
+        assertEquals(List.of("Medida", "Peso"), List.copyOf(p.getFichaTecnica().keySet()));
+        assertEquals("STD", p.getFichaTecnica().get("Medida"));
+
+        service.patch(9L, patchFicha(Map.of()));
+        assertEquals(Map.of(), p.getFichaTecnica());
+    }
+
+    private static PatchProdutoRequest patchFicha(Map<String, Object> ficha) {
+        return new PatchProdutoRequest(null, null, null, null, null, null, ficha, null);
+    }
+
+    @Test
+    void imagemSoHttpOuArquivoQueExiste() {
+        Produto p = new Produto();
+        p.setId(9L);
+        Categoria cat = new Categoria();
+        cat.setId(1L);
+        p.setCategoria(cat);
+        when(produtoRepository.findByIdWithDetails(9L)).thenReturn(Optional.of(p));
+        org.mockito.Mockito.lenient().when(imagemArquivoRepository.existsById(7L)).thenReturn(true);
+
+        for (String url : List.of("produtos/imagens/8", "produtos/imagens/99999999999999999999", "javascript:alert(1)",
+                "data:image/png;base64,AA", "/etc/passwd", "produtos/imagens/7/x", "https://", "http://a b")) {
+            assertThrows(ApiException.class, () -> service.patch(9L, patchImagem(url)), url);
+        }
+        service.patch(9L, patchImagem("produtos/imagens/7"));
+        service.patch(9L, patchImagem("https://exemplo.com/foto.png"));
+        assertEquals("https://exemplo.com/foto.png", p.getImagens().iterator().next().getUrl());
+    }
+
+    private static PatchProdutoRequest patchImagem(String url) {
+        return new PatchProdutoRequest(
+                null, null, null, null, null, null, null, List.of(new ProdutoInput.ImagemInput(url, null, null)));
     }
 
     @Test
@@ -97,8 +161,24 @@ class AdminProdutoServiceTest {
                 .thenReturn(new PageImpl<>(List.of(p)));
         when(produtoRepository.findByIdWithDetails(3L)).thenReturn(Optional.of(p));
 
-        assertEquals(1, service.listar(null, null, null, null).total());
+        assertEquals(1, service.listar(null, null, null, null, null).total());
         assertEquals("P", service.getById(3L).nome());
+    }
+
+    @Test
+    void listarOrdenaSoPorCamposPermitidos() {
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        when(produtoRepository.adminSearch(any(), any(), pageable.capture())).thenReturn(new PageImpl<>(List.of()));
+
+        service.listar(null, null, 2, 20, "preco,desc");
+        service.listar(null, null, null, null, "senha_hash,asc");
+        service.listar(null, null, null, null, ",");
+
+        Sort porPreco = pageable.getAllValues().get(0).getSort();
+        assertEquals(Sort.Direction.DESC, porPreco.getOrderFor("preco").getDirection());
+        assertEquals(2, pageable.getAllValues().get(0).getPageNumber());
+        assertEquals(Sort.by(Sort.Direction.DESC, "id"), pageable.getAllValues().get(1).getSort());
+        assertEquals(Sort.by(Sort.Direction.DESC, "id"), pageable.getAllValues().get(2).getSort());
     }
 
     @Test

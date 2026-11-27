@@ -32,12 +32,12 @@ Isso diferencia o trabalho de lojas virtuais genéricas (tema marcado como evita
 
 | Recurso | Onde |
 |---------|------|
-| Visão, RF, arquitetura, API | [frontend/docs/](../frontend/docs/) |
+| Visão, requisitos, casos de uso, arquitetura, API | [docs/](README.md) |
 | Backend | [backend/README.md](../backend/README.md) |
 | Banco + RabbitMQ | [database/README.md](../database/README.md) |
 | Visão geral do repo | [README.md](../README.md) |
 
-Wiki do GitHub: a popular a partir destes docs (fase posterior do plano de conformidade).
+Wiki do GitHub: gerada a partir destes docs com `python scripts/publicar_wiki.py`.
 
 ## CI / SonarCloud
 
@@ -51,14 +51,12 @@ Gates locais (também no CI):
 ### Configurar SonarCloud (uma vez)
 
 1. Criar conta/projeto em [SonarCloud](https://sonarcloud.io) e importar o repo GitHub `ALenckulh/Catalogo-Inteligente`
-2. No GitHub → **Settings → Secrets and variables → Actions**: criar `SONAR_TOKEN` (token do SonarCloud)
+2. No GitHub → **Settings → Secrets and variables → Actions**: criar `SONAR_CLOUD` (token do SonarCloud)
 3. Conferir [`sonar-project.properties`](../sonar-project.properties): `sonar.organization` e `sonar.projectKey` devem bater com o projeto criado no SonarCloud (ajuste se o import gerar outros IDs)
 4. Após o push, checks esperados: `backend`, `frontend`, `sonar`
 
-Sem `SONAR_TOKEN`, os jobs de teste ainda validam o código; o job `sonar` falha até o secret existir.
+Sem `SONAR_CLOUD`, os jobs de teste ainda validam o código; o job `sonar` falha até o secret existir.
 
-## Pendências explícitas (fora deste alinhamento)
+## Pendências
 
-- **Hospedagem pública** em cloud permitida (AWS/GCP/Azure etc.) — obrigatória para Demo Day; **não** Vercel/Netlify/Render
-- Observabilidade (Actuator) e Wiki — fases seguintes
-- Poster + QR apontando para URL pública
+- Observabilidade: hoje há só o `GET /api/health`

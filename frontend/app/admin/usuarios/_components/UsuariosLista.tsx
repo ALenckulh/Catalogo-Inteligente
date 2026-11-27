@@ -1,20 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { listAdminUsuarios } from '@/lib/api/admin'
 import { listCategorias } from '@/lib/api/categorias'
-import { formatDateTime } from '@/lib/formatters'
+import { formatTelefone } from '@/lib/formatters'
+import { telefoneForMask } from '@/lib/validators'
 import { useRequireAdmin } from '@/lib/hooks/useRequireAdmin'
+import { useTabelaPaginada } from '@/lib/hooks/useTabelaPaginada'
 import type { AdminUsuarioListItem, Categoria } from '@/lib/types'
-import {
-  NIVEIS_INTERESSE,
-  isNivelInteresse,
-  nivelDoScore,
-  type NivelInteresse,
-} from '@/lib/nivelInteresse'
-import { NivelInteresseIcon } from '@/components/admin/NivelInteresseIcon'
+import { NIVEIS_INTERESSE, isNivelInteresse, type NivelInteresse } from '@/lib/nivelInteresse'
+import { PageError } from '@/components/layout/PageStates'
+import { AtivoTag, DataCelula, NaoCompartilhado, NotaCelula, TextoCelula } from '@/components/admin/celulas'
 import {
   Button,
   Flex,
@@ -27,15 +25,20 @@ import {
 } from '@/components/ui'
 import type { TableProps } from '@/components/ui'
 import { EyeOutlined } from '@ant-design/icons'
+import { HelpTitle } from '../../_components/HelpTitle'
 
 const { Title } = Typography
 
-type StatusFiltro = boolean[] | null
+const TIPOS = ['PF', 'PJ'] as const
 
-function statusDaUrl(v: string | null): StatusFiltro {
-  if (v === 'ativo') return [true]
-  if (v === 'inativo') return [false]
-  return null
+/** O contato já ocupa duas linhas (e-mail e telefone): os outros textos podem usar as mesmas duas. */
+const duasLinhas = (v: string | null | undefined, row: AdminUsuarioListItem) =>
+  row.interesseVisivel ? <TextoCelula texto={v} linhas={2} /> : <NaoCompartilhado />
+
+function statusDaUrl(v: string | null): boolean | undefined {
+  if (v === 'ativo') return true
+  if (v === 'inativo') return false
+  return undefined
 }
 
 export function UsuariosLista() {
@@ -44,47 +47,42 @@ export function UsuariosLista() {
   const searchParams = useSearchParams()
   const nivelUrl = searchParams.get('nivel')
   const nivel: NivelInteresse | undefined = isNivelInteresse(nivelUrl) ? nivelUrl : undefined
-  const statusFiltro = statusDaUrl(searchParams.get('status'))
+  const ativo = statusDaUrl(searchParams.get('status'))
 
-  /** Mantém `nivel` e `status` na URL para que o filtro possa ser compartilhado (ex.: link do dashboard). */
-  function atualizarUrl(next: { nivel?: NivelInteresse | null; status?: StatusFiltro }) {
+  const tipoUrl = searchParams.get('tipo')
+  const tipo = TIPOS.find((t) => t === tipoUrl)
+  const categoria = searchParams.get('categoria') ?? undefined
+
+  /**
+   * Filtros na URL, para o link poder ser compartilhado (ex.: o do dashboard) e voltar do detalhe não perdê-los.
+   * A busca fica de fora: pode ter CPF ou telefone, e a URL vai para o histórico e para os logs.
+   */
+  function atualizarUrl(next: Partial<Record<'nivel' | 'status' | 'tipo' | 'categoria', string | null>>) {
     const params = new URLSearchParams(searchParams.toString())
-    if (next.nivel !== undefined) {
-      if (next.nivel) params.set('nivel', next.nivel)
-      else params.delete('nivel')
-    }
-    if (next.status !== undefined) {
-      const s = next.status
-      if (s && s.length === 1) params.set('status', s[0] ? 'ativo' : 'inativo')
-      else params.delete('status')
+    for (const [chave, valor] of Object.entries(next)) {
+      if (valor) params.set(chave, valor)
+      else params.delete(chave)
     }
     const qs = params.toString()
     router.replace(qs ? `/admin/usuarios?${qs}` : '/admin/usuarios', { scroll: false })
   }
-  const [items, setItems] = useState<AdminUsuarioListItem[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
-  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
-  const [tipo, setTipo] = useState<string | undefined>()
-  const [categoria, setCategoria] = useState<string | undefined>()
-  /** Filtro da coluna Tipo (antd exige `filteredValue` em todas as colunas filtráveis quando uma é controlada). */
-  const [tipoColuna, setTipoColuna] = useState<string[] | null>(null)
+
+  const buscar = useCallback(
+    (params: { page: number; limit: number; sort?: string }) =>
+      listAdminUsuarios({ q: q || undefined, tipo, categoria, nivel, ativo, ...params }),
+    [q, tipo, categoria, nivel, ativo],
+  )
+  const { items, loading, erro, setPage, reload, onTableChange, sortOrder, pagination } =
+    useTabelaPaginada<AdminUsuarioListItem>(buscar, isAdmin)
 
   useEffect(() => {
     if (!isAdmin) return
-    void listCategorias().then(setCategorias)
+    void listCategorias()
+      .then(setCategorias)
+      .catch(() => setCategorias([]))
   }, [isAdmin])
-
-  useEffect(() => {
-    if (!isAdmin) return
-    const t = window.setTimeout(() => {
-      setLoading(true)
-      void listAdminUsuarios({ q: q || undefined, tipo, categoria, nivel })
-        .then((r) => setItems(r.items))
-        .finally(() => setLoading(false))
-    }, 0)
-    return () => window.clearTimeout(t)
-  }, [isAdmin, q, tipo, categoria, nivel])
 
   if (authLoading || !isAdmin) {
     return (
@@ -97,74 +95,91 @@ export function UsuariosLista() {
   const columns: TableProps<AdminUsuarioListItem>['columns'] = [
     {
       title: 'Identificador',
-      key: 'nome',
-      sorter: (a, b) =>
-        (a.nomeCompleto ?? a.razaoSocial ?? '').localeCompare(
-          b.nomeCompleto ?? b.razaoSocial ?? '',
-        ),
-      render: (_, row) => row.nomeCompleto ?? row.razaoSocial ?? '—',
+      dataIndex: 'nome',
+      sorter: true,
+      sortOrder: sortOrder('nome'),
+      width: '15%',
+      render: (_, row) => <TextoCelula texto={row.nomeCompleto ?? row.razaoSocial} linhas={2} principal />,
     },
     {
       title: 'Tipo',
       dataIndex: 'tipo',
+      width: 68,
       filters: [
         { text: 'PF', value: 'PF' },
         { text: 'PJ', value: 'PJ' },
       ],
-      filteredValue: tipoColuna,
-      onFilter: (v, row) => row.tipo === v,
+      filterMultiple: false,
+      filteredValue: tipo ? [tipo] : null,
       render: (t) => <Tag>{t}</Tag>,
     },
     {
-      title: 'E-mail',
+      title: 'Contato',
       dataIndex: 'email',
-      sorter: (a, b) => a.email.localeCompare(b.email),
-    },
-    {
-      title: 'Telefone',
-      dataIndex: 'telefone',
-      render: (t) => t ?? '—',
+      sorter: true,
+      sortOrder: sortOrder('email'),
+      width: '19%',
+      render: (email: string | null, row) =>
+        row.contatoVisivel ? (
+          <>
+            <TextoCelula texto={email} />
+            {row.telefone && <TextoCelula texto={formatTelefone(telefoneForMask(row.telefone))} type="secondary" />}
+          </>
+        ) : (
+          <NaoCompartilhado />
+        ),
     },
     {
       title: 'Status',
       dataIndex: 'ativo',
+      width: 86,
       filters: [
         { text: 'Ativo', value: true },
         { text: 'Inativo', value: false },
       ],
-      filteredValue: statusFiltro,
-      onFilter: (v, row) => row.ativo === v,
-      render: (ativo: boolean) => (
-        <Tag color={ativo ? 'success' : 'default'}>{ativo ? 'Ativo' : 'Inativo'}</Tag>
-      ),
+      filterMultiple: false,
+      filteredValue: ativo === undefined ? null : [ativo],
+      render: (valor: boolean) => <AtivoTag ativo={valor} />,
     },
     {
       title: 'Score máx.',
       dataIndex: 'scoreMaxProduto',
-      sorter: (a, b) => (a.scoreMaxProduto ?? -1) - (b.scoreMaxProduto ?? -1),
-      render: (v: number | null) => (
-        <Flex gap={8} align="center">
-          <NivelInteresseIcon nivel={nivelDoScore(v)} />
-          <span>{v ?? '—'}</span>
-        </Flex>
-      ),
+      width: 84,
+      sorter: true,
+      sortOrder: sortOrder('scoreMaxProduto'),
+      render: (v: number | null, row) => (row.interesseVisivel ? <NotaCelula nota={v} /> : <NaoCompartilhado />),
     },
     {
       title: 'Top categoria',
       dataIndex: 'topCategoria',
-      sorter: (a, b) => (a.topCategoria ?? '').localeCompare(b.topCategoria ?? ''),
-      render: (v: string | null) => v ?? '—',
+      sorter: true,
+      sortOrder: sortOrder('topCategoria'),
+      render: duasLinhas,
+    },
+    {
+      title: (
+        <HelpTitle
+          label="Próxima compra provável"
+          help="Produto de maior nota que o cliente não comprou nos últimos 30 dias."
+        />
+      ),
+      dataIndex: 'proximaCompra',
+      // Uma fatia do total, e não a sobra: é o texto mais longo e o cabeçalho precisa de duas linhas inteiras.
+      width: '15%',
+      render: duasLinhas,
     },
     {
       title: 'Última atividade',
       dataIndex: 'ultimaAtividade',
-      sorter: (a, b) =>
-        (a.ultimaAtividade ?? '').localeCompare(b.ultimaAtividade ?? ''),
-      render: (d: string | null) => (d ? formatDateTime(d) : '—'),
+      sorter: true,
+      sortOrder: sortOrder('ultimaAtividade'),
+      width: 96,
+      render: (d: string | null, row) => (row.interesseVisivel ? <DataCelula data={d} /> : <NaoCompartilhado />),
     },
     {
       title: 'Ações',
       key: 'acoes',
+      width: 62,
       render: (_, row) => (
         <Link href={`/admin/usuarios/${row.id}`}>
           <Button
@@ -187,10 +202,13 @@ export function UsuariosLista() {
       <Flex gap="middle" wrap="wrap">
         <Input.Search
           id="admin-usuarios-busca"
-          placeholder="Informe o termo de busca"
+          placeholder="Nome, e-mail, CPF/CNPJ ou telefone"
           allowClear
           style={{ maxWidth: 280 }}
-          onSearch={setQ}
+          onSearch={(v) => {
+            setQ(v)
+            setPage(1)
+          }}
         />
         <Select
           id="admin-usuarios-tipo"
@@ -201,15 +219,23 @@ export function UsuariosLista() {
             { value: 'PF', label: 'PF' },
             { value: 'PJ', label: 'PJ' },
           ]}
-          onChange={(v: string | null) => setTipo(v ?? undefined)}
+          value={tipo}
+          onChange={(v: string | null | undefined) => {
+            atualizarUrl({ tipo: v ?? null })
+            setPage(1)
+          }}
         />
         <Select
           id="admin-usuarios-categoria"
           allowClear
           placeholder="Selecione a categoria"
           style={{ minWidth: 180 }}
+          value={categoria}
           options={categorias.map((c) => ({ value: c.nome, label: c.nome }))}
-          onChange={(v: string | null) => setCategoria(v ?? undefined)}
+          onChange={(v: string | null | undefined) => {
+            atualizarUrl({ categoria: v ?? null })
+            setPage(1)
+          }}
         />
         <Select
           id="admin-usuarios-nivel"
@@ -221,22 +247,34 @@ export function UsuariosLista() {
             value,
             label: n.label,
           }))}
-          onChange={(v: NivelInteresse | null | undefined) => atualizarUrl({ nivel: v ?? null })}
+          onChange={(v: NivelInteresse | null | undefined) => {
+            atualizarUrl({ nivel: v ?? null })
+            setPage(1)
+          }}
         />
       </Flex>
-      <Table
-        size="small"
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={items}
-        pagination={{ pageSize: 20 }}
-        onChange={(_, filters) => {
-          setTipoColuna((filters.tipo as string[] | null | undefined) ?? null)
-          const ativo = (filters.ativo as boolean[] | null | undefined) ?? null
-          if (JSON.stringify(ativo) !== JSON.stringify(statusFiltro)) atualizarUrl({ status: ativo })
-        }}
-      />
+      {erro ? (
+        <PageError onRetry={() => void reload()} />
+      ) : (
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          pagination={pagination}
+          scroll={{ x: 970 }}
+          onChange={(p, filters, sorter) => {
+            const tipoFiltro = filters.tipo?.[0] as string | undefined
+            const ativoFiltro = filters.ativo?.[0] as boolean | undefined
+            const mudou = tipoFiltro !== tipo || ativoFiltro !== ativo
+            if (mudou) {
+              const status = ativoFiltro === undefined ? null : ativoFiltro ? 'ativo' : 'inativo'
+              atualizarUrl({ tipo: tipoFiltro ?? null, status })
+            }
+            onTableChange(p, sorter, mudou)
+          }}
+        />
+      )}
     </Flex>
   )
 }

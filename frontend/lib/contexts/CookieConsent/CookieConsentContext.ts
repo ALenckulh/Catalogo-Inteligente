@@ -15,6 +15,8 @@ export interface CookieConsentValue {
   acceptAll: () => void
   acceptEssential: () => void
   acceptCustom: (behavioral: boolean) => void
+  /** Cadastro: liga a coleta só se este navegador ainda não escolheu. */
+  acceptIfUndecided: () => void
   canTrackBehavioral: boolean
 }
 

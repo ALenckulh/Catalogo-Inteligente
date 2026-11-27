@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createProduto, updateProduto } from '@/lib/api/admin'
 import { listCategorias } from '@/lib/api/categorias'
 import { toApiError } from '@/lib/api/client'
+import { precoInputProps } from '@/lib/formatters'
 import { useAppNotification } from '@/lib/hooks/useAppNotification'
 import type { Categoria, Produto, ProdutoInput } from '@/lib/types'
 import {
@@ -25,6 +26,7 @@ import {
   PlusOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
+import { chaveRepetida, fichaToPairs, pairsToFicha, type FichaPar } from './fichaTecnica'
 import { ImagemUploadField } from './ImagemUploadField'
 
 const { Title } = Typography
@@ -42,27 +44,9 @@ function slugify(nome: string): string {
     .replace(/^-|-$/g, '')
 }
 
-function fichaToPairs(ficha: Record<string, string | number | boolean> | null | undefined) {
-  if (!ficha) return []
-  return Object.entries(ficha).map(([chave, valor]) => ({ chave, valor: String(valor) }))
-}
-
-function pairsToFicha(
-  pairs: Array<{ chave?: string; valor?: string }> | undefined,
-): Record<string, string> | undefined {
-  if (!pairs?.length) return undefined
-  const out: Record<string, string> = {}
-  for (const row of pairs) {
-    const k = row.chave?.trim()
-    if (!k) continue
-    out[k] = row.valor?.trim() ?? ''
-  }
-  return Object.keys(out).length ? out : undefined
-}
-
 export function ProdutoForm({ initial }: Props) {
   const router = useRouter()
-  const { api, contextHolder } = useAppNotification()
+  const { api } = useAppNotification()
   const [form] = Form.useForm()
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -103,7 +87,7 @@ export function ProdutoForm({ initial }: Props) {
     preco: number
     categoriaId: number
     ativo: boolean
-    fichaPairs?: Array<{ chave?: string; valor?: string }>
+    fichaPairs?: FichaPar[]
     imagens?: Array<{ url?: string; altText?: string; ordem?: number }>
   }) {
     setError(null)
@@ -143,7 +127,6 @@ export function ProdutoForm({ initial }: Props) {
 
   return (
     <Flex vertical gap={16} style={{ maxWidth: 640 }}>
-      {contextHolder}
       {error && <Alert type="error" showIcon title={error} />}
       <Form
         form={form}
@@ -164,6 +147,7 @@ export function ProdutoForm({ initial }: Props) {
           <Input
             id="admin-prod-form-nome"
             placeholder="Informe o nome"
+            maxLength={200}
             onChange={(e) => {
               if (!slugTouched) {
                 form.setFieldValue('slug', slugify(e.target.value))
@@ -175,11 +159,18 @@ export function ProdutoForm({ initial }: Props) {
           name="slug"
           label="Slug"
           tooltip="URL amigável (único)"
-          rules={[{ required: true, message: 'Informe o slug' }]}
+          rules={[
+            { required: true, message: 'Informe o slug' },
+            {
+              pattern: /^(?!imagens$)[a-z0-9]+(-[a-z0-9]+)*$/,
+              message: 'Use só letras minúsculas sem acento, números e hífen',
+            },
+          ]}
         >
           <Input
             id="admin-prod-form-slug"
             placeholder="Informe o slug"
+            maxLength={220}
             onChange={() => setSlugTouched(true)}
           />
         </FormItem>
@@ -189,15 +180,22 @@ export function ProdutoForm({ initial }: Props) {
         <FormItem
           name="preco"
           label="Preço"
-          tooltip="Preço de referência (≥ 0)"
-          rules={[{ required: true, message: 'Informe o preço' }]}
+          tooltip="Preço de referência (maior que zero)"
+          rules={[
+            { required: true, message: 'Informe o preço' },
+            { type: 'number', min: 0.01, message: 'O preço deve ser maior que zero' },
+          ]}
         >
+          {/* pt-BR: sem isso "1234,50" era lido como 123450 e "1.234,50" como 1,23. */}
           <InputNumber
             id="admin-prod-form-preco"
-            min={0}
+            max={9999999999.99}
+            {...precoInputProps()}
+            precision={2}
             step={0.01}
+            prefix="R$"
             style={{ width: '100%' }}
-            placeholder="R$ 0,00"
+            placeholder="0,00"
           />
         </FormItem>
         <FormItem
@@ -231,7 +229,16 @@ export function ProdutoForm({ initial }: Props) {
                     {...field}
                     name={[field.name, 'chave']}
                     style={{ flex: 1, marginBottom: 0 }}
-                    rules={[{ required: true, message: 'Chave' }]}
+                    dependencies={['fichaPairs']}
+                    rules={[
+                      { required: true, whitespace: true, message: 'Informe a chave' },
+                      {
+                        validator: (_, v) =>
+                          chaveRepetida(form.getFieldValue('fichaPairs'), v)
+                            ? Promise.reject(new Error('Chave repetida'))
+                            : Promise.resolve(),
+                      },
+                    ]}
                   >
                     <Input placeholder="Chave" id={`admin-prod-ficha-chave-${key}`} />
                   </FormItem>
@@ -239,12 +246,13 @@ export function ProdutoForm({ initial }: Props) {
                     {...field}
                     name={[field.name, 'valor']}
                     style={{ flex: 1, marginBottom: 0 }}
-                    rules={[{ required: true, message: 'Valor' }]}
+                    rules={[{ required: true, whitespace: true, message: 'Informe o valor' }]}
                   >
                     <Input placeholder="Valor" id={`admin-prod-ficha-valor-${key}`} />
                   </FormItem>
                   <Button
                     variant="text"
+                    color="danger"
                     icon={<DeleteOutlined />}
                     tooltip="Remover"
                     onClick={() => remove(field.name)}
@@ -300,6 +308,7 @@ export function ProdutoForm({ initial }: Props) {
                     </FormItem>
                     <Button
                       variant="text"
+                      color="danger"
                       icon={<DeleteOutlined />}
                       tooltip="Remover"
                       onClick={() => remove(field.name)}

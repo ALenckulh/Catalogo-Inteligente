@@ -5,6 +5,9 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,6 +26,11 @@ import com.catalogo.scoring.repository.PesoMetricaRepository;
 import com.catalogo.scoring.repository.ScoreCategoriaRepository;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
 
+/**
+ * Orquestra o score de um sujeito (usuário ou visitante): carrega eventos, compras e parâmetros do banco,
+ * delega o cálculo ao ScoreCalculator (puro) e grava o resultado. As tabelas score_* funcionam como cache
+ * materializado: sempre podem ser recalculadas a partir dos eventos.
+ */
 @Service
 public class ScoreEngine {
 
@@ -77,20 +85,22 @@ public class ScoreEngine {
                 ? eventoRepository.findAtivosByUsuarioId(usuarioId)
                 : eventoRepository.findAtivosByVisitanteId(visitanteId);
 
-        List<Compra> compras = List.of();
-        if (usuarioId != null
-                && compraRepository.countByUsuarioIdAndDeletedAtIsNull(usuarioId) >= ScoreCalculator.MIN_COMPRAS) {
-            compras = compraRepository.findByUsuarioIdAndDeletedAtIsNull(usuarioId);
-        }
+        List<Compra> compras = usuarioId != null
+                ? compraRepository.findByUsuarioIdAndDeletedAtIsNull(usuarioId)
+                : List.of();
 
         ScoreCalculator.Resultado r = ScoreCalculator.calcular(eventos, compras, params, now);
-        r.notasProduto().forEach((produtoId, nota) -> upsertScoreProduto(usuarioId, visitanteId, produtoId, nota, now));
-        r.notasCategoria().forEach((categoriaId, nota) -> upsertScoreCategoria(usuarioId, visitanteId, categoriaId, nota, now));
+        gravarProdutos(usuarioId, visitanteId, r.notasProduto(), now);
+        gravarCategorias(usuarioId, visitanteId, r.notasCategoria(), now);
         upsertFaixaPreco(usuarioId, visitanteId, r.precosComConversao(), r.precosSemConversao(), now);
 
         log.debug("Score recalc usuario={} visitante={} produtos={}", usuarioId, visitanteId, r.notasProduto().size());
     }
 
+    /**
+     * Faixa de preço: mediana dos preços dos produtos com conversão × sem conversão, e o gap entre elas.
+     * Mostra ao vendedor quanto o cliente realmente paga comparado com o que ele só olha.
+     */
     private void upsertFaixaPreco(
             Long usuarioId,
             Long visitanteId,
@@ -116,34 +126,50 @@ public class ScoreEngine {
         faixaPrecoUsuarioRepository.save(faixa);
     }
 
-    private void upsertScoreProduto(Long usuarioId, Long visitanteId, Long produtoId, double valor, OffsetDateTime now) {
-        ScoreProduto score = usuarioId != null
-                ? scoreProdutoRepository.findByUsuarioIdAndProdutoId(usuarioId, produtoId).orElseGet(ScoreProduto::new)
-                : scoreProdutoRepository.findByVisitanteIdAndProdutoId(visitanteId, produtoId).orElseGet(ScoreProduto::new);
-        score.setUsuarioId(usuarioId);
-        score.setVisitanteId(visitanteId);
-        score.setProdutoId(produtoId);
-        score.setValor(BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP));
-        score.setCalculadoEm(now);
-        scoreProdutoRepository.save(score);
+    /** Cria ou atualiza as notas do sujeito e apaga as que não têm mais sinal (ex.: a compra foi excluída). */
+    private void gravarProdutos(Long usuarioId, Long visitanteId, Map<Long, Double> notas, OffsetDateTime now) {
+        Map<Long, ScoreProduto> atuais = (usuarioId != null
+                ? scoreProdutoRepository.findByUsuarioId(usuarioId)
+                : scoreProdutoRepository.findByVisitanteId(visitanteId))
+                .stream().collect(Collectors.toMap(ScoreProduto::getProdutoId, Function.identity()));
+        notas.forEach((produtoId, nota) -> {
+            ScoreProduto score = atuais.remove(produtoId);
+            if (score == null) {
+                score = new ScoreProduto();
+                score.setUsuarioId(usuarioId);
+                score.setVisitanteId(visitanteId);
+                score.setProdutoId(produtoId);
+            }
+            score.setValor(duasCasas(nota));
+            score.setCalculadoEm(now);
+            scoreProdutoRepository.save(score);
+        });
+        scoreProdutoRepository.deleteAllInBatch(atuais.values());
     }
 
-    private void upsertScoreCategoria(Long usuarioId, Long visitanteId, Long categoriaId, double valor, OffsetDateTime now) {
-        ScoreCategoria score = usuarioId != null
-                ? scoreCategoriaRepository.findByUsuarioIdAndCategoriaId(usuarioId, categoriaId).orElseGet(ScoreCategoria::new)
-                : scoreCategoriaRepository.findByVisitanteIdAndCategoriaId(visitanteId, categoriaId).orElseGet(ScoreCategoria::new);
-        score.setUsuarioId(usuarioId);
-        score.setVisitanteId(visitanteId);
-        score.setCategoriaId(categoriaId);
-        score.setValor(BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP));
-        score.setCalculadoEm(now);
-        scoreCategoriaRepository.save(score);
+    private void gravarCategorias(Long usuarioId, Long visitanteId, Map<Long, Double> notas, OffsetDateTime now) {
+        Map<Long, ScoreCategoria> atuais = (usuarioId != null
+                ? scoreCategoriaRepository.findByUsuarioId(usuarioId)
+                : scoreCategoriaRepository.findByVisitanteId(visitanteId))
+                .stream().collect(Collectors.toMap(ScoreCategoria::getCategoriaId, Function.identity()));
+        notas.forEach((categoriaId, nota) -> {
+            ScoreCategoria score = atuais.remove(categoriaId);
+            if (score == null) {
+                score = new ScoreCategoria();
+                score.setUsuarioId(usuarioId);
+                score.setVisitanteId(visitanteId);
+                score.setCategoriaId(categoriaId);
+            }
+            score.setValor(duasCasas(nota));
+            score.setCalculadoEm(now);
+            scoreCategoriaRepository.save(score);
+        });
+        scoreCategoriaRepository.deleteAllInBatch(atuais.values());
     }
 
-
-
-
-
+    private static BigDecimal duasCasas(double valor) {
+        return BigDecimal.valueOf(valor).setScale(2, RoundingMode.HALF_UP);
+    }
 
     private static BigDecimal median(List<BigDecimal> values) {
         if (values == null || values.isEmpty()) {

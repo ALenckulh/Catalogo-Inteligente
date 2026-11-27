@@ -50,11 +50,14 @@ public class ImagemArquivoService {
         } catch (IOException e) {
             throw invalida("Não foi possível ler o arquivo");
         }
-        // Tipo pelos magic bytes — o Content-Type do multipart vem do cliente.
+        // Tipo pelos magic bytes — o Content-Type do multipart vem do cliente e pode mentir.
+        // Apache Tika lê os primeiros bytes do arquivo; só JPEG, PNG ou WebP passam.
         String tipo = tika.detect(bytes);
         if (!TIPOS_ACEITOS.contains(tipo)) {
             throw invalida("Formato não suportado. Envie JPEG, PNG ou WebP");
         }
+        // Bytes ficam em imagem_arquivo (BYTEA), tabela separada de produto_imagem, para nunca entrarem
+        // nos JOIN FETCH das listagens; produto_imagem.url guarda só a referência produtos/imagens/{id}.
         ImagemArquivo img = new ImagemArquivo();
         img.setContentType(tipo);
         img.setTamanho(bytes.length);

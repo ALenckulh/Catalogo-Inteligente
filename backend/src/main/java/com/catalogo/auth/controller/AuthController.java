@@ -1,5 +1,6 @@
 package com.catalogo.auth.controller;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -46,12 +47,14 @@ public class AuthController {
         return authService.loginConsumidor(request);
     }
 
+    /** Revoga este token (o filtro passa a recusá-lo); os outros aparelhos continuam logados. */
     @PostMapping("/logout")
-    public MessageResponse logout(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ApiException("UNAUTHORIZED", "Não autenticado", HttpStatus.UNAUTHORIZED);
-        }
-        return new MessageResponse("Logout realizado");
+    public MessageResponse logout(
+            Authentication authentication,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
+    ) {
+        requireUserId(authentication);
+        return authService.logout(authorization.substring("Bearer ".length()));
     }
 
     @PostMapping("/password-reset")

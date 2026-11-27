@@ -1,5 +1,6 @@
 package com.catalogo.lgpd.repository;
 
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -13,11 +14,14 @@ import com.catalogo.lgpd.entity.SolicitacaoLgpd;
 
 public interface SolicitacaoLgpdRepository extends JpaRepository<SolicitacaoLgpd, Long> {
 
+    List<SolicitacaoLgpd> findByUsuario_IdOrderBySolicitadoEmDescIdDesc(Long usuarioId);
+
+    /** COALESCE, e não ":x IS NULL": o Postgres não descobre o tipo de um enum nulo sem uma coluna ao lado. */
     @EntityGraph(attributePaths = "usuario")
     @Query("""
             SELECT s FROM SolicitacaoLgpd s
-            WHERE (:status IS NULL OR s.status = :status)
-              AND (:tipo IS NULL OR s.tipo = :tipo)
+            WHERE s.status = COALESCE(:status, s.status)
+              AND s.tipo = COALESCE(:tipo, s.tipo)
             """)
     Page<SolicitacaoLgpd> search(
             @Param("status") StatusSolicitacaoLgpd status,

@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiErrorBody } from '@/lib/types'
-import { API_BASE_URL, AUTH_TOKEN_KEY, USE_MOCK, VISITANTE_COOKIE_KEY } from './config'
+import { API_BASE_URL, AUTH_TOKEN_KEY, AUTH_USER_KEY, USE_MOCK } from './config'
+import { readVisitanteId } from './visitanteId'
 
 export const SESSION_CLEARED_EVENT = 'ci:session-cleared'
 
@@ -17,7 +18,7 @@ function clearStoredAuth(): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.removeItem(AUTH_TOKEN_KEY)
-    window.localStorage.removeItem('ci_auth_user')
+    window.localStorage.removeItem(AUTH_USER_KEY)
     window.dispatchEvent(new Event(SESSION_CLEARED_EVENT))
   } catch {
     /* ignore */
@@ -40,18 +41,21 @@ export const apiClient = axios.create({
   timeout: 15_000,
 })
 
+// Em toda requisição: JWT em Authorization: Bearer e o id do visitante anônimo em X-Visitante-Cookie-Id.
+// O token fica no localStorage (exposto a XSS; a alternativa, cookie httpOnly, exigiria tratar CSRF).
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = readStorage(AUTH_TOKEN_KEY)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
-  const visitanteId = readStorage(VISITANTE_COOKIE_KEY)
+  const visitanteId = readVisitanteId()
   if (visitanteId) {
     config.headers['X-Visitante-Cookie-Id'] = visitanteId
   }
   return config
 })
 
+// 401 fora das rotas de login/cadastro = token expirado ou conta excluída: limpa a sessão local.
 apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {

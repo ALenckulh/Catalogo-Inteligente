@@ -148,6 +148,7 @@ export default function RecuperarSenhaPage() {
                 rules={[
                   { required: true, message: 'Informe a nova senha' },
                   { min: 6, message: 'A senha deve ter no mínimo 6 caracteres' },
+                  { max: 72, message: 'A senha deve ter no máximo 72 caracteres' },
                 ]}
               >
                 <Input.Password

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.scoring.repository.ScoreProdutoRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -153,10 +154,19 @@ class AdminScoringServiceTest {
         when(engine.carregarParams()).thenReturn(BOM);
         when(eventos.findUsuarioIdsComEventos()).thenReturn(List.of(1L, 2L));
         when(eventos.findVisitanteIdsSemUsuario()).thenReturn(List.of(9L));
+        // só com compras, e só com nota antiga (a compra foi excluída)
+        CompraRepository compras = mock(CompraRepository.class);
+        when(compras.findUsuarioIdsComCompras()).thenReturn(List.of(2L, 3L));
+        ScoreProdutoRepository notas = mock(ScoreProdutoRepository.class);
+        when(notas.findUsuarioIdsComNota()).thenReturn(List.of(1L, 4L));
+        when(notas.findVisitanteIdsComNota()).thenReturn(List.of(9L, 10L));
 
-        int total = new AdminScoringService(eventos, mock(CompraRepository.class), engine).recalcularTodos();
+        int total = new AdminScoringService(eventos, compras, notas, engine).recalcularTodos();
 
-        assertEquals(3, total);
+        assertEquals(6, total);
+        verify(engine).recalc(3L, null, BOM);
+        verify(engine).recalc(4L, null, BOM);
+        verify(engine).recalc(null, 10L, BOM);
         verify(engine).recalc(1L, null, BOM);
         verify(engine).recalc(2L, null, BOM);
         verify(engine).recalc(null, 9L, BOM);

@@ -2,7 +2,7 @@ import type { AuthSession, LoginRequest, SignupRequest, Usuario } from '@/lib/ty
 import { delay } from '@/lib/mocks/delay'
 import { MOCK_PASSWORD, mockUsuarios } from '@/lib/mocks/data'
 import { ApiError, apiClient } from './client'
-import { AUTH_TOKEN_KEY, USE_MOCK } from './config'
+import { AUTH_TOKEN_KEY, AUTH_USER_KEY, USE_MOCK } from './config'
 
 function displayName(u: Usuario): string {
   return u.nomeCompleto ?? u.razaoSocial ?? u.email
@@ -112,13 +112,24 @@ export async function migrarHistorico(aceitar: boolean): Promise<void> {
 export function persistSession(session: AuthSession): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(AUTH_TOKEN_KEY, session.token)
-  window.localStorage.setItem('ci_auth_user', JSON.stringify(session.usuario))
+  persistUser(session.usuario)
+}
+
+/** Trocar a senha encerra as outras sessões; esta segue com o token novo. */
+export function persistToken(token: string): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token)
+}
+
+export function persistUser(usuario: Usuario): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(usuario))
 }
 
 export function clearSession(): void {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(AUTH_TOKEN_KEY)
-  window.localStorage.removeItem('ci_auth_user')
+  window.localStorage.removeItem(AUTH_USER_KEY)
 }
 
 export function readStoredToken(): string | null {
@@ -145,7 +156,7 @@ export function readStoredUser(): Usuario | null {
       clearSession()
       return null
     }
-    const raw = window.localStorage.getItem('ci_auth_user')
+    const raw = window.localStorage.getItem(AUTH_USER_KEY)
     if (!raw) return null
     return JSON.parse(raw) as Usuario
   } catch {

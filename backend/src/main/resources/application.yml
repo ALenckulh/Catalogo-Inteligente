@@ -4,15 +4,32 @@ spring:
   profiles:
     active: dev
   jpa:
+    # Sessão do Hibernate fecha no fim do service: nada de lazy loading escondido no controller
+    # (as queries usam JOIN FETCH quando precisam das relações).
     open-in-view: false
     hibernate:
+      # Hibernate não cria nem altera tabelas: o schema é do Flyway (database/migrations).
       ddl-auto: none
     properties:
       hibernate:
         jdbc:
+          # Instantes gravados em UTC (TIMESTAMPTZ ↔ OffsetDateTime); o front converte para o horário local.
           time_zone: UTC
   flyway:
+    # A aplicação não roda migrations (ADR-B04): elas rodam pelo container flyway do docker compose.
     enabled: false
+  mail:
+    # Padrão: Mailpit local (docker compose --profile tools). Outro SMTP: só variáveis de ambiente.
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   servlet:
     multipart:
       max-file-size: 5MB
@@ -20,3 +37,7 @@ spring:
 
 server:
   port: 8080
+
+catalogo:
+  mail:
+    remetente: ${MAIL_FROM:nao-responda@catalogo.local}

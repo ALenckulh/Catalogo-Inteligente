@@ -7,8 +7,8 @@ Referência de desenvolvimento + checklist de code review. Lista as decisões de
 ## 1. Uso de componentes
 
 **Prioridade:**
-1. Wrapper em `@/components/ui/*` (Button, Input, Form, Card, Select).
-2. Componente antd re-exportado em `@/components/ui` (Tag, Modal, Table, …).
+1. Wrapper em `@/components/ui/*` (Button, Input, Form, Card, Select, Table).
+2. Componente antd re-exportado em `@/components/ui` (Tag, Modal, …).
 3. Componente antd importado direto de `antd` — só se o barrel não expor.
 4. HTML "cru" — apenas para **landmarks semânticos** (`<main>`, `<section aria-labelledby>`, `<nav>`, `<footer>` quando não houver `Layout.Footer`) e `<a>` de skip-link.
 
@@ -42,6 +42,7 @@ O wrapper decide o default pela cor: `color="primary"` nasce `solid`; `variant="
 | `outlined` + `danger` | Ação destrutiva de página (Solicitar exclusão da conta), separada das demais por `Divider` |
 | `dashed` / `filled` | Casos raros (adicionar item em lista, destaque suave) — evitar no admin atual |
 | `text` | Ações em **tabela** / toolbar densa (Abrir, Editar, Ativar, Excluir) e navegação no header |
+| `text` + `danger` | Sair da conta, Desativar, Excluir e Remover, em tabela, lista ou fim de página. O inverso (Ativar) e o que não perde nada (Cancelar, Limpar, Desfazer, Restaurar padrão) ficam neutros; recusar consentimento também |
 | `link` | Navegação auxiliar leve (Ver do KPI, Limpar filtros, Desfazer) |
 
 **O header não disputa com a página:** "Cadastrar" é `outlined`. O CTA da tela é sempre da página.
@@ -78,7 +79,7 @@ Toda cor usada em TSX/CSS deve vir de um token:
 - **TSX inline style:** `color: 'var(--primary)'` **ou** `color: palette.primary[400]` importando `@/lib/theme/tokens`.
 - **ThemeConfig do antd:** já mapeia os tokens — para `colorPrimary` etc. não é preciso prop custom.
 
-❌ Nunca hardcode `#3D6F94`, `#F5F5F5`, `rgba(...)` em componente.
+❌ Nunca hardcode `#3D6F94`, `#F5F5F5`, `rgba(...)` em componente. O ESLint acusa (só `lib/theme/` fica de fora).
 
 ### 2.1 Grafia do projeto
 
@@ -86,7 +87,7 @@ Sempre **Catálogo Inteligente** (com acento no "a" e "C" + "I" maiúsculos). "c
 
 ### 2.2 Primária só em ação
 
-Cor primária (`--primary`) representa affordance — reserve para elementos interativos (botão principal, link, badge de status ativo). Em texto puro use `--text-neutral-*`; para destaque secundário, `--secondary`.
+Cor primária (`--primary`) representa affordance — reserve para elementos interativos (botão principal, link, badge de status ativo). Em texto puro use `--text-neutral-*` (todos com contraste AA de 4,5:1; o placeholder usa `--text-neutral-subtle`); para destaque secundário, `--secondary`.
 
 ## 3. Confirmação de deleção
 
@@ -101,9 +102,9 @@ Texto obrigatório: pergunta explícita + consequência. Botão primário com **
 
 ```tsx
 <Popconfirm
-  message="Remover produto do catálogo?"
-  description="Esta ação é permanente e não pode ser desfeita."
-  okText="Remover"
+  title="Excluir compra?"
+  description="Ela sai do histórico do cliente e a nota é recalculada."
+  okText="Excluir"
   cancelText="Cancelar"
   onConfirm={handleDelete}
 >
@@ -137,7 +138,10 @@ Em `notification`/`Alert`/`message` que exibam **apenas um ícone** (sem texto a
 ## 6. Tabelas
 
 - **Filtro + ordenação** em toda coluna de dados tabulares (`sorter`, `filters`/`filterDropdown`).
-- `size="small"` em telas internas (admin dashboard).
+- O wrapper `Table` já vem com `size="small"` e `tableLayout="fixed"`.
+- **Largura:** coluna curta (nota, data, status, ações) declara `width`; a de texto longo fica sem, para receber a sobra, ou usa porcentagem. Tabela com muitas colunas define `scroll.x`.
+- **Altura da linha:** texto longo usa `TextoCelula` (12px, uma linha, com a dica do texto inteiro). A coluna que identifica a linha usa `principal` (14px). Duas linhas (`linhas={2}`) só quando outra coluna já ocupa duas. A linha não passa de 54px, fora as que têm campos.
+- Células repetidas ficam em `components/admin/celulas.tsx`: `TextoCelula`, `NotaCelula`, `AtivoTag`, `DataCelula` (data, com a hora na dica) e `NaoCompartilhado`.
 - `pagination` com `pageSize` razoável (10/20/50).
 - "Nenhum registro" via `Empty` — não via string crua "No data".
 
@@ -160,7 +164,7 @@ Default `bordered`. **Preenchida** só em status crítico (erro grave, bloqueio)
 
 ## 8. Botões e ícones
 
-- **Só ícone** (tabela / toolbar densa): obrigatório `tooltip` (prop do wrapper) ou `aria-label`. Preferência em células de ação.
+- **Só ícone** (tabela / toolbar densa): obrigatório `tooltip` (prop do wrapper, que também vira o `aria-label`) ou `aria-label`. Preferência em células de ação.
 - **CTA / secundário de formulário:** texto + `icon` quando houver ícone semântico claro. Não omita o verbo ("Salvar", "Cancelar").
 
 ```tsx
@@ -176,7 +180,7 @@ Default `bordered`. **Preenchida** só em status crítico (erro grave, bloqueio)
 Texto que pode estourar precisa truncar + revelar via `Tooltip`:
 
 ```tsx
-<Tooltip message={produto.nome}>
+<Tooltip title={produto.nome}>
   <Text ellipsis style={{ maxWidth: 240 }}>{produto.nome}</Text>
 </Tooltip>
 ```
@@ -218,7 +222,7 @@ Campo bloqueado deve ter `placeholder` descritivo + `tooltip` no `FormItem` com 
 
 ### 13.1 Tooltip no FormItem
 
-`FormItem` **sempre** com `tooltip` explicando o campo (contexto / aceite / origem do dado). Isso é lido por screen readers e aparece com o ícone de interrogação.
+`FormItem` (o de `@/components/ui`) liga o rótulo ao `id` do campo. **Sempre** com `tooltip` explicando o campo (contexto / aceite / origem do dado). Isso é lido por screen readers e aparece com o ícone de interrogação.
 
 **Exceção:** `FormItem` sem `label` (checkbox de aceite) não renderiza `tooltip`. Nesse caso, o próprio texto do checkbox explica, com link para o documento (§20).
 
@@ -271,9 +275,7 @@ Toda rota com conteúdo principal expõe `<a href="#main-content" className="ski
 
 ### Hook canônico
 
-`useAppNotification` em `@/lib/hooks/useAppNotification` — expõe `api` + `contextHolder`. Montar o `contextHolder` dentro do componente que usa.
-
-Feedback que precisa sobreviver a um redirect (ex.: "Conta criada") usa `message` de `App.useApp()`: o `contextHolder` da página desmonta junto com ela.
+`useAppNotification` em `@/lib/hooks/useAppNotification` — expõe `api`, que usa o `<App>` da raiz: o aviso continua depois de um redirect (ex.: "Produto criado"). Não há `contextHolder` para montar.
 
 ## 16. Layout e grade
 
@@ -359,10 +361,14 @@ Antes de adicionar um clique, uma etapa ou uma confirmação, pergunte se o sist
 - **URL é a fonte de verdade:** filtro, busca e página vivem na query string e são lidos dela. Link compartilhado, voltar e recarregar mantêm o estado.
 - **Nunca perder o contexto:** todo caminho para login ou cadastro leva `?next=`, passado adiante entre `/entrar` e `/cadastro`, sempre validado por `safeNext` (`lib/navigation.ts`). Link que sai de um formulário abre em nova aba.
 - **Desfazer em vez de confirmar:** ver §3.
-- **Bom default:** comece pela opção mais provável para o público (cadastro inicia em PJ) e reaproveite o que já se sabe (consentimento dado no banner vem marcado no cadastro).
+- **Bom default:** comece pela opção mais provável para o público (cadastro inicia em PJ) e reaproveite o que já se sabe (recusa dada no banner continua valendo depois do cadastro).
 - **Pedir só o necessário:** campo opcional fica rotulado "(opcional)" ou recolhido em `Collapse`.
-- **Aceite único, documento à mão:** o cadastro tem um só checkbox obrigatório. O texto dele abre os documentos em modal, sem sair do formulário, e "Li e aceito" no modal já marca o checkbox. Abrir o modal nunca marca nada sozinho.
-- **Consentimento opcional não entra no aceite:** cookies comportamentais e contato proativo nunca vão embutidos nos termos (LGPD art. 8º §4). Ficam no banner e em `/conta`, onde também são revogados.
+- **Aceite único, documento à mão:** o cadastro tem um só checkbox obrigatório. Marcar abre os documentos em modal, sem sair do formulário, e só "Li e aceito" marca. Abrir ou fechar o modal nunca marca nada; desmarcar é direto.
+- **O que começa ligado é avisado antes:** cookies comportamentais e contato proativo começam ligados por legítimo interesse, nunca como consentimento embutido nos termos (LGPD art. 8º §4º). Isso está na cláusula 4 dos Termos e da Política, que o modal exibe por inteiro, e os dois se desligam em `/conta` ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)).
+- **Texto legal tem uma fonte:** `/termos`, `/privacidade` e o modal exibem `components/LegalConteudo.tsx`. Nada de resumo próprio em outra tela.
+- **Texto legal no formato ABNT:** redação formal, impessoal e condensada (“o Titular”, “a Controladora”), justificada, com numeração progressiva (NBR 6024) gerada pelo componente: nunca digitar o número. No modal, os dois documentos em sequência, sem abas, em `--font-size-base`.
+- **Ajuda diz o que fazer:** resposta em passos numerados; cada passo começa com verbo e faz uma coisa só; o botão vai entre aspas, com o nome exato da tela, e o passo diz onde ele fica; no máximo três passos; nenhum termo técnico (“janela bloqueada”, não “pop-up”).
+- **Oculto não é vazio:** dado que o cliente desligou aparece como “Oculto” (`NaoCompartilhado`), não como “—”.
 - **Saída fica longe:** "Sair" não aparece em header, menu ou Drawer. Ação rara e que encerra a sessão fica no fim da tela de conta, como `variant="text"`, tanto na área pública quanto no admin.
 - **Busca sempre à mão:** o header oferece busca fora do catálogo, para não exigir navegação antes de buscar.
 - **Um gate, uma verdade:** o estado que controla o comportamento é o estado mostrado. O switch de cookies lê o consentimento local que libera a coleta, não uma cópia do servidor.
@@ -412,5 +418,5 @@ Marcar antes de abrir PR:
 - [ ] Nenhum "Aplicar"/"Salvar" onde dá para aplicar sozinho; estado de lista na URL.
 - [ ] Caminho para login/cadastro preserva `?next=`, validado por `safeNext`.
 - [ ] Ação reversível usa Desfazer, não confirmação.
-- [ ] "Sair" só na tela de conta; consentimento opcional fora do aceite de termos.
+- [ ] "Sair" só na tela de conta; o que começa ligado é avisado no modal do aceite.
 - [ ] Página trata carregando, erro com retry, vazio e dados (§21).

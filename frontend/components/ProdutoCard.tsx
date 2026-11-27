@@ -28,10 +28,13 @@ export function ProdutoCard({ produto }: ProdutoCardProps) {
         size="small"
         style={{ height: '100%' }}
         cover={
-          <Flex
-            align="center"
-            justify="center"
+          // div com display:flex inline, não <Flex>: o AntD aplica `display: block` aos filhos de
+          // .ant-card-cover, o que anulava a classe do Flex e jogava o ícone para o canto.
+          <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               width: '100%',
               aspectRatio: '4 / 3',
               background: 'var(--surface-base)',
@@ -53,7 +56,7 @@ export function ProdutoCard({ produto }: ProdutoCardProps) {
             ) : (
               <PictureOutlined aria-hidden />
             )}
-          </Flex>
+          </div>
         }
       >
         <Flex vertical gap="small">

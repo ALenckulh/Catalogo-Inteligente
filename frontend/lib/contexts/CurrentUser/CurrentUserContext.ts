@@ -8,6 +8,8 @@ export interface CurrentUserValue {
   loginAdmin: (body: LoginRequest) => Promise<AuthSession>
   signup: (body: SignupRequest) => Promise<AuthSession>
   logout: () => Promise<void>
+  /** Atualiza o usuário logado (header + localStorage) depois de editar a conta. */
+  updateUser: (usuario: Usuario) => void
   isAuthenticated: boolean
   isAdmin: boolean
 }

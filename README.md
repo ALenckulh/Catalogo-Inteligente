@@ -62,10 +62,11 @@ Captura de evento → API → RabbitMQ → Worker → Score (Camadas 1 e 2) → 
 - Workers: persistência de eventos e recálculo de score
 - Score de Produto / Categoria (regras + decay)
 - Área admin (dashboard, leads, CRUD produtos, pesos/λ)
-- Conta do titular: consentimentos, exportação e exclusão (LGPD)
+- Conta do titular: opções de privacidade e exclusão; cópia dos dados por e-mail (LGPD)
 - Migração de histórico visitante → usuário autenticado
+- Upload de imagens de produto
 
-Documentação técnica: [frontend/docs/](./frontend/docs/).
+Documentação técnica: [docs/](./docs/README.md). Diagramas C4: [docs/05-ARQUITETURA.md](./docs/05-ARQUITETURA.md).
 
 ---
 
@@ -124,7 +125,7 @@ Distingue produtos com conversão (contato/compra) de apenas visualizados.
 
 ### Pré-requisitos
 
-- Node.js 18+
+- Node.js 20+
 - JDK 25+
 - Docker Desktop (Postgres + RabbitMQ)
 
@@ -182,7 +183,6 @@ App em [http://localhost:3000](http://localhost:3000).
 - **Camada 4** — Collaborative Filtering / Matrix Factorization
 - PoC de ML (ex. RNN) em dados históricos — fora do escopo entregue
 - Integração WhatsApp Business / CRM
-- Hospedagem pública em cloud (AWS/GCP/Azure) — pendente para Demo Day
 
 ---
 

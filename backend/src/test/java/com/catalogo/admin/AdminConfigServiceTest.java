@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.catalogo.admin.dto.DecayPatchRequest;
+import com.catalogo.scoring.entity.ParametroDecay;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -72,5 +74,22 @@ class AdminConfigServiceTest {
 
         verify(parametroDecayRepository).save(any());
         assertEquals(0, service.listPesos().size());
+    }
+
+    /** Nulo não altera: quem só manda λ e bônus não apaga recorrência nem pausa. */
+    @Test
+    void recorrenciaEPausaNulasNaoMudam() {
+        ParametroDecay p = new ParametroDecay();
+        p.setLambda(new BigDecimal("0.01"));
+        when(parametroDecayRepository.findGlobal()).thenReturn(Optional.of(p));
+        when(parametroDecayRepository.findAll()).thenReturn(List.of(p));
+
+        service.patchDecay(1L, new DecayPatchRequest(List.of(new DecayPatchRequest.Item(
+                null, new BigDecimal("0.02"), BigDecimal.ONE, new BigDecimal("1.3"), (short) 30))));
+        var r = service.patchDecay(1L, new DecayPatchRequest(List.of(
+                new DecayPatchRequest.Item(null, new BigDecimal("0.02"), BigDecimal.ONE)))).getFirst();
+
+        assertEquals(new BigDecimal("1.3"), r.boostRecorrencia());
+        assertEquals((short) 30, r.pausaDias());
     }
 }

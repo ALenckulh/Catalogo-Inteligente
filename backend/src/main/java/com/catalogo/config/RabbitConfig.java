@@ -5,6 +5,9 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -12,7 +15,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Filas de eventos conforme {@code frontend/docs/12-ARQUITETURA-BACKEND.md} §6.
+ * Filas de eventos conforme {@code docs/12-ARQUITETURA-BACKEND.md} §6.
+ * Um DirectExchange (events.exchange) roteia pela routing key para 4 filas duráveis, que sobrevivem a
+ * restart do broker, mais a DLQ. Hoje um único listener (EventoPersistWorker) consome todas.
+ * Desligável por catalogo.rabbit.enabled=false, que é o que os testes usam para rodar sem RabbitMQ.
  */
 @Configuration
 @ConditionalOnProperty(name = "catalogo.rabbit.enabled", havingValue = "true", matchIfMissing = true)
@@ -25,11 +31,16 @@ public class RabbitConfig {
     public static final String QUEUE_PRODUCT_FAVORITE = "events.product.favorite";
     public static final String QUEUE_PRODUCT_CONTACT = "events.product.contact";
     public static final String QUEUE_SEARCH = "events.search";
-    public static final String QUEUE_SESSION = "events.session";
 
     @Bean
     public MessageConverter jacksonMessageConverter() {
         return new JacksonJsonMessageConverter();
+    }
+
+    /** Mensagem que falha por dado inválido vai para a DLQ; só falha passageira volta para a fila. */
+    @Bean
+    public ContainerCustomizer<SimpleMessageListenerContainer> destinoDasFalhas() {
+        return container -> container.setErrorHandler(new ConditionalRejectingErrorHandler(new FalhaPassageira()));
     }
 
     @Bean
@@ -63,11 +74,6 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Queue sessionQueue() {
-        return durableWithDlq(QUEUE_SESSION);
-    }
-
-    @Bean
     public Binding productViewBinding(Queue productViewQueue, DirectExchange eventsExchange) {
         return BindingBuilder.bind(productViewQueue).to(eventsExchange).with(QUEUE_PRODUCT_VIEW);
     }
@@ -88,15 +94,14 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Binding sessionBinding(Queue sessionQueue, DirectExchange eventsExchange) {
-        return BindingBuilder.bind(sessionQueue).to(eventsExchange).with(QUEUE_SESSION);
-    }
-
-    @Bean
     public Binding dlqBinding(Queue dlq, DirectExchange eventsExchange) {
         return BindingBuilder.bind(dlq).to(eventsExchange).with(DLQ);
     }
 
+    /**
+     * Fila durável com dead letter: mensagem rejeitada sem requeue vai para events.dlq em vez de se perder.
+     * Quem decide entre rejeitar e devolver à fila é FalhaPassageira.
+     */
     private static Queue durableWithDlq(String name) {
         return QueueBuilder.durable(name)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_EVENTS)

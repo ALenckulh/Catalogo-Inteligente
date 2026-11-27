@@ -1,4 +1,4 @@
-import type { TipoEvento } from './index'
+import type { TipoMetrica } from './index'
 
 export interface Compra {
   id: number
@@ -12,7 +12,8 @@ export interface Compra {
   observacoes: string | null
 }
 
-export type CompraInput = Omit<Compra, 'id' | 'usuarioId' | 'produtoNome'>
+/** O total é calculado pelo backend. */
+export type CompraInput = Omit<Compra, 'id' | 'usuarioId' | 'produtoNome' | 'valorTotal'>
 
 export interface ScoreProdutoRow {
   produtoId: number
@@ -32,16 +33,26 @@ export interface FaixaPrecoUsuario {
   gapPreco: number
 }
 
-export type AdminUsuarioListItem = import('./index').Usuario & {
+/** Sem `contatoVisivel`, e-mail, telefone, documento e idade vêm nulos; sem `interesseVisivel`, notas e afins. */
+export type UsuarioDoAdmin = Omit<import('./index').Usuario, 'email'> & { email: string | null }
+
+interface Compartilhado {
+  contatoVisivel: boolean
+  interesseVisivel: boolean
+}
+
+export type AdminUsuarioListItem = UsuarioDoAdmin & Compartilhado & {
   scoreMaxProduto: number | null
   topCategoria: string | null
   ultimaAtividade: string | null
+  /** Produto de maior nota não comprado nos últimos 30 dias. */
+  proximaCompra: string | null
   /** Conta não soft-deleted (`deleted_at` nulo). */
   ativo: boolean
 }
 
-export interface AdminUsuarioDetalhe {
-  usuario: import('./index').Usuario
+export interface AdminUsuarioDetalhe extends Compartilhado {
+  usuario: UsuarioDoAdmin
   scoresProduto: ScoreProdutoRow[]
   scoresCategoria: ScoreCategoriaRow[]
   faixaPreco: FaixaPrecoUsuario
@@ -49,7 +60,7 @@ export interface AdminUsuarioDetalhe {
 }
 
 export interface PesoMetrica {
-  tipoEvento: TipoEvento
+  tipoEvento: TipoMetrica
   peso: number
 }
 
@@ -58,6 +69,10 @@ export interface ParametroDecay {
   categoriaNome: string | null
   lambda: number
   boostConversao: number
+  /** Bônus da categoria com compra em mais de uma data. */
+  boostRecorrencia: number
+  /** Dias sem esfriar depois de contato ou compra; só o item global vale. */
+  pausaDias: number
 }
 
 /** Nível de interesse (espelha `NivelInteresse` do backend). */

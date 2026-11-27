@@ -11,22 +11,21 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Catálogo Inteligente B2B | Predição de Intenção de Compra",
+  title: "Renova Retífica de Motores | Retífica, montagem e peças",
   description:
-    "Sistema de catálogo B2B com motor de recomendação baseado em scoring e decaimento temporal exponencial — predizendo intenção de compra a partir de uma única interação do usuário.",
+    "Retífica, montagem e peças para motores em geral em Jaraguá do Sul, SC.",
   keywords: [
-    "B2B",
-    "e-commerce",
-    "sistema de recomendação",
-    "scoring",
-    "intenção de compra",
-    "decaimento temporal",
-    "LGPD",
+    "retífica de motores",
+    "retífica de cabeçote",
+    "virabrequim",
+    "peças para motores",
+    "montagem de motores",
+    "Jaraguá do Sul",
   ],
   authors: [{ name: "Ana Paula Lenckulh", url: "mailto:lenckulh.ola@gmail.com" }],
   openGraph: {
-    title: "Catálogo Inteligente B2B",
-    description: "Predição de intenção de compra com scoring e decaimento temporal exponencial.",
+    title: "Renova Retífica de Motores",
+    description: "Retífica, montagem e peças para motores em geral — Jaraguá do Sul, SC.",
     type: "website",
     locale: "pt_BR",
   },

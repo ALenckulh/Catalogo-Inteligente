@@ -3,25 +3,33 @@ package com.catalogo.catalog;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.LongStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 
+import com.catalogo.auth.service.ConsentimentoService;
+import com.catalogo.catalog.dto.ProdutoResponse;
 import com.catalogo.catalog.entity.Categoria;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.catalog.repository.CategoriaRepository;
@@ -45,6 +53,8 @@ class CatalogServiceTest {
     ScoreProdutoRepository scoreProdutoRepository;
     @Mock
     RankingService rankingService;
+    @Mock
+    ConsentimentoService consentimentoService;
 
     CatalogService catalogService;
 
@@ -55,7 +65,8 @@ class CatalogServiceTest {
                 categoriaRepository,
                 eventoRepository,
                 scoreProdutoRepository,
-                rankingService
+                rankingService,
+                consentimentoService
         );
     }
 
@@ -71,9 +82,8 @@ class CatalogServiceTest {
         Categoria root = categoria(1L, null);
         Categoria child = categoria(2L, root);
         when(categoriaRepository.findAll()).thenReturn(List.of(root, child));
-        when(produtoRepository.search(isNull(), eq(Set.of(1L, 2L)), isNull(), isNull(), any()))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(produtoRepository.searchIds(isNull(), eq(Set.of(1L, 2L)), isNull(), isNull())).thenReturn(List.of());
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
@@ -81,16 +91,28 @@ class CatalogServiceTest {
         assertEquals(0, page.total());
     }
 
+    /** Desligou a personalização: as notas já gravadas não ordenam mais o catálogo. */
+    @Test
+    void semPersonalizacaoUsaSoPopularidade() {
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of());
+        when(consentimentoService.aceitaCookies(7L)).thenReturn(false);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
+        when(rankingService.personalScores(null, null)).thenReturn(Map.of());
+        when(rankingService.loadPopularidade()).thenReturn(Map.of());
+
+        catalogService.listProdutos(null, null, null, null, 0, 20, false, 7L, null);
+
+        verify(rankingService).sortByRank(any(), eq(0.0), eq(Map.of()), any(), eq(false));
+        verifyNoInteractions(eventoRepository, scoreProdutoRepository);
+    }
+
     @Test
     void destaqueLimitsReturnedSize() {
         Categoria cat = categoria(1L, null);
-        List<Produto> many = List.of(
-                produto(1L, cat), produto(2L, cat), produto(3L, cat),
-                produto(4L, cat), produto(5L, cat), produto(6L, cat), produto(7L, cat)
-        );
-        when(produtoRepository.search(isNull(), isNull(), isNull(), isNull(), any()))
-                .thenReturn(new PageImpl<>(many, PageRequest.of(0, 100), many.size()));
-        when(rankingService.personalWeight(0, false)).thenReturn(0.0);
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L));
+        stubCarregamento(cat);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
         when(rankingService.personalScores(null, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
@@ -99,18 +121,56 @@ class CatalogServiceTest {
         assertEquals(6, page.limit());
     }
 
+    /** Mais de 100 produtos: todos entram no ranking e no total, e a página sai na ordem do ranking. */
+    @Test
+    void catalogoComMaisDe100ProdutosPaginaTodos() {
+        Categoria cat = categoria(1L, null);
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(LongStream.rangeClosed(1, 150).boxed().toList());
+        stubCarregamento(cat);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
+        when(rankingService.personalScores(null, null)).thenReturn(Map.of());
+        when(rankingService.loadPopularidade()).thenReturn(Map.of());
+        // Ranking simulado: maior id primeiro. O repositório devolve a página em ordem crescente.
+        doAnswer(inv -> {
+            List<Long> ids = inv.getArgument(0);
+            ids.sort(Comparator.reverseOrder());
+            return null;
+        }).when(rankingService).sortByRank(any(), anyDouble(), any(), any(), anyBoolean());
+
+        var primeira = catalogService.listProdutos(null, null, null, null, 0, 12, false);
+        var ultima = catalogService.listProdutos(null, null, null, null, 12, 12, false);
+
+        assertEquals(150, primeira.total());
+        assertEquals(LongStream.iterate(150, i -> i - 1).limit(12).boxed().toList(),
+                primeira.items().stream().map(ProdutoResponse::id).toList());
+        assertEquals(List.of(6L, 5L, 4L, 3L, 2L, 1L), ultima.items().stream().map(ProdutoResponse::id).toList());
+    }
+
+    @Test
+    void paginaAlemDoFimVemVaziaComTotal() {
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of(1L, 2L));
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
+        when(rankingService.personalScores(null, null)).thenReturn(Map.of());
+        when(rankingService.loadPopularidade()).thenReturn(Map.of());
+
+        var page = catalogService.listProdutos(null, null, null, null, Integer.MAX_VALUE, 100, false);
+        assertEquals(0, page.items().size());
+        assertEquals(2, page.total());
+    }
+
     @Test
     void highInteractionPrefersPersonalWeight() {
-        when(produtoRepository.search(isNull(), isNull(), isNull(), isNull(), any()))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
+        when(consentimentoService.aceitaCookies(1L)).thenReturn(true);
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of());
         when(eventoRepository.countByUsuario_IdAndDeletedAtIsNull(1L)).thenReturn(12L);
         when(scoreProdutoRepository.countByUsuarioId(1L)).thenReturn(3L);
-        when(rankingService.personalWeight(12L, true)).thenReturn(1.0);
+        when(rankingService.personalWeight(12L, true, true)).thenReturn(1.0);
         when(rankingService.personalScores(1L, null)).thenReturn(Map.of());
         when(rankingService.loadPopularidade()).thenReturn(Map.of());
 
         catalogService.listProdutos(null, null, null, null, 0, 20, false, 1L, null);
-        org.mockito.Mockito.verify(rankingService).personalWeight(12L, true);
+        org.mockito.Mockito.verify(rankingService).personalWeight(12L, true, true);
     }
 
     @Test
@@ -123,6 +183,13 @@ class CatalogServiceTest {
         var dto = catalogService.getBySlug("p");
         assertEquals("220", dto.fichaTecnica().get("volts"));
         assertEquals("root", dto.categoria().slug());
+    }
+
+    private void stubCarregamento(Categoria cat) {
+        when(produtoRepository.findAllByIdInWithImagens(any())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().sorted().map(id -> produto(id, cat)).toList();
+        });
     }
 
     private static Produto produto(Long id, Categoria cat) {

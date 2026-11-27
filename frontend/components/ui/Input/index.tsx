@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { CloseCircleFilled, SearchOutlined } from '@ant-design/icons'
 import { Input as AntInput } from 'antd'
 import type {
   InputProps as AntInputProps,
@@ -29,8 +30,13 @@ const TextArea = React.forwardRef<
 >((props, ref) => <AntInput.TextArea ref={ref} {...props} />)
 TextArea.displayName = 'Input.TextArea'
 
-const Search = React.forwardRef<InputRef, SearchProps>((props, ref) => (
-  <AntInput.Search ref={ref} {...props} />
+const Search = React.forwardRef<InputRef, SearchProps>(({ allowClear, ...props }, ref) => (
+  <AntInput.Search
+    ref={ref}
+    searchIcon={<SearchOutlined aria-label="Buscar" />}
+    allowClear={allowClear === true ? { clearIcon: <CloseCircleFilled aria-label="Limpar" /> } : allowClear}
+    {...props}
+  />
 ))
 Search.displayName = 'Input.Search'
 

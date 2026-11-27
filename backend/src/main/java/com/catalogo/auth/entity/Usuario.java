@@ -2,6 +2,7 @@ package com.catalogo.auth.entity;
 
 import java.time.OffsetDateTime;
 
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
@@ -71,6 +72,10 @@ public class Usuario {
 
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
+
+    /** Tokens emitidos antes disto não valem (troca ou redefinição de senha). Nulo = todos valem. */
+    @Column(name = "sessoes_validas_desde")
+    private OffsetDateTime sessoesValidasDesde;
 
     @PrePersist
     void prePersist() {
@@ -190,6 +195,16 @@ public class Usuario {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public OffsetDateTime getSessoesValidasDesde() {
+        return sessoesValidasDesde;
+    }
+
+    /** Troca a senha e encerra as sessões abertas com a anterior. O iat do JWT só tem segundos. */
+    public void trocarSenha(String senhaHash) {
+        this.senhaHash = senhaHash;
+        this.sessoesValidasDesde = OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS);
     }
 
     public OffsetDateTime getDeletedAt() {

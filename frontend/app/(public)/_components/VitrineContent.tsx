@@ -23,7 +23,7 @@ export function VitrineContent() {
     const t = window.setTimeout(() => {
       setLoading(true)
       setFalhou(false)
-      Promise.all([listProdutos({ destaque: true, limit: 4 }), listCategorias()])
+      Promise.all([listProdutos({ destaque: true, limit: 6 }), listCategorias()])
         .then(([produtos, cats]) => {
           if (cancelled) return
           setDestaques(produtos.items)
@@ -46,10 +46,10 @@ export function VitrineContent() {
     <Flex vertical className="page">
       <section aria-labelledby="vitrine-hero-title">
         <Title id="vitrine-hero-title" level={1} style={{ marginBottom: 'var(--space-2)' }}>
-          Catálogo Inteligente
+          Renova Retífica de Motores
         </Title>
         <Paragraph type="secondary" style={{ maxWidth: 560, marginBottom: 'var(--space-4)' }}>
-          Produtos selecionados para compradores B2B — ficha clara, sem urgência artificial.
+          Retífica, montagem e peças para motores em geral.
         </Paragraph>
         <Button color="primary" id="vitrine-ver-catalogo" href="/produtos">
           Ver catálogo

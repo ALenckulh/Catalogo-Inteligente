@@ -1,149 +1,212 @@
 # Arquitetura
 
-Visão arquitetural do sistema: camadas, modelo de dados e esboço da API.
+Visão arquitetural do sistema no modelo **C4** (contexto, contêineres e componentes), seguida do caminho de um evento e da mensageria. Detalhes por camada: [10 — Frontend](10-ARQUITETURA-FRONTEND.md), [12 — Backend](12-ARQUITETURA-BACKEND.md), [08 — Modelo de dados](08-MODELO-DE-DADOS.md) e [11 — API](11-API-ENDPOINTS.md).
 
-## 1. Visão em camadas
+| Nível | Pergunta que responde |
+|---|---|
+| [C4-1: Contexto](#1-c4-1-contexto) | Quem usa o sistema e com o que ele se conecta? |
+| [C4-2: Contêineres](#2-c4-2-contêineres) | Quais aplicações e bancos formam o sistema? |
+| [C4-3: Componentes do backend](#3-c4-3-componentes-do-backend) | Como a API está dividida por dentro? |
+| [C4-3: Componentes do frontend](#4-c4-3-componentes-do-frontend) | Como a aplicação web está dividida por dentro? |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Navegador (usuário)                                        │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  Next.js (React) + Ant Design                         │  │
-│  │  • SSR / SSG para páginas públicas                    │  │
-│  │  • Coleta de eventos no cliente (clique, scroll…)     │  │
-│  └───────────────────────────────────────────────────────┘  │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ HTTPS / REST
-┌──────────────────▼──────────────────────────────────────────┐
-│  API Spring Boot (Java 25)                                  │
-│  • Autenticação (JWT ou sessão)                             │
-│  • CRUD de produtos, usuários, favoritos                    │
-│  • Producer de eventos → mensageria                         │
-│  • Endpoints de leitura de score (admin)                    │
-└────────┬──────────────────────────────┬─────────────────────┘
-         │                              │
-         │ publish                      │ CRUD / leitura
-         ▼                              ▼
-┌─────────────────────┐        ┌──────────────────────────────┐
-│  RabbitMQ / Kafka   │        │  PostgreSQL                  │
-│  Filas de eventos   │        │  • Usuários, produtos        │
-└─────────┬───────────┘        │  • Favoritos, compras        │
-          │ consume            │  • Eventos (JSONB metadados) │
-          ▼                    │  • Scores calculados         │
-┌─────────────────────┐        │  • Consentimentos LGPD       │
-│  Worker (Spring)    │───────▶│                              │
-│  • Persiste evento  │        └──────────────────────────────┘
-│  • Dispara recálculo│                      ▲
-│    de score         │                      │ leitura em batch
-└─────────────────────┘                      │
-                                   ┌─────────┴──────────┐
-                                   │  Serviço ML Python │
-                                   │  TensorFlow/Keras  │
-                                   │  • Treina modelo   │
-                                   │  • Gera predições  │
-                                   └────────────────────┘
+Legenda dos diagramas: pessoa em amarelo, parte do sistema em azul, banco e fila em verde, sistema externo em cinza.
+
+---
+
+## 1. C4-1: Contexto
+
+O Catálogo Inteligente fica entre quem compra e quem vende. A negociação termina fora dele, no WhatsApp.
+
+```mermaid
+flowchart TB
+    visitante(["Visitante<br/>[Pessoa]<br/>Navega sem conta"]):::pessoa
+    comprador(["Comprador PF ou PJ<br/>[Pessoa]<br/>Navega, favorita e pede contato"]):::pessoa
+    dono(["Dono do catálogo<br/>[Pessoa]<br/>Acompanha leads e gerencia produtos"]):::pessoa
+
+    sistema["Catálogo Inteligente<br/>[Sistema]<br/>Catálogo B2B que calcula a intenção<br/>de compra e prioriza leads"]:::sistema
+
+    whatsapp["WhatsApp<br/>[Sistema externo]<br/>Negociação e fechamento"]:::externo
+
+    visitante -->|"consulta o catálogo"| sistema
+    comprador -->|"consulta, favorita e gerencia seus dados"| sistema
+    dono -->|"vê leads, ajusta o score e cadastra produtos"| sistema
+    sistema -->|"abre a conversa por link (wa.me)"| whatsapp
+    comprador -.->|"negocia"| whatsapp
+    dono -.->|"negocia"| whatsapp
+
+    classDef pessoa fill:#fff3cd,stroke:#b38600,color:#222
+    classDef sistema fill:#d6e6f5,stroke:#345f7f,color:#222
+    classDef externo fill:#eeeeee,stroke:#777777,color:#222
 ```
 
-## 2. Mensageria assíncrona
+A integração com o WhatsApp é um link `wa.me` com a mensagem pronta. Não há uso da API do WhatsApp.
 
-A fila de eventos (RabbitMQ ou Kafka) é parte **central** da arquitetura:
+---
 
-- **Desacoplamento:** o frontend/API não aguardam a persistência completa do evento para responder. A API apenas publica na fila e retorna rapidamente, garantindo que o envio de eventos não bloqueie a navegação ([RNF02](02-REQUISITOS.md)).
-- **Absorção de picos:** se houver um pico de tráfego, a fila armazena eventos até que os workers consigam processar.
-- **Múltiplos consumidores:** o mesmo evento pode ser consumido por workers distintos — um grava no Postgres, outro poderia alimentar cache, outro poderia alimentar o pipeline ML.
-- **Resiliência:** tópico de **dead letter queue** acumula mensagens que falharam após N retentativas, para análise sem bloquear o fluxo principal.
+## 2. C4-2: Contêineres
 
-**Tópicos/filas previstos:**
+```mermaid
+flowchart TB
+    pessoas(["Visitante, comprador<br/>e dono do catálogo<br/>[Pessoas]"]):::pessoa
 
-| Fila | Tipo de evento | Produtor | Consumidor |
-|---|---|---|---|
-| `events.product.view` | Visualização de página de produto | API | Worker scoring |
-| `events.product.favorite` | Favoritar / desfavoritar | API | Worker scoring |
-| `events.product.contact` | Clique no WhatsApp (conversão) | API | Worker scoring |
-| `events.search` | Pesquisa realizada | API | Worker scoring |
-| `events.session` | Dados de contexto da sessão | API | Worker scoring |
-| `events.dlq` | Dead letter queue | — | Monitor/log |
+    subgraph catalogo["Catálogo Inteligente"]
+        web["Aplicação web<br/>[Contêiner: Next.js 16, React 19, Ant Design]<br/>Vitrine, conta e painel admin"]:::sistema
+        api["API<br/>[Contêiner: Java 25, Spring Boot 4]<br/>REST, autenticação JWT e<br/>worker de score no mesmo processo"]:::sistema
+        fila[("Fila de eventos<br/>[Contêiner: RabbitMQ 3]<br/>4 filas de eventos e 1 fila de erros")]:::dados
+        banco[("Banco de dados<br/>[Contêiner: PostgreSQL 16]<br/>Usuários, produtos, eventos,<br/>notas, consentimentos e imagens")]:::dados
+        flyway["Migrations<br/>[Contêiner: Flyway 10]<br/>Cria e evolui o schema"]:::sistema
+    end
 
-**Política de retentativa:** tentativa inicial + 3 retentativas com backoff exponencial; falhas definitivas vão para DLQ.
+    whatsapp["WhatsApp<br/>[Sistema externo]"]:::externo
 
-**Granularidade de filas vs `tipo_evento`:** o enum `tipo_evento` ([08 §3](08-MODELO-DE-DADOS.md)) é mais fino que a lista de filas acima — `SCROLL_DEPTH`, `TEMPO_PAGINA` e `FILTRO_APLICADO` são agrupados em `events.product.view` por compartilharem o worker consumidor; `DESFAVORITAR` compartilha `events.product.favorite`. Essa agregação mantém poucas filas sem perder expressividade do evento, já que o `tipo` persiste no payload.
+    pessoas -->|"usa pelo navegador"| web
+    web -->|"JSON/HTTP, Bearer JWT"| api
+    api -->|"publica evento (AMQP)"| fila
+    fila -->|"entrega ao worker (AMQP)"| api
+    api -->|"lê e grava (JDBC)"| banco
+    flyway -->|"aplica V001 a V017"| banco
+    web -->|"link wa.me"| whatsapp
 
-## 3. Modelo de dados
-
-A modelagem relacional completa (tabelas, colunas, tipos, constraints, enums e índices) está documentada em **[08-MODELO-DE-DADOS.md](08-MODELO-DE-DADOS.md)**.
-
-Resumo das entidades principais:
-
-- **Núcleo:** `usuario` (tabela única PF/PJ/ADMIN), `visitante`, `consentimento_lgpd`.
-- **Catálogo:** `categoria`, `produto`, `produto_imagem`, `favorito`.
-- **Comportamento:** `sessao`, `evento` (com `metadados` JSONB), `compra`.
-- **Scoring:** `score_produto`, `score_categoria`, `faixa_preco_usuario`, `produto_aresta` (grafo — Camada 3).
-- **Configuração:** `peso_metrica`, `parametro_decay`.
-- **LGPD:** `solicitacao_lgpd`.
-
-## 4. Esboço de API REST
-
-> **Fonte de verdade:** [11-API-ENDPOINTS.md](11-API-ENDPOINTS.md). O esboço abaixo é apenas um índice; qualquer divergência entre este arquivo e o 11 resolve pelo 11.
-
-### Público / consumidor
-
-```
-POST   /api/auth/signup                    Cria conta (PF ou PJ)
-POST   /api/auth/login                     Autentica usuário
-POST   /api/auth/logout                    Encerra sessão
-POST   /api/auth/password-reset            Solicita recuperação
-POST   /api/auth/password-reset/confirm    Confirma nova senha
-POST   /api/auth/migrar-historico          Migração visitante → usuário (RF19)
-POST   /api/visitantes/sessao              Bootstrap cookie/sessão anônima
-
-GET    /api/produtos                       Lista produtos (ordenado por score)
-GET    /api/produtos/{slug}                Detalhe de produto
-GET    /api/categorias                     Lista categorias
-
-POST   /api/favoritos/{produtoId}          Favoritar
-DELETE /api/favoritos/{produtoId}          Desfavoritar
-GET    /api/favoritos                      Lista favoritos do usuário
-
-POST   /api/eventos                        Publica evento comportamental
-                                           (API faz publish na fila)
-
-GET    /api/conta                          Dados do usuário logado
-PATCH  /api/conta                          Atualiza dados
-POST   /api/conta/consentimentos           Atualiza consentimentos LGPD
-GET    /api/conta/exportar                 LGPD — portabilidade
-POST   /api/conta/solicitacoes-lgpd        LGPD — solicitações (export/exclusão)
-DELETE /api/conta                          LGPD — exclusão
+    classDef pessoa fill:#fff3cd,stroke:#b38600,color:#222
+    classDef sistema fill:#d6e6f5,stroke:#345f7f,color:#222
+    classDef dados fill:#dcefe9,stroke:#286b64,color:#222
+    classDef externo fill:#eeeeee,stroke:#777777,color:#222
 ```
 
-### Admin
+| Contêiner | Responsabilidade | Onde |
+|---|---|---|
+| Aplicação web | Telas, coleta de eventos no navegador e consentimento | [`frontend/`](../frontend/) |
+| API | Regras de negócio, segurança, publicação e consumo de eventos, cálculo da nota | [`backend/`](../backend/) |
+| Fila de eventos | Separa a resposta da API do cálculo da nota | [`database/docker-compose.yml`](../database/docker-compose.yml) |
+| Banco de dados | Persistência, com `metadados` em JSONB | [`database/`](../database/) |
+| Migrations | Única fonte do schema; a API não altera tabelas | [`database/migrations/`](../database/migrations/) |
 
+---
+
+## 3. C4-3: Componentes do backend
+
+Um pacote por domínio (ADR-B02). O worker roda no mesmo processo da API (ADR-B07).
+
+```mermaid
+flowchart LR
+    web["Aplicação web"]:::sistema
+
+    subgraph backend["API [Contêiner: Spring Boot 4]"]
+        direction LR
+        seg["Segurança<br/>RateLimitFilter<br/>JwtAuthenticationFilter<br/>SecurityConfig"]:::comp
+        auth["auth<br/>cadastro, login, senha"]:::comp
+        visit["visitante<br/>sessão e migração"]:::comp
+        lgpd["lgpd<br/>consentimento, exportação,<br/>anonimização"]:::comp
+        catalog["catalog<br/>produtos, categorias,<br/>favoritos, imagens"]:::comp
+        admin["admin<br/>dashboard, usuários,<br/>produtos, configuração"]:::comp
+        eventos["eventos<br/>EventoService<br/>EventoPublisher"]:::comp
+        engine["scoring.engine<br/>ScoreEngine<br/>ScoreCalculator<br/>RankingService"]:::comp
+        worker["scoring.worker<br/>EventoPersistWorker"]:::comp
+    end
+
+    fila[("RabbitMQ")]:::dados
+    banco[("PostgreSQL")]:::dados
+
+    web --> seg
+    seg --> auth & visit & lgpd & catalog & admin & eventos
+    catalog -->|"ordena pela nota"| engine
+    admin -->|"simula e recalcula"| engine
+    eventos -->|publica| fila
+    fila -->|consome| worker
+    worker -->|"recalcula"| engine
+    backend -->|"JPA e SQL nativo"| banco
+
+    classDef sistema fill:#d6e6f5,stroke:#345f7f,color:#222
+    classDef comp fill:#eaf2fa,stroke:#345f7f,color:#222
+    classDef dados fill:#dcefe9,stroke:#286b64,color:#222
 ```
-POST   /api/admin/auth/login               Login do admin
 
-GET    /api/admin/usuarios                 Lista de usuários com score
-GET    /api/admin/usuarios/{id}            Detalhe + scores
-POST   /api/admin/usuarios/{id}/compras    Registra compra manual
+O `ScoreCalculator` é uma função sem acesso a banco. Por isso, o worker e a simulação do admin usam a mesma conta.
 
-GET    /api/admin/produtos                 Lista admin
-POST   /api/admin/produtos                 Cria produto
-PATCH  /api/admin/produtos/{id}            Atualiza produto
-DELETE /api/admin/produtos/{id}            Remove produto
+---
 
-GET    /api/admin/dashboard                KPIs + leads priorizados
+## 4. C4-3: Componentes do frontend
 
-GET    /api/admin/conta                    Dados do admin logado
-PATCH  /api/admin/conta                    Atualiza e-mail/senha/telefone
+```mermaid
+flowchart TB
+    subgraph frontend["Aplicação web [Contêiner: Next.js 16]"]
+        publico["app/(public)<br/>vitrine, catálogo, ficha,<br/>favoritos, conta"]:::comp
+        adm["app/admin<br/>dashboard, usuários, produtos,<br/>configuração"]:::comp
+        ui["components/ui<br/>camada sobre o Ant Design"]:::comp
+        ctx["lib/contexts<br/>CurrentUser e CookieConsent"]:::comp
+        hooks["lib/hooks<br/>useTrackEvent, useRequireAdmin,<br/>useTabelaPaginada"]:::comp
+        apiCli["lib/api<br/>axios, JWT e header do visitante"]:::comp
+    end
+    api["API [Contêiner: Spring Boot 4]"]:::sistema
 
-GET    /api/admin/configuracao/pesos       Lê pesos de métricas
-PATCH  /api/admin/configuracao/pesos       Atualiza pesos
-GET    /api/admin/configuracao/decay       Lê λ (global + por categoria)
-PATCH  /api/admin/configuracao/decay       Atualiza λ
+    publico & adm --> ui
+    publico & adm --> ctx
+    publico & adm --> hooks
+    hooks -->|"só com consentimento"| apiCli
+    publico & adm --> apiCli
+    ctx --> apiCli
+    apiCli -->|"JSON/HTTP"| api
+
+    classDef sistema fill:#d6e6f5,stroke:#345f7f,color:#222
+    classDef comp fill:#eaf2fa,stroke:#345f7f,color:#222
 ```
 
-## 5. Decisões arquiteturais relevantes
+---
 
-- **Monorepo com `frontend/` separado** para o Next.js; backend Java fica em `backend/` (diretório irmão). Estrutura concreta — módulos, Gradle, segurança, mensageria, ADRs — em [12-ARQUITETURA-BACKEND.md](12-ARQUITETURA-BACKEND.md).
-- **Ambiente de banco em `database/`** — Docker Compose com PostgreSQL + Flyway + pgAdmin. Scripts de criação em `database/migrations/`. Ver [`database/README.md`](../../database/README.md).
-- **Sem carrinho/pagamento:** decisão de escopo (ver [01-VISAO-GERAL.md §3](01-VISAO-GERAL.md)).
-- **PostgreSQL único**, com uso de JSONB para `evento.metadados` para flexibilidade na coleta sem migrações frequentes.
-- **ML em processo separado**, lendo do Postgres em batch — não acoplado ao fluxo síncrono de resposta ao usuário.
+## 5. Caminho de um evento até a nota
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Comprador
+    participant W as Aplicação web
+    participant A as API
+    participant Q as RabbitMQ
+    participant K as Worker
+    participant D as PostgreSQL
+
+    U->>W: abre a ficha de um produto
+    W->>W: há consentimento comportamental?
+    W->>A: POST /api/eventos
+    A->>D: confere consentimento (logado) e sessão
+    A->>Q: publica em events.product.view
+    A-->>W: 202 { aceito: true }
+    Note over U,W: a navegação não espera o cálculo
+    Q->>K: entrega a mensagem
+    K->>D: grava em evento
+    K->>K: ScoreCalculator: peso × valor × decaimento
+    K->>D: grava score_produto, score_categoria e faixa de preço
+    U->>W: volta ao catálogo
+    W->>A: GET /api/produtos
+    A->>D: lê notas e popularidade
+    A-->>W: produtos ordenados pela intenção
+```
+
+---
+
+## 6. Mensageria assíncrona
+
+- **Desacoplamento:** a API publica e responde; não espera o cálculo da nota ([RNF02](02-REQUISITOS.md)).
+- **Absorção de picos:** a fila guarda os eventos até o worker processar.
+- **Filas por natureza do evento:** permite separar consumidores no futuro. Hoje um único listener consome todas.
+
+| Fila | Tipos de evento | Consumidor |
+|---|---|---|
+| `events.product.view` | `VISUALIZACAO_PRODUTO`, `SCROLL_DEPTH`, `TEMPO_PAGINA`, `FILTRO_APLICADO` | Worker de score |
+| `events.product.favorite` | `FAVORITAR`, `DESFAVORITAR` | Worker de score |
+| `events.product.contact` | `CONTATO_WHATSAPP` | Worker de score |
+| `events.search` | `PESQUISA` | Worker de score |
+| `events.dlq` | mensagens rejeitadas sem requeue | — |
+
+**Falhas:** gravar o evento e recalcular a nota formam uma transação só. Falha passageira (banco fora, deadlock) volta para a fila; dado inválido ou mensagem malformada vai para a `events.dlq`. Evento de conta excluída é descartado. Retentativa com backoff não está configurada. Se o RabbitMQ estiver fora do ar, a API responde erro, o evento se perde e a navegação segue.
+
+## 7. Decisões arquiteturais relevantes
+
+- **Monorepo** com `frontend/`, `backend/` e `database/`.
+- **RabbitMQ, não Kafka** (ADR-B05) e **worker no mesmo processo** (ADR-B07): [12 §10](12-ARQUITETURA-BACKEND.md).
+- **Flyway como única fonte do schema** (ADR-B04).
+- **JWT stateless** (ADR-B06), com releitura do usuário a cada requisição para barrar conta excluída.
+- **Sem carrinho nem pagamento:** decisão de escopo ([01 §3](01-VISAO-GERAL.md)).
+- **PostgreSQL único:** JSONB para `evento.metadados` e BYTEA para as imagens ([13 — M16](13-MUDANCAS-DE-ESCOPO.md)).
+- **Score por regras, sem ML:** interpretável e útil com poucos dados ([04](04-ESPECIFICACAO-TECNICA.md)).
+- Decisões do frontend: [10 §10](10-ARQUITETURA-FRONTEND.md).

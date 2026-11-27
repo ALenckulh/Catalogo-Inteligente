@@ -6,6 +6,8 @@ public record ParametroDecayResponse(
         Long categoriaId,
         String categoriaNome,
         BigDecimal lambda,
-        BigDecimal boostConversao
+        BigDecimal boostConversao,
+        BigDecimal boostRecorrencia,
+        Short pausaDias
 ) {
 }

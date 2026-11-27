@@ -1,6 +1,8 @@
-import type { ConsentimentoLgpd, Usuario } from '@/lib/types'
+import type { ConsentimentoInput, ConsentimentoLgpd, Usuario } from '@/lib/types'
+import { VERSAO_TERMOS } from '@/lib/config'
 import { delay } from '@/lib/mocks/delay'
 import { mockUsuarios } from '@/lib/mocks/data'
+import { persistToken } from './auth'
 import { ApiError, apiClient } from './client'
 import { USE_MOCK } from './config'
 
@@ -12,6 +14,7 @@ export interface ContaData {
 interface ContaApiResponse {
   usuario: Usuario
   consentimentos: ConsentimentoLgpd[]
+  token?: string | null
 }
 
 export async function getConta(usuarioId: number): Promise<ContaData> {
@@ -32,13 +35,13 @@ export async function getConta(usuarioId: number): Promise<ContaData> {
       {
         tipo: 'COOKIES_COMPORTAMENTAIS',
         aceito: true,
-        versaoTermos: '1.0',
+        versaoTermos: VERSAO_TERMOS,
         aceitoEm: new Date().toISOString(),
       },
       {
         tipo: 'CONTATO_PROATIVO',
-        aceito: false,
-        versaoTermos: '1.0',
+        aceito: true,
+        versaoTermos: VERSAO_TERMOS,
         aceitoEm: new Date().toISOString(),
       },
     ],
@@ -51,6 +54,7 @@ export async function updateConta(
 ): Promise<Usuario> {
   if (!USE_MOCK) {
     const { data } = await apiClient.patch<ContaApiResponse>('/conta', patch)
+    if (data.token) persistToken(data.token)
     return data.usuario
   }
 
@@ -63,7 +67,7 @@ export async function updateConta(
 
 export async function updateConsentimentos(
   _usuarioId: number,
-  consentimentos: ConsentimentoLgpd[],
+  consentimentos: ConsentimentoInput[],
 ): Promise<ConsentimentoLgpd[]> {
   if (!USE_MOCK) {
     const { data } = await apiClient.post<ConsentimentoLgpd[]>('/conta/consentimentos', {
@@ -73,24 +77,7 @@ export async function updateConsentimentos(
   }
 
   await delay()
-  return consentimentos
-}
-
-export async function exportarConta(formato: 'json' | 'csv' = 'json'): Promise<Blob> {
-  if (!USE_MOCK) {
-    const { data } = await apiClient.get<unknown>('/conta/exportar', {
-      params: { formato },
-      responseType: formato === 'csv' ? 'blob' : 'json',
-    })
-    if (formato === 'csv' && data instanceof Blob) return data
-    return new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  }
-
-  await delay()
-  return new Blob(
-    [JSON.stringify({ mock: true, exportedAt: new Date().toISOString() }, null, 2)],
-    { type: 'application/json' },
-  )
+  return consentimentos.map((c) => ({ ...c, aceitoEm: new Date().toISOString() }))
 }
 
 export async function solicitarLgpd(

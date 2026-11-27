@@ -1,8 +1,13 @@
 package com.catalogo.admin.service;
 
+import com.catalogo.catalog.repository.ImagemArquivoRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -26,20 +31,44 @@ public class AdminProdutoService {
 
     private final ProdutoRepository produtoRepository;
     private final CategoriaRepository categoriaRepository;
+    private final ImagemArquivoRepository imagemArquivoRepository;
 
-    public AdminProdutoService(ProdutoRepository produtoRepository, CategoriaRepository categoriaRepository) {
+    public AdminProdutoService(
+            ProdutoRepository produtoRepository,
+            CategoriaRepository categoriaRepository,
+            ImagemArquivoRepository imagemArquivoRepository
+    ) {
         this.produtoRepository = produtoRepository;
         this.categoriaRepository = categoriaRepository;
+        this.imagemArquivoRepository = imagemArquivoRepository;
     }
 
+    private static final Pattern IMAGEM_ENVIADA = Pattern.compile("produtos/imagens/(\\d{1,18})");
+    private static final Pattern IMAGEM_EXTERNA = Pattern.compile("https?://\\S+");
+    private static final Set<String> SORT_FIELDS = Set.of("nome", "slug", "preco", "updatedAt");
+
+    /** @param sort "campo,asc|desc" com campo em {@link #SORT_FIELDS}; inválido ou nulo = id desc. */
     @Transactional(readOnly = true)
-    public PageResponse<ProdutoResponse> listar(String q, Boolean ativo, Integer page, Integer limit) {
+    public PageResponse<ProdutoResponse> listar(String q, Boolean ativo, Integer page, Integer limit, String sort) {
         int pageIndex = page == null || page < 0 ? 0 : page;
         int size = limit == null || limit < 1 ? 20 : Math.min(limit, 100);
         String query = q == null || q.isBlank() ? null : q.trim();
-        PageRequest pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "id"));
+        PageRequest pageable = PageRequest.of(pageIndex, size, parseSort(sort));
         Page<Produto> result = produtoRepository.adminSearch(query, ativo, pageable);
         return PageResponse.from(result.map(p -> ProdutoResponse.from(p, true)));
+    }
+
+    private static Sort parseSort(String sort) {
+        if (sort != null) {
+            String[] parts = sort.split(",", -1);
+            String field = parts[0].trim();
+            if (SORT_FIELDS.contains(field)) {
+                boolean desc = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim());
+                // id como desempate: paginação estável quando há valores iguais.
+                return Sort.by(desc ? Sort.Direction.DESC : Sort.Direction.ASC, field).and(Sort.by("id"));
+            }
+        }
+        return Sort.by(Sort.Direction.DESC, "id");
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +121,7 @@ public class AdminProdutoService {
             p.setAtivo(input.ativo());
         }
         if (input.fichaTecnica() != null) {
-            p.setFichaTecnica(new LinkedHashMap<>(input.fichaTecnica()));
+            p.setFichaTecnica(limparFicha(input.fichaTecnica()));
         }
         if (input.imagens() != null) {
             replaceImagens(p, input.imagens());
@@ -118,7 +147,7 @@ public class AdminProdutoService {
         p.setCategoria(cat);
         p.setAtivo(Boolean.TRUE.equals(input.ativo()));
         if (input.fichaTecnica() != null) {
-            p.setFichaTecnica(new LinkedHashMap<>(input.fichaTecnica()));
+            p.setFichaTecnica(limparFicha(input.fichaTecnica()));
         }
         if (input.imagens() != null) {
             replaceImagens(p, input.imagens());
@@ -128,13 +157,26 @@ public class AdminProdutoService {
         p.setUpdatedAt(now);
     }
 
-    private static void replaceImagens(Produto p, java.util.List<ProdutoInput.ImagemInput> imagens) {
+    /** Sem espaços nas pontas e sem linha em branco na ficha pública; mantém a ordem. */
+    private static Map<String, Object> limparFicha(Map<String, Object> ficha) {
+        Map<String, Object> limpa = new LinkedHashMap<>();
+        ficha.forEach((chave, valor) -> {
+            Object v = valor instanceof String s ? s.trim() : valor;
+            if (chave != null && !chave.isBlank() && v != null && !"".equals(v)) {
+                limpa.put(chave.trim(), v);
+            }
+        });
+        return limpa;
+    }
+
+    private void replaceImagens(Produto p, java.util.List<ProdutoInput.ImagemInput> imagens) {
         p.getImagens().clear();
         short i = 0;
         for (ProdutoInput.ImagemInput img : imagens) {
             if (img.url() == null || img.url().isBlank()) {
                 continue;
             }
+            requireImagemValida(img.url());
             ProdutoImagem pi = new ProdutoImagem();
             pi.setProduto(p);
             pi.setUrl(img.url());
@@ -143,6 +185,17 @@ public class AdminProdutoService {
             pi.setCreatedAt(OffsetDateTime.now());
             p.getImagens().add(pi);
             i++;
+        }
+    }
+
+    /** Arquivo enviado ao catálogo (que exista) ou endereço http(s). */
+    private void requireImagemValida(String url) {
+        Matcher arquivo = IMAGEM_ENVIADA.matcher(url);
+        boolean valida = arquivo.matches()
+                ? imagemArquivoRepository.existsById(Long.valueOf(arquivo.group(1)))
+                : IMAGEM_EXTERNA.matcher(url).matches();
+        if (!valida) {
+            throw new ApiException("VALIDATION_ERROR", "Imagem inválida ou inexistente", HttpStatus.BAD_REQUEST);
         }
     }
 }
