@@ -23,7 +23,7 @@ Dados de cadastro:
 - Número de telefone (opcional)
 - E-mail alternativo para contato (opcional)
 - Aceite dos Termos de Uso e Política de Privacidade (checkbox obrigatório — LGPD)
-- Consentimento para cookies de rastreamento comportamental: não faz parte do formulário; segue a escolha do banner de cookies e é revogável em Conta
+- Personalização e contato proativo: não são campos do formulário; começam ligados, com aviso antes do aceite, e são desligados em Conta (§10.1)
 
 Funcionalidades disponíveis:
 
@@ -46,7 +46,7 @@ Dados de cadastro:
 - Número de telefone (opcional)
 - E-mail alternativo para contato (opcional)
 - Aceite dos Termos de Uso e Política de Privacidade (checkbox obrigatório — LGPD)
-- Consentimento para cookies de rastreamento comportamental: não faz parte do formulário; segue a escolha do banner de cookies e é revogável em Conta
+- Personalização e contato proativo: não são campos do formulário; começam ligados, com aviso antes do aceite, e são desligados em Conta (§10.1)
 
 Funcionalidades disponíveis:
 
@@ -76,7 +76,7 @@ Funcionalidades indisponíveis:
 
 ## 3. Métricas de Coleta de Dados
 
-Todas as métricas comportamentais só são coletadas após consentimento explícito de cookies. Para visitantes, o consentimento é solicitado via banner padrão (LGPD). Para usuários autenticados, vale a escolha do banner, revogável em Conta (§10.1).
+Para visitantes, as métricas comportamentais só são coletadas após consentimento explícito, no banner de cookies (LGPD). Para usuários autenticados, a coleta começa ligada com base em legítimo interesse e é desligada em Conta (§10.1). Nos dois casos, quem recusa no banner não tem coleta naquele navegador.
 
 ### 3.1 Métricas Comportamentais Diretas
 
@@ -338,10 +338,30 @@ Por se tratar de sistema que coleta dados comportamentais de usuários brasileir
 ### 10.1 No Cadastro de Usuário Autenticado
 
 - Checkbox obrigatório: aceite dos Termos de Uso e Política de Privacidade — sem aceite, o cadastro não é concluído
-- Consentimento separado e opcional, no banner de cookies e em Conta: coleta de dados comportamentais (cliques, tempo em página, navegação) para fins de personalização
-- Consentimento separado e opcional, em Conta (inicia desligado): receber contato proativo do dono do catálogo com base no perfil de interesse
-- Data e versão dos termos aceitos devem ser registradas no banco de dados
-- Usuário pode revogar consentimentos a qualquer momento nas configurações do perfil
+- Personalização (cookies comportamentais) e contato proativo começam **ligados** na conta nova, por **legítimo interesse** (LGPD art. 7º IX e art. 10), e não por consentimento: embutido no aceite, o consentimento seria nulo (art. 8º §4º). Contas já existentes ficam como estavam
+- Antes do aceite, o modal traz os documentos completos; o que começa ligado e onde desligar estão na cláusula 4 dos Termos e na seção 4 da Política (art. 9º e art. 10 §2º). Um aviso em destaque, fora do texto, daria mais transparência e deve ser reavaliado na revisão jurídica
+- Recusa no navegador prevalece: cookies comportamentais desligados na Política continuam desligados naquele navegador depois do cadastro
+- Aceite da conta vale em navegador ainda sem escolha: ao entrar, o navegador adota o aceite e o banner não aparece. Conta que recusou ou nunca decidiu vê o banner normalmente
+- Data e versão dos termos aceitos, e cada ligar ou desligar, são registrados no banco (`consentimento_lgpd`)
+- O usuário desliga cada opção a qualquer momento em Conta, com efeito imediato:
+
+| Opção desligada | O que para | O que a loja deixa de ver |
+|---|---|---|
+| Cookies comportamentais | Coleta e ordem personalizada do catálogo (volta à popularidade) | Nota, categoria, próxima compra, última atividade e faixa de preço; o cliente sai dos leads, do gráfico de níveis e da prévia |
+| Contato proativo | Contato comercial por iniciativa da loja | E-mail, telefone, CPF/CNPJ e idade; o cliente sai dos leads |
+
+Nome e compras registradas pela loja continuam visíveis (relação comercial). A ocultação é feita na consulta, para que busca, filtro e ordenação também não revelem o dado.
+
+**Teste de balanceamento (resumo)**
+
+| Etapa | Avaliação |
+|---|---|
+| Finalidade | Ordenar o catálogo e priorizar o atendimento de quem criou conta para falar com a loja; não há publicidade de terceiros nem venda de dados |
+| Necessidade | Só eventos do próprio catálogo; sem IP, sem fingerprint, sem dado sensível |
+| Expectativa | Quem cria conta o faz para negociar com a loja; a cláusula 4 dos Termos, exibida no modal, avisa antes do aceite |
+| Salvaguardas | Desligar em um clique, com efeito imediato e sem perda de acesso; recusa do banner respeitada; dados ocultos do admin; maiores de 18 |
+
+**Limite conhecido:** o guia de cookies da ANPD recomenda consentimento para cookies não necessários; para o visitante ele é exigido. Antes de uso comercial, o teste deve ser revisto por um advogado.
 
 ### 10.2 Para Visitantes — Banner de Cookies
 
@@ -359,7 +379,7 @@ O sistema deve prever mecanismos para atender os direitos previstos na LGPD:
 - Acesso: usuário pode visualizar quais dados foram coletados sobre ele
 - Correção: usuário pode editar seus dados cadastrais
 - Exclusão: usuário pode solicitar exclusão completa de seus dados e histórico
-- Portabilidade: exportação dos dados em formato acessível (ex: JSON ou CSV)
+- Portabilidade: cópia dos dados em formato acessível (JSON), pedida por e-mail e gerada pelo admin (`GET /api/admin/usuarios/{id}/exportar`)
 - Oposição: usuário pode desabilitar a coleta comportamental mantendo o cadastro ativo
 
 ## 11. Edge Cases e Decisões de Projeto
@@ -374,7 +394,7 @@ O sistema deve prever mecanismos para atender os direitos previstos na LGPD:
 | Usuário que favorita muitos produtos sem nunca contatar | Favoritar sozinho não chega a Quente: olhar e favoritar é Frio; ler e favoritar, Morno. O score só dispara com outros sinais. |
 | Vendedor com zero registros de histórico de compras | Métrica de histórico completamente anulada. Score baseado 100% em comportamento. |
 | Dois usuários com o mesmo dispositivo/rede | Vale o identificador do navegador e o login. |
-| Usuário revoga consentimento de cookies após acumular histórico | Parar coleta imediatamente. Histórico existente é mantido para fins estatísticos; para apagá-lo, o usuário deve excluir a conta ([08 §5.2](08-MODELO-DE-DADOS.md)). |
+| Usuário revoga consentimento de cookies após acumular histórico | Parar a coleta e o uso imediatamente: catálogo por popularidade e interesses ocultos do admin. Histórico existente é mantido para fins estatísticos; para apagá-lo, o usuário deve excluir a conta ([08 §5.2](08-MODELO-DE-DADOS.md)). |
 | Lead B2B em negociação ativa sem novas interações passivas | Decay pausado enquanto houver contato ou compra dentro da pausa configurada (60 dias por padrão). Ver seção 5.4. |
 | Boost pós-conversão em categoria de bens duráveis | Dono do catálogo deve reduzir `parametro_decay.boost_conversao` para próximo de 1,00 nessas categorias, onde conversão recente indica necessidade já atendida. |
 | Camada 3 (PPR) não implementada | Trabalho futuro. As Camadas 1 e 2 são suficientes para catálogos B2B pequenos. |

@@ -4,10 +4,11 @@ import java.util.List;
 
 import com.catalogo.auth.dto.UsuarioResponse;
 
-/** contatoProativo: último consentimento CONTATO_PROATIVO; null = o cliente nunca respondeu. */
+/** Sem contatoVisivel, o usuário vem sem e-mail, telefone, documento e idade; sem interesseVisivel, sem notas e sem faixa de preço. */
 public record AdminUsuarioDetalhe(
         UsuarioResponse usuario,
-        Boolean contatoProativo,
+        boolean contatoVisivel,
+        boolean interesseVisivel,
         List<ScoreProdutoRow> scoresProduto,
         List<ScoreCategoriaRow> scoresCategoria,
         FaixaPrecoRow faixaPreco,

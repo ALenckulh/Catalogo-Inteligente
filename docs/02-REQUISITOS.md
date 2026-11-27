@@ -16,7 +16,7 @@ Os casos de uso estão em [14-CASOS-DE-USO.md](14-CASOS-DE-USO.md). A coluna **S
 | RF01 | O sistema deve permitir cadastro de usuário Pessoa Física (CPF com validação de dígito, nome completo, e-mail, idade opcional, telefone opcional, e-mail alternativo opcional). | Implementado |
 | RF02 | O sistema deve permitir cadastro de usuário Pessoa Jurídica (CNPJ com validação de dígito, razão social, e-mail corporativo, telefone opcional, e-mail alternativo opcional). | Implementado |
 | RF03 | O cadastro deve obrigar aceite dos Termos de Uso e Política de Privacidade (LGPD). | Implementado |
-| RF04 | O consentimento para rastreamento comportamental deve ser separado do aceite do cadastro e opcional, oferecido no banner de cookies e revogável em Conta. | Implementado |
+| RF04 | O visitante só é rastreado com consentimento, dado no banner de cookies. Para quem cria conta, a personalização e o contato proativo começam ligados por legítimo interesse, avisados antes do aceite, e são desligados em Conta. | Implementado ([13](13-MUDANCAS-DE-ESCOPO.md), M22) |
 | RF05 | O sistema deve permitir login de usuários cadastrados (PF, PJ, Admin). | Implementado |
 | RF06 | O sistema deve oferecer fluxo de recuperação de senha por e-mail. | Implementado: código por e-mail, válido por 2 horas (SMTP configurável; Mailpit no ambiente local) |
 | RF07 | O cadastro de administradores é feito exclusivamente pela equipe de TI (sem auto-signup). | Implementado |
@@ -63,7 +63,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 |---|---|---|
 | RF27 | O sistema deve exibir banner de consentimento de cookies na primeira visita. | Implementado |
 | RF28 | O usuário deve poder revogar consentimentos a qualquer momento. | Implementado |
-| RF29 | O usuário deve poder solicitar exportação dos seus dados (JSON ou CSV). | Implementado |
+| RF29 | O usuário deve poder solicitar uma cópia dos seus dados. | Implementado: pedido por e-mail (Ajuda e Política); a loja gera o JSON pela API do admin ([13](13-MUDANCAS-DE-ESCOPO.md), M22) |
 | RF30 | O usuário deve poder solicitar exclusão completa de seus dados e histórico. | Implementado |
 
 ## 2. Requisitos Não-Funcionais (RNF)

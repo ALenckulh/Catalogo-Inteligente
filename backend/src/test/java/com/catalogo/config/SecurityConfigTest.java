@@ -120,6 +120,8 @@ class SecurityConfigTest {
                     .andExpect(status().isForbidden())
                     .andExpect(content().contentType("application/json;charset=UTF-8"));
         }
+        mockMvc.perform(req("GET", "/api/admin/usuarios/5/exportar", TipoUsuario.PF)).andExpect(status().isForbidden());
+        verifyNoInteractions(contaService);
         mockMvc.perform(req("GET", "/api/admin/usuarios", TipoUsuario.ADMIN)).andExpect(status().isOk());
     }
 

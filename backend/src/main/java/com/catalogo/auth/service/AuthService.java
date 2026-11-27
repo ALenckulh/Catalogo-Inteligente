@@ -36,7 +36,6 @@ import com.catalogo.shared.Documentos;
 @Service
 public class AuthService {
 
-    private static final String TERMOS_VERSAO = "1.0";
     /** Mesma mensagem para e-mail inexistente e senha errada: não revela quais e-mails estão cadastrados. */
     private static final String AUTH_FAIL = "Credenciais inválidas";
 
@@ -121,12 +120,10 @@ public class AuthService {
         usuario = usuarioRepository.save(usuario);
         saveConsent(usuario, TipoConsentimento.TERMOS_USO, true);
         saveConsent(usuario, TipoConsentimento.POLITICA_PRIVACIDADE, true);
-        if (request.cookiesComportamentais() != null) {
-            saveConsent(usuario, TipoConsentimento.COOKIES_COMPORTAMENTAIS, request.cookiesComportamentais());
-        }
-        if (request.contatoProativo() != null) {
-            saveConsent(usuario, TipoConsentimento.CONTATO_PROATIVO, request.contatoProativo());
-        }
+        // Nascem ligados por legítimo interesse, avisado no cadastro (docs/04 §10.1); desligar é em /conta.
+        saveConsent(usuario, TipoConsentimento.COOKIES_COMPORTAMENTAIS,
+                !Boolean.FALSE.equals(request.cookiesComportamentais()));
+        saveConsent(usuario, TipoConsentimento.CONTATO_PROATIVO, !Boolean.FALSE.equals(request.contatoProativo()));
 
         return session(usuario);
     }
@@ -228,7 +225,7 @@ public class AuthService {
         c.setUsuario(usuario);
         c.setTipo(tipo);
         c.setAceito(aceito);
-        c.setVersaoTermos(TERMOS_VERSAO);
+        c.setVersaoTermos(ConsentimentoLgpd.VERSAO_TERMOS);
         c.setAceitoEm(OffsetDateTime.now());
         consentimentoRepository.save(c);
     }

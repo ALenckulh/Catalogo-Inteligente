@@ -39,7 +39,7 @@ export function LeadsTabela({ leads }: { leads: LeadResumo[] }) {
       title={
         <HelpTitle
           label="Clientes para contatar primeiro"
-          help="Os 5 clientes com maior nota de interesse em algum produto. “Próxima compra provável” é o produto de maior nota que o cliente não comprou nos últimos 30 dias."
+          help="Os 5 clientes com maior nota de interesse em algum produto, entre os que aceitam contato e personalização. “Próxima compra provável” é o produto de maior nota que o cliente não comprou nos últimos 30 dias."
         />
       }
     >

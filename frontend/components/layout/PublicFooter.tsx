@@ -10,7 +10,9 @@ const { Text } = Typography
 const LINKS = [
   { href: '/produtos', label: 'Catálogo' },
   { href: '/sobre', label: 'Sobre' },
+  { href: '/ajuda', label: 'Ajuda' },
   { href: '/privacidade', label: 'Privacidade' },
+  { href: '/privacidade#privacidade-escolhas', label: 'Preferências de cookies' },
   { href: '/termos', label: 'Termos de Uso' },
 ] as const
 
@@ -34,7 +36,7 @@ export function PublicFooter() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  id={`footer-link-${item.href.replace('/', '')}`}
+                  id={`footer-link-${item.href.replace('/', '').replace('#', '-')}`}
                   style={{ color: 'var(--text-neutral-default)', textDecoration: 'none' }}
                 >
                   {item.label}

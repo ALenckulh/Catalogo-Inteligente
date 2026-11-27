@@ -33,7 +33,15 @@ export interface FaixaPrecoUsuario {
   gapPreco: number
 }
 
-export type AdminUsuarioListItem = import('./index').Usuario & {
+/** Sem `contatoVisivel`, e-mail, telefone, documento e idade vêm nulos; sem `interesseVisivel`, notas e afins. */
+export type UsuarioDoAdmin = Omit<import('./index').Usuario, 'email'> & { email: string | null }
+
+interface Compartilhado {
+  contatoVisivel: boolean
+  interesseVisivel: boolean
+}
+
+export type AdminUsuarioListItem = UsuarioDoAdmin & Compartilhado & {
   scoreMaxProduto: number | null
   topCategoria: string | null
   ultimaAtividade: string | null
@@ -43,10 +51,8 @@ export type AdminUsuarioListItem = import('./index').Usuario & {
   ativo: boolean
 }
 
-export interface AdminUsuarioDetalhe {
-  usuario: import('./index').Usuario
-  /** null = o cliente nunca respondeu. */
-  contatoProativo: boolean | null
+export interface AdminUsuarioDetalhe extends Compartilhado {
+  usuario: UsuarioDoAdmin
   scoresProduto: ScoreProdutoRow[]
   scoresCategoria: ScoreCategoriaRow[]
   faixaPreco: FaixaPrecoUsuario

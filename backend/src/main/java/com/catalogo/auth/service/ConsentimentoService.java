@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import com.catalogo.auth.domain.TipoConsentimento;
+import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.shared.ApiException;
 import com.catalogo.visitante.entity.Visitante;
@@ -18,12 +19,24 @@ public class ConsentimentoService {
         this.consentimentoRepository = consentimentoRepository;
     }
 
-    /** Vale o consentimento mais recente (tabela append-only). */
+    public boolean aceitaCookies(Long usuarioId) {
+        return vigente(usuarioId, TipoConsentimento.COOKIES_COMPORTAMENTAIS);
+    }
+
+    public boolean aceitaContato(Long usuarioId) {
+        return vigente(usuarioId, TipoConsentimento.CONTATO_PROATIVO);
+    }
+
+    /** Vale a escolha mais recente (tabela append-only); sem registro, vale não. */
+    private boolean vigente(Long usuarioId, TipoConsentimento tipo) {
+        return consentimentoRepository
+                .findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(usuarioId, tipo)
+                .map(ConsentimentoLgpd::isAceito)
+                .orElse(false);
+    }
+
     public void exigirDoUsuario(Long usuarioId) {
-        exigir(consentimentoRepository
-                .findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(usuarioId, TipoConsentimento.COOKIES_COMPORTAMENTAIS)
-                .map(c -> c.isAceito())
-                .orElse(false));
+        exigir(aceitaCookies(usuarioId));
     }
 
     public void exigirDoVisitante(Visitante visitante) {

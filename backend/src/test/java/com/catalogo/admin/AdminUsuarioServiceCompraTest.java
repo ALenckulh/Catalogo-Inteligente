@@ -1,9 +1,11 @@
 package com.catalogo.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,17 +28,16 @@ import org.springframework.http.HttpStatus;
 import com.catalogo.admin.dto.RegistrarCompraRequest;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
 import com.catalogo.admin.service.AdminUsuarioService;
-import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
-import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.entity.Usuario;
-import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.auth.repository.UsuarioRepository;
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.catalog.repository.CompraRepository;
 import com.catalogo.catalog.repository.ProdutoRepository;
 import com.catalogo.scoring.engine.ScoreEngine;
+import com.catalogo.scoring.entity.ScoreProduto;
 import com.catalogo.scoring.repository.FaixaPrecoUsuarioRepository;
 import com.catalogo.scoring.repository.ScoreCategoriaRepository;
 import com.catalogo.scoring.repository.ScoreProdutoRepository;
@@ -60,7 +61,7 @@ class AdminUsuarioServiceCompraTest {
     @Mock
     ProdutoRepository produtoRepository;
     @Mock
-    ConsentimentoLgpdRepository consentimentoRepository;
+    ConsentimentoService consentimentoService;
     @Mock
     ScoreEngine scoreEngine;
 
@@ -76,28 +77,51 @@ class AdminUsuarioServiceCompraTest {
                 faixaPrecoUsuarioRepository,
                 compraRepository,
                 produtoRepository,
-                consentimentoRepository,
+                consentimentoService,
                 scoreEngine
         );
     }
 
+    /** Cada opção esconde só o seu: contato não mexe nas notas, e interesse não mexe no contato. */
     @Test
-    void detalheTrazOUltimoConsentimentoDeContato() {
+    void detalheEscondeSoOQueOClienteDesligou() {
         Usuario u = new Usuario();
         u.setId(5L);
         u.setTipo(TipoUsuario.PF);
+        u.setNomeCompleto("Ana");
+        u.setEmail("ana@x.c");
+        u.setEmailAlternativo("alt@x.c");
+        u.setTelefone("47999990000");
+        u.setCpf("52998224725");
+        u.setIdade((short) 30);
+        ScoreProduto nota = new ScoreProduto();
+        nota.setProdutoId(2L);
+        nota.setValor(new BigDecimal("80"));
+        Compra compra = new Compra();
+        compra.setProduto(new Produto());
         when(usuarioRepository.findById(5L)).thenReturn(Optional.of(u));
-        ConsentimentoLgpd sim = new ConsentimentoLgpd();
-        sim.setAceito(true);
-        ConsentimentoLgpd nao = new ConsentimentoLgpd();
-        nao.setAceito(false);
-        when(consentimentoRepository.findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(
-                5L, TipoConsentimento.CONTATO_PROATIVO
-        )).thenReturn(Optional.of(sim), Optional.of(nao), Optional.empty());
+        when(scoreProdutoRepository.findByUsuarioId(5L)).thenReturn(List.of(nota));
+        when(compraRepository.findByUsuarioIdAndDeletedAtIsNull(5L)).thenReturn(List.of(compra));
+        when(consentimentoService.aceitaContato(5L)).thenReturn(false, true);
+        when(consentimentoService.aceitaCookies(5L)).thenReturn(true, false);
 
-        assertEquals(true, service.detalhe(5L).contatoProativo());
-        assertEquals(false, service.detalhe(5L).contatoProativo());
-        assertNull(service.detalhe(5L).contatoProativo());
+        var semContato = service.detalhe(5L);
+        assertFalse(semContato.contatoVisivel());
+        assertEquals("Ana", semContato.usuario().nomeCompleto());
+        assertNull(semContato.usuario().email());
+        assertNull(semContato.usuario().emailAlternativo());
+        assertNull(semContato.usuario().telefone());
+        assertNull(semContato.usuario().cpf());
+        assertNull(semContato.usuario().idade());
+        assertEquals(1, semContato.scoresProduto().size());
+
+        var semInteresse = service.detalhe(5L);
+        assertFalse(semInteresse.interesseVisivel());
+        assertEquals("ana@x.c", semInteresse.usuario().email());
+        assertTrue(semInteresse.scoresProduto().isEmpty());
+        assertTrue(semInteresse.scoresCategoria().isEmpty());
+        assertNull(semInteresse.faixaPreco().gapPreco());
+        assertEquals(1, semInteresse.compras().size());
     }
 
     @Test

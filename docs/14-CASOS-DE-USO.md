@@ -72,8 +72,8 @@ flowchart LR
 |---|---|
 | **Ator** | Visitante ou comprador |
 | **Pré-condição** | Primeira visita ou escolha vencida (12 meses) |
-| **Fluxo principal** | 1. O sistema mostra o banner. 2. A pessoa escolhe **Aceitar todos**. 3. O sistema guarda a escolha e passa a coletar eventos. |
-| **Alternativas** | **Apenas essenciais:** nenhum evento é enviado e o catálogo usa a popularidade. **Personalizar:** abre o modal e a pessoa liga ou desliga os cookies comportamentais. |
+| **Fluxo principal** | 1. O sistema mostra o banner. 2. A pessoa clica em **Aceitar cookies e continuar**. 3. O sistema guarda a escolha e passa a coletar eventos. |
+| **Alternativas** | **Recusar ou mudar depois:** link Privacidade do banner ou Preferências de cookies, no rodapé (switch deste navegador); com conta, aba Privacidade. Desligado, nenhum evento é enviado e o catálogo usa a popularidade. |
 | **Resultado** | Consentimento definido no navegador; para quem tem conta, também no banco, com data e versão |
 | **Rastreabilidade** | RF04, RF27, RF28 · tela S4 · `POST /api/conta/consentimentos` |
 
@@ -105,7 +105,7 @@ flowchart LR
 |---|---|
 | **Ator** | Visitante |
 | **Pré-condição** | Não estar logado |
-| **Fluxo principal** | 1. A pessoa escolhe PJ ou PF e preenche os dados. 2. Aceita os Termos e a Política. 3. O sistema valida CPF ou CNPJ, e-mail e telefone. 4. Cria a conta, grava os consentimentos e já entra. |
+| **Fluxo principal** | 1. A pessoa escolhe PJ ou PF e preenche os dados. 2. Ao marcar o aceite, lê no modal o que começa ligado, os Termos e a Política, e confirma em “Li e aceito”. 3. O sistema valida CPF ou CNPJ, e-mail e telefone. 4. Cria a conta, grava os consentimentos e já entra. |
 | **Alternativas** | **E-mail, CPF ou CNPJ já usado:** erro 409. **Documento inválido:** erro 400. **Sem aceite:** o envio fica bloqueado. **Há navegação anônima:** segue para o UC06. |
 | **Resultado** | Conta criada e sessão iniciada |
 | **Rastreabilidade** | RF01–RF04, RNF09 · tela 3 · `POST /api/auth/signup` |
@@ -161,9 +161,9 @@ flowchart LR
 | **Ator** | Comprador |
 | **Pré-condição** | Estar logado |
 | **Fluxo principal** | 1. O comprador abre Conta. 2. Edita os dados ou liga e desliga um consentimento. 3. O sistema salva e registra o consentimento com data e versão. |
-| **Alternativas** | **Exportar:** baixa os dados em JSON ou CSV. **Excluir conta:** após confirmar, os dados pessoais são apagados (anonimização) e a sessão termina. |
-| **Resultado** | Direitos da LGPD exercidos sem depender de atendimento |
-| **Rastreabilidade** | RF28–RF30, RNF08, RNF09 · tela 8 · `GET/PATCH/DELETE /api/conta`, `POST /api/conta/consentimentos`, `GET /api/conta/exportar` |
+| **Alternativas** | **Desligar contato ou cookies:** o admin deixa de ver o dado correspondente. **Cópia dos dados:** pede por e-mail, indicado na Ajuda. **Excluir conta:** após confirmar, os dados pessoais são apagados (anonimização) e a sessão termina. |
+| **Resultado** | Direitos da LGPD exercidos na própria conta; só a cópia dos dados depende de atendimento |
+| **Rastreabilidade** | RF28–RF30, RNF08, RNF09 · tela 8 · `GET/PATCH/DELETE /api/conta`, `POST /api/conta/consentimentos` |
 
 ---
 

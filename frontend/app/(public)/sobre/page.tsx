@@ -12,12 +12,11 @@ import {
 import Image from 'next/image'
 import { Logo } from '@/components/layout/Logo'
 import { Button, Card, Col, Flex, Row, Typography } from '@/components/ui'
-import { whatsappUrl } from '@/lib/config'
+import { EMPRESA, whatsappUrl } from '@/lib/config'
 
 const { Title, Paragraph, Text, Link } = Typography
 
-const ENDERECO = 'R. Manoel Francisco da Costa, 443, Jaraguá do Sul, SC'
-const MAPA_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ENDERECO)}`
+const MAPA_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(EMPRESA.endereco)}`
 
 const SERVICOS = [
   { titulo: 'Retífica de motores', descricao: 'Recuperação completa de motores a gasolina, álcool, flex e diesel.' },
@@ -48,20 +47,20 @@ const PRODUTOS = [
 ]
 
 const CONTATOS = [
-  { icon: <PhoneOutlined />, titulo: 'Telefone', conteudo: <Link href="tel:+554733702206">(47) 3370-2206</Link> },
+  { icon: <PhoneOutlined />, titulo: 'Telefone', conteudo: <Link href={EMPRESA.telefoneHref}>{EMPRESA.telefone}</Link> },
   {
     icon: <MailOutlined />,
     titulo: 'E-mail',
-    conteudo: <Link href="mailto:financeiro@retificarenova.com.br">financeiro@retificarenova.com.br</Link>,
+    conteudo: <Link href={`mailto:${EMPRESA.email}`}>{EMPRESA.email}</Link>,
   },
   {
     icon: <ClockCircleOutlined />,
     titulo: 'Horário',
     conteudo: (
       <>
-        <Text>Segunda a sexta</Text>
+        <Text>{EMPRESA.horario.dias}</Text>
         <br />
-        <Text type="secondary">7:45 às 12:00 · 13:15 às 17:45</Text>
+        <Text type="secondary">{EMPRESA.horario.horas}</Text>
       </>
     ),
   },
@@ -70,7 +69,7 @@ const CONTATOS = [
     titulo: 'Endereço',
     conteudo: (
       <>
-        <Text>{ENDERECO}</Text>
+        <Text>{EMPRESA.endereco}</Text>
         <br />
         <Link href={MAPA_URL} target="_blank" rel="noopener noreferrer">
           Ver no mapa
@@ -133,7 +132,7 @@ export default function SobrePage() {
             <Flex vertical gap="middle" align="flex-start">
               <Logo size="lg" iconOnly />
               <Title id="sobre-title" level={1} style={{ margin: 0 }}>
-                Renova Retífica de Motores
+                {EMPRESA.nome}
               </Title>
               <Paragraph type="secondary" style={{ maxWidth: 560, margin: 0, fontSize: 'var(--font-size-lg)' }}>
                 Peças, óleos, lubrificantes e motores para carros, caminhões, máquinas agrícolas e embarcações, com

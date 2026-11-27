@@ -12,7 +12,7 @@ import { useTabelaPaginada } from '@/lib/hooks/useTabelaPaginada'
 import type { AdminUsuarioListItem, Categoria } from '@/lib/types'
 import { NIVEIS_INTERESSE, isNivelInteresse, type NivelInteresse } from '@/lib/nivelInteresse'
 import { PageError } from '@/components/layout/PageStates'
-import { AtivoTag, DataCelula, NotaCelula, TextoCelula } from '@/components/admin/celulas'
+import { AtivoTag, DataCelula, NaoCompartilhado, NotaCelula, TextoCelula } from '@/components/admin/celulas'
 import {
   Button,
   Flex,
@@ -32,7 +32,8 @@ const { Title } = Typography
 const TIPOS = ['PF', 'PJ'] as const
 
 /** O contato já ocupa duas linhas (e-mail e telefone): os outros textos podem usar as mesmas duas. */
-const duasLinhas = (v: string | null | undefined) => <TextoCelula texto={v} linhas={2} />
+const duasLinhas = (v: string | null | undefined, row: AdminUsuarioListItem) =>
+  row.interesseVisivel ? <TextoCelula texto={v} linhas={2} /> : <NaoCompartilhado />
 
 function statusDaUrl(v: string | null): boolean | undefined {
   if (v === 'ativo') return true
@@ -118,12 +119,15 @@ export function UsuariosLista() {
       sorter: true,
       sortOrder: sortOrder('email'),
       width: '19%',
-      render: (email: string, row) => (
-        <>
-          <TextoCelula texto={email} />
-          {row.telefone && <TextoCelula texto={formatTelefone(telefoneForMask(row.telefone))} type="secondary" />}
-        </>
-      ),
+      render: (email: string | null, row) =>
+        row.contatoVisivel ? (
+          <>
+            <TextoCelula texto={email} />
+            {row.telefone && <TextoCelula texto={formatTelefone(telefoneForMask(row.telefone))} type="secondary" />}
+          </>
+        ) : (
+          <NaoCompartilhado />
+        ),
     },
     {
       title: 'Status',
@@ -143,7 +147,7 @@ export function UsuariosLista() {
       width: 84,
       sorter: true,
       sortOrder: sortOrder('scoreMaxProduto'),
-      render: (v: number | null) => <NotaCelula nota={v} />,
+      render: (v: number | null, row) => (row.interesseVisivel ? <NotaCelula nota={v} /> : <NaoCompartilhado />),
     },
     {
       title: 'Top categoria',
@@ -170,7 +174,7 @@ export function UsuariosLista() {
       sorter: true,
       sortOrder: sortOrder('ultimaAtividade'),
       width: 96,
-      render: (d: string | null) => <DataCelula data={d} />,
+      render: (d: string | null, row) => (row.interesseVisivel ? <DataCelula data={d} /> : <NaoCompartilhado />),
     },
     {
       title: 'Ações',

@@ -39,6 +39,8 @@ const isAba = (v: string | null): v is Aba => ABAS.includes(v as Aba)
 type ScoreProduto = AdminUsuarioDetalhe['scoresProduto'][number]
 type ScoreCategoria = AdminUsuarioDetalhe['scoresCategoria'][number]
 
+const INTERESSE_OCULTO = 'O cliente optou por não compartilhar seus interesses'
+
 const COLUNA_NOTA = {
   title: 'Nota',
   dataIndex: 'valor',
@@ -113,11 +115,16 @@ export function UsuarioDetalhe() {
     )
   }
 
-  const { usuario, compras, contatoProativo } = data
-  const nome = usuario.nomeCompleto ?? usuario.razaoSocial ?? usuario.email
+  const { usuario, compras, contatoVisivel, interesseVisivel } = data
+  const nome = usuario.nomeCompleto ?? usuario.razaoSocial ?? usuario.email ?? `Cliente ${usuario.id}`
   const tel = usuario.telefone
   const whatsapp = whatsappClienteUrl(tel, `Olá ${nome}!`)
   const abrirWhatsapp = () => whatsapp && window.open(whatsapp, '_blank', 'noopener,noreferrer')
+  const motivoSemWhatsapp = !contatoVisivel
+    ? 'O cliente optou por não compartilhar o contato'
+    : tel
+      ? 'Telefone inválido'
+      : 'Cliente sem telefone cadastrado'
   const totalCompras = compras.reduce((acc, c) => acc + c.valorTotal, 0)
   const abrirNovaCompra = () => setModal({ open: true })
 
@@ -271,29 +278,21 @@ export function UsuarioDetalhe() {
             {nome}
           </Title>
           <Text type="secondary">
-            {[usuario.tipo, usuario.email, tel && formatTelefone(tel)].filter(Boolean).join(' · ')}
+            {[usuario.tipo, usuario.email, tel && formatTelefone(tel), !contatoVisivel && 'Contato oculto']
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         </Flex>
-        {/* Sem autorização de contato, avisa antes: o cliente pode ter chamado primeiro, então não bloqueia. */}
-        <Popconfirm
-          title="Abrir a conversa mesmo assim?"
-          description="Este cliente não autorizou contato proativo."
-          okText="Abrir"
-          cancelText="Cancelar"
-          disabled={!whatsapp || contatoProativo === true}
-          onConfirm={abrirWhatsapp}
+        <Button
+          id="admin-user-whatsapp"
+          color="primary"
+          icon={<WhatsAppOutlined />}
+          disabled={!whatsapp}
+          tooltip={whatsapp ? undefined : motivoSemWhatsapp}
+          onClick={abrirWhatsapp}
         >
-          <Button
-            id="admin-user-whatsapp"
-            color="primary"
-            icon={<WhatsAppOutlined />}
-            disabled={!whatsapp}
-            tooltip={whatsapp ? undefined : tel ? 'Telefone inválido' : 'Cliente sem telefone cadastrado'}
-            onClick={contatoProativo === true ? abrirWhatsapp : undefined}
-          >
-            WhatsApp
-          </Button>
-        </Popconfirm>
+          WhatsApp
+        </Button>
       </Flex>
 
       <Tabs
@@ -303,7 +302,9 @@ export function UsuarioDetalhe() {
           {
             key: 'scores',
             label: 'Notas de interesse',
-            children: (
+            children: !interesseVisivel ? (
+              <Empty description={INTERESSE_OCULTO} />
+            ) : (
               <Row gutter={[24, 24]}>
                 <Col xs={24} lg={12}>
                   <Table
@@ -331,7 +332,9 @@ export function UsuarioDetalhe() {
           {
             key: 'preco',
             label: 'Faixa de preço',
-            children: (
+            children: !interesseVisivel ? (
+              <Empty description={INTERESSE_OCULTO} />
+            ) : (
               <Flex vertical gap="middle" style={{ maxWidth: 640 }}>
                 <Descriptions
                   bordered

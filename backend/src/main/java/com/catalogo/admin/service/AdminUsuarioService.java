@@ -26,13 +26,11 @@ import com.catalogo.admin.dto.ScoreCategoriaRow;
 import com.catalogo.admin.dto.ScoreProdutoRow;
 import com.catalogo.admin.repository.AdminAnalyticsRepository;
 import com.catalogo.admin.repository.AdminAnalyticsRepository.FiltroUsuarios;
-import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.dto.UsuarioResponse;
-import com.catalogo.auth.entity.ConsentimentoLgpd;
 import com.catalogo.auth.entity.Usuario;
-import com.catalogo.auth.repository.ConsentimentoLgpdRepository;
 import com.catalogo.auth.repository.UsuarioRepository;
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.entity.Compra;
 import com.catalogo.catalog.entity.Produto;
 import com.catalogo.catalog.repository.CompraRepository;
@@ -65,7 +63,7 @@ public class AdminUsuarioService {
     private final FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository;
     private final CompraRepository compraRepository;
     private final ProdutoRepository produtoRepository;
-    private final ConsentimentoLgpdRepository consentimentoRepository;
+    private final ConsentimentoService consentimentoService;
     private final ScoreEngine scoreEngine;
 
     public AdminUsuarioService(
@@ -76,7 +74,7 @@ public class AdminUsuarioService {
             FaixaPrecoUsuarioRepository faixaPrecoUsuarioRepository,
             CompraRepository compraRepository,
             ProdutoRepository produtoRepository,
-            ConsentimentoLgpdRepository consentimentoRepository,
+            ConsentimentoService consentimentoService,
             ScoreEngine scoreEngine
     ) {
         this.usuarioRepository = usuarioRepository;
@@ -86,7 +84,7 @@ public class AdminUsuarioService {
         this.faixaPrecoUsuarioRepository = faixaPrecoUsuarioRepository;
         this.compraRepository = compraRepository;
         this.produtoRepository = produtoRepository;
-        this.consentimentoRepository = consentimentoRepository;
+        this.consentimentoService = consentimentoService;
         this.scoreEngine = scoreEngine;
     }
 
@@ -115,7 +113,8 @@ public class AdminUsuarioService {
         List<AdminUsuarioListItem> items = rows.stream()
                 .filter(r -> porId.containsKey(toLong(r[0])))
                 .map(r -> AdminUsuarioListItem.from(
-                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3]), (String) r[4]))
+                        porId.get(toLong(r[0])), toBd(r[1]), (String) r[2], toOdt(r[3]), (String) r[4],
+                        (Boolean) r[5], (Boolean) r[6]))
                 .toList();
         return new PageResponse<>(items, pageIndex, size, total);
     }
@@ -128,7 +127,10 @@ public class AdminUsuarioService {
             throw new ApiException("NOT_FOUND", "Usuário não encontrado", HttpStatus.NOT_FOUND);
         }
 
-        List<ScoreProduto> scores = scoreProdutoRepository.findByUsuarioId(id);
+        boolean contato = consentimentoService.aceitaContato(id);
+        boolean interesse = consentimentoService.aceitaCookies(id);
+
+        List<ScoreProduto> scores = interesse ? scoreProdutoRepository.findByUsuarioId(id) : List.of();
         List<ScoreProdutoRow> scoreRows = new ArrayList<>();
         for (ScoreProduto s : scores) {
             String nome = produtoRepository.findById(s.getProdutoId()).map(Produto::getNome).orElse("?");
@@ -136,7 +138,7 @@ public class AdminUsuarioService {
         }
 
         List<ScoreCategoriaRow> catRows = new ArrayList<>();
-        for (ScoreCategoria s : scoreCategoriaRepository.findByUsuarioId(id)) {
+        for (ScoreCategoria s : interesse ? scoreCategoriaRepository.findByUsuarioId(id) : List.<ScoreCategoria>of()) {
             String nome = em.createQuery("SELECT c.nome FROM Categoria c WHERE c.id = :id", String.class)
                     .setParameter("id", s.getCategoriaId())
                     .getResultStream().findFirst().orElse("?");
@@ -144,18 +146,15 @@ public class AdminUsuarioService {
         }
 
         FaixaPrecoRow faixa = FaixaPrecoRow.from(
-                faixaPrecoUsuarioRepository.findByUsuarioId(id).orElse(null)
+                interesse ? faixaPrecoUsuarioRepository.findByUsuarioId(id).orElse(null) : null
         );
         List<CompraResponse> compras = compraRepository.findByUsuarioIdAndDeletedAtIsNull(id).stream()
                 .map(CompraResponse::from)
                 .toList();
 
-        Boolean contatoProativo = consentimentoRepository
-                .findFirstByUsuario_IdAndTipoOrderByAceitoEmDescIdDesc(id, TipoConsentimento.CONTATO_PROATIVO)
-                .map(ConsentimentoLgpd::isAceito)
-                .orElse(null);
-
-        return new AdminUsuarioDetalhe(UsuarioResponse.from(u), contatoProativo, scoreRows, catRows, faixa, compras);
+        UsuarioResponse usuario = UsuarioResponse.from(u);
+        return new AdminUsuarioDetalhe(
+                contato ? usuario : usuario.semContato(), contato, interesse, scoreRows, catRows, faixa, compras);
     }
 
     /**

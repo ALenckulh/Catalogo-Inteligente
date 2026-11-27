@@ -1,9 +1,22 @@
 import { normalizeTelefone } from './validators'
 
+/** Versão vigente dos Termos e da Política; espelha ConsentimentoLgpd.VERSAO_TERMOS do backend. */
+export const VERSAO_TERMOS = '1.0'
+
+/** Contato público da loja (Sobre, Ajuda e documentos legais). */
+export const EMPRESA = {
+  nome: 'Renova Retífica de Motores',
+  endereco: 'R. Manoel Francisco da Costa, 443, Jaraguá do Sul, SC',
+  telefone: '(47) 3370-2206',
+  telefoneHref: 'tel:+554733702206',
+  email: 'financeiro@retificarenova.com.br',
+  horario: { dias: 'Segunda a sexta', horas: '7:45 às 12:00 · 13:15 às 17:45' },
+} as const
+
 /** Contato da Renova Retífica — CTA WhatsApp. */
 export const CATALOGO_WHATSAPP = {
   telefone: '5547920026438',
-  displayName: 'Renova Retífica de Motores',
+  displayName: EMPRESA.nome,
 }
 
 /** Cliente fala com a loja. */

@@ -1,17 +1,8 @@
 'use client'
 
-import { TermosConteudo } from '@/components/LegalConteudo'
-import { Typography } from '@/components/ui'
-
-const { Title } = Typography
+import { TERMOS } from '@/components/LegalConteudo'
+import { PaginaLegal } from '@/components/PaginaLegal'
 
 export default function TermosPage() {
-  return (
-    <article aria-labelledby="termos-title" className="page page--narrow page--prose">
-      <Title id="termos-title" level={1}>
-        Termos de Uso
-      </Title>
-      <TermosConteudo />
-    </article>
-  )
+  return <PaginaLegal doc={TERMOS} />
 }

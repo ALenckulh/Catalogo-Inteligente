@@ -28,6 +28,22 @@ public class AdminAnalyticsRepository {
     @PersistenceContext
     private EntityManager em;
 
+    /**
+     * O que o cliente compartilha com a loja: escolha vigente (linha mais recente) de contato e de interesse;
+     * sem registro, vale não. Ocultar aqui, e não na tela, impede que busca, filtro e ordenação revelem o dado.
+     */
+    private static final String PERMISSOES = """
+
+                CROSS JOIN LATERAL (
+                    SELECT COALESCE((SELECT cl.aceito FROM consentimento_lgpd cl
+                                     WHERE cl.usuario_id = u.id AND cl.tipo = 'CONTATO_PROATIVO'
+                                     ORDER BY cl.aceito_em DESC, cl.id DESC LIMIT 1), FALSE) AS contato,
+                           COALESCE((SELECT cl.aceito FROM consentimento_lgpd cl
+                                     WHERE cl.usuario_id = u.id AND cl.tipo = 'COOKIES_COMPORTAMENTAIS'
+                                     ORDER BY cl.aceito_em DESC, cl.id DESC LIMIT 1), FALSE) AS interesse
+                ) pr
+                """;
+
     public long countContatosSince(OffsetDateTime since) {
         Number n = (Number) em.createNativeQuery("""
                 SELECT COUNT(*) FROM evento
@@ -45,7 +61,8 @@ public class AdminAnalyticsRepository {
                 SELECT COUNT(DISTINCT sp.usuario_id)
                 FROM score_produto sp
                 JOIN usuario u ON u.id = sp.usuario_id
-                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN' AND sp.valor >= :min
+                """ + PERMISSOES + """
+                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN' AND pr.interesse AND sp.valor >= :min
                 """)
                 .setParameter("min", minScore)
                 .getSingleResult();
@@ -53,7 +70,7 @@ public class AdminAnalyticsRepository {
     }
 
     /**
-     * Clientes com maior nota: subquery com MAX(valor) por usuário + dois LEFT JOIN LATERAL, um para a
+     * Clientes com maior nota, entre os que aceitam contato e personalização: subquery com MAX(valor) por usuário + dois LEFT JOIN LATERAL, um para a
      * categoria de maior nota (ORDER BY valor DESC LIMIT 1) e outro para a última atividade.
      * LATERAL deixa a subquery "enxergar" o u.id da linha externa.
      */
@@ -77,6 +94,7 @@ public class AdminAnalyticsRepository {
                     WHERE usuario_id IS NOT NULL
                     GROUP BY usuario_id
                 ) mx ON mx.usuario_id = u.id
+                """ + PERMISSOES + """
                 LEFT JOIN LATERAL (
                     SELECT c.nome AS cat_nome
                     FROM score_categoria sc
@@ -91,7 +109,7 @@ public class AdminAnalyticsRepository {
                     WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
                 ) ua ON TRUE
                 """ + PROXIMA_COMPRA + """
-                WHERE u.deleted_at IS NULL
+                WHERE u.deleted_at IS NULL AND pr.contato AND pr.interesse
                 ORDER BY mx.max_score DESC, u.id
                 LIMIT 50
                 """)
@@ -107,7 +125,7 @@ public class AdminAnalyticsRepository {
     }
 
     /**
-     * "Temperatura" dos usuários ativos (não ADMIN) pelo maior score de produto:
+     * "Temperatura" dos usuários ativos (não ADMIN) que aceitam personalização, pelo maior score de produto:
      * QUENTE (≥ alto), MORNO (≥ morno), FRIO (&lt; morno) e SEM_SCORE (nenhum score).
      * Sempre retorna os 4 níveis, nessa ordem, mesmo com contagem zero.
      */
@@ -117,8 +135,9 @@ public class AdminAnalyticsRepository {
                 WITH mx AS (
                     SELECT u.id, MAX(sp.valor) AS v
                     FROM usuario u
+                    """ + PERMISSOES + """
                     LEFT JOIN score_produto sp ON sp.usuario_id = u.id
-                    WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN'
+                    WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN' AND pr.interesse
                     GROUP BY u.id
                 )
                 SELECT n.faixa, COUNT(mx.id)
@@ -165,7 +184,7 @@ public class AdminAnalyticsRepository {
     }
 
     /**
-     * Usuários ativos (não ADMIN) cuja categoria de maior score é a categoria — top 10.
+     * Usuários ativos (não ADMIN) que aceitam personalização e cuja categoria de maior score é a categoria — top 10.
      * Empates contam o usuário em todas as categorias empatadas.
      */
     @SuppressWarnings("unchecked")
@@ -181,7 +200,8 @@ public class AdminAnalyticsRepository {
                     WHERE usuario_id IS NOT NULL
                     GROUP BY usuario_id
                 ) tops ON tops.usuario_id = sc.usuario_id AND tops.maxv = sc.valor
-                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN'
+                """ + PERMISSOES + """
+                WHERE u.deleted_at IS NULL AND u.tipo <> 'ADMIN' AND pr.interesse
                 GROUP BY c.nome
                 ORDER BY COUNT(DISTINCT sc.usuario_id) DESC
                 LIMIT 10
@@ -199,7 +219,7 @@ public class AdminAnalyticsRepository {
                     SELECT p.nome AS produto_nome
                     FROM score_produto sp
                     JOIN produto p ON p.id = sp.produto_id
-                    WHERE sp.usuario_id = u.id AND sp.valor > 0 AND p.ativo
+                    WHERE sp.usuario_id = u.id AND pr.interesse AND sp.valor > 0 AND p.ativo
                       AND NOT EXISTS (
                           SELECT 1 FROM compra c
                           WHERE c.usuario_id = u.id AND c.produto_id = p.id
@@ -227,14 +247,14 @@ public class AdminAnalyticsRepository {
     /** Colunas ordenáveis da lista de clientes: nome público → expressão SQL. */
     private static final Map<String, String> ORDENACAO_USUARIOS = Map.of(
             "nome", "COALESCE(u.nome_completo, u.razao_social)" + PT_BR,
-            "email", "u.email" + PT_BR,
+            "email", "CASE WHEN pr.contato THEN u.email END" + PT_BR,
             "scoreMaxProduto", "mx.max_score",
             "topCategoria", "tc.cat_nome" + PT_BR,
             "ultimaAtividade", "ua.ultima"
     );
 
     /**
-     * Página de clientes: [id, nota máxima, top categoria, última atividade, próxima compra]. Uma consulta só; os LATERAL
+     * Página de clientes: [id, nota máxima, top categoria, última atividade, próxima compra, contato, interesse]. Uma consulta só; os LATERAL
      * calculam os valores por cliente, para que filtro, ordenação e paginação rodem no banco.
      *
      * @param sort "campo,asc|desc" com campo em {@link #ORDENACAO_USUARIOS}; inválido ou nulo = id desc.
@@ -242,7 +262,7 @@ public class AdminAnalyticsRepository {
     @SuppressWarnings("unchecked")
     public List<Object[]> usuarios(FiltroUsuarios filtro, String sort, int limit, long offset) {
         Map<String, Object> params = new HashMap<>();
-        String sql = "SELECT u.id, mx.max_score, tc.cat_nome, ua.ultima, pc.produto_nome"
+        String sql = "SELECT u.id, mx.max_score, tc.cat_nome, ua.ultima, pc.produto_nome, pr.contato, pr.interesse"
                 + fromUsuarios(PROXIMA_COMPRA, filtro, params)
                 + " ORDER BY " + orderByUsuarios(sort)
                 + " LIMIT :limit OFFSET :offset";
@@ -269,23 +289,24 @@ public class AdminAnalyticsRepository {
         StringBuilder sql = new StringBuilder("""
 
                 FROM usuario u
+                """ + PERMISSOES + """
                 LEFT JOIN LATERAL (
                     SELECT MAX(sp.valor) AS max_score
                     FROM score_produto sp
-                    WHERE sp.usuario_id = u.id
+                    WHERE sp.usuario_id = u.id AND pr.interesse
                 ) mx ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT c.nome AS cat_nome
                     FROM score_categoria sc
                     JOIN categoria c ON c.id = sc.categoria_id
-                    WHERE sc.usuario_id = u.id
+                    WHERE sc.usuario_id = u.id AND pr.interesse
                     ORDER BY sc.valor DESC, sc.categoria_id
                     LIMIT 1
                 ) tc ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT MAX(e.ocorrido_em) AS ultima
                     FROM evento e
-                    WHERE e.usuario_id = u.id AND e.deleted_at IS NULL
+                    WHERE e.usuario_id = u.id AND e.deleted_at IS NULL AND pr.interesse
                 ) ua ON TRUE
                 """);
         sql.append(joins).append(" WHERE u.tipo <> 'ADMIN'");
@@ -320,13 +341,16 @@ public class AdminAnalyticsRepository {
                     sql.append(" AND mx.max_score < :morno");
                     params.put("morno", NivelInteresse.MORNO_MIN);
                 }
-                case SEM_SCORE -> sql.append(" AND mx.max_score IS NULL");
+                case SEM_SCORE -> sql.append(" AND pr.interesse AND mx.max_score IS NULL");
             }
         }
         return sql.toString();
     }
 
-    /** Nome, razão social ou e-mail; se a busca for só de números, também CPF, CNPJ e telefone (gravados só com dígitos). */
+    /**
+     * Nome, razão social ou e-mail; se a busca for só de números, também CPF, CNPJ e telefone (gravados só com dígitos).
+     * E-mail, documento e telefone só de quem aceita contato.
+     */
     static void filtroTexto(String q, StringBuilder sql, Map<String, Object> params) {
         List<String> padroes = BuscaTexto.padroes(q);
         if (padroes.isEmpty()) {
@@ -335,7 +359,7 @@ public class AdminAnalyticsRepository {
         List<String> palavras = new ArrayList<>();
         for (int i = 0; i < padroes.size(); i++) {
             String nome = "q" + i;
-            palavras.add(Stream.of("u.email", "u.nome_completo", "u.razao_social")
+            palavras.add(Stream.of("CASE WHEN pr.contato THEN u.email END", "u.nome_completo", "u.razao_social")
                     .map(c -> "unaccent(LOWER(" + c + ")) LIKE unaccent(:" + nome + ") ESCAPE '" + BuscaTexto.ESCAPE + "'")
                     .collect(Collectors.joining(" OR ", "(", ")")));
             params.put(nome, padroes.get(i));
@@ -344,7 +368,7 @@ public class AdminAnalyticsRepository {
         String digitos = BuscaTexto.digitos(q);
         if (digitos != null) {
             // '55' na frente: acha o telefone digitado com ou sem o DDI, seja qual for a forma gravada.
-            sql.append(" OR u.cpf LIKE :digitos OR u.cnpj LIKE :digitos OR '55' || u.telefone LIKE :digitos");
+            sql.append(" OR (pr.contato AND (u.cpf LIKE :digitos OR u.cnpj LIKE :digitos OR '55' || u.telefone LIKE :digitos))");
             params.put("digitos", "%" + digitos + "%");
         }
         sql.append(")");

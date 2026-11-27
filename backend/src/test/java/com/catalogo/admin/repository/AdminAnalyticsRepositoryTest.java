@@ -19,6 +19,7 @@ class AdminAnalyticsRepositoryTest {
                 AdminAnalyticsRepository.orderByUsuarios("ultimaAtividade,asc"));
         assertEquals("ua.ultima ASC NULLS FIRST, u.id",
                 AdminAnalyticsRepository.orderByUsuarios("ultimaAtividade,desc; DROP TABLE usuario"));
+        assertTrue(AdminAnalyticsRepository.orderByUsuarios("email,asc").startsWith("CASE WHEN pr.contato THEN u.email END"));
         assertEquals("u.id DESC", AdminAnalyticsRepository.orderByUsuarios("senha_hash,asc"));
         assertEquals("u.id DESC", AdminAnalyticsRepository.orderByUsuarios("u.id; DROP TABLE usuario"));
         assertEquals("u.id DESC", AdminAnalyticsRepository.orderByUsuarios(","));
@@ -33,6 +34,8 @@ class AdminAnalyticsRepositoryTest {
         AdminAnalyticsRepository.filtroTexto("Mecânica 100%", sql, params);
         assertEquals(Map.of("q0", "%mecânica%", "q1", "%100\\%%"), params);
         assertFalse(sql.toString().contains("cnpj"));
+        // Buscar por e-mail não pode achar quem desligou o contato.
+        assertTrue(sql.toString().contains("CASE WHEN pr.contato THEN u.email END"));
     }
 
     @Test
@@ -41,7 +44,7 @@ class AdminAnalyticsRepositoryTest {
         Map<String, Object> params = new HashMap<>();
         AdminAnalyticsRepository.filtroTexto("23.456.789/0001-10", sql, params);
         assertEquals("%23456789000110%", params.get("digitos"));
-        assertTrue(sql.toString().contains("u.cnpj LIKE :digitos"));
+        assertTrue(sql.toString().contains("pr.contato AND (u.cpf LIKE :digitos OR u.cnpj LIKE :digitos"));
     }
 
     @Test

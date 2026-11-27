@@ -49,8 +49,6 @@ import com.catalogo.shared.ApiException;
 @Service
 public class ContaService {
 
-    private static final String VERSAO_TERMOS = "1.0";
-
     private final UsuarioRepository usuarioRepository;
     private final ConsentimentoLgpdRepository consentimentoRepository;
     private final SolicitacaoLgpdRepository solicitacaoRepository;
@@ -295,7 +293,7 @@ public class ContaService {
             c.setUsuario(usuario);
             c.setTipo(tipo);
             c.setAceito(false);
-            c.setVersaoTermos(VERSAO_TERMOS);
+            c.setVersaoTermos(ConsentimentoLgpd.VERSAO_TERMOS);
             c.setAceitoEm(OffsetDateTime.now());
             consentimentoRepository.save(c);
         }

@@ -1,6 +1,7 @@
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getConta, updateConsentimentos } from '@/lib/api/conta'
+import { VERSAO_TERMOS } from '@/lib/config'
 import { marcarContaDecidida } from '@/lib/consentSync'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
@@ -52,7 +53,7 @@ it.each([true, false])('conta que nunca decidiu recebe a escolha do navegador (%
   render(<SyncBehavioralConsent />)
   await waitFor(() =>
     expect(updateConsentimentos).toHaveBeenCalledWith(id, [
-      { tipo: 'COOKIES_COMPORTAMENTAIS', aceito: navegador, versaoTermos: '1.0' },
+      { tipo: 'COOKIES_COMPORTAMENTAIS', aceito: navegador, versaoTermos: VERSAO_TERMOS },
     ]),
   )
 })

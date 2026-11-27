@@ -35,6 +35,7 @@ import com.catalogo.admin.service.AdminUsuarioService;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.auth.security.UsuarioPrincipal;
+import com.catalogo.lgpd.service.ContaService;
 import com.catalogo.shared.GlobalExceptionHandler;
 import com.catalogo.shared.PageResponse;
 import org.springframework.transaction.CannotCreateTransactionException;
@@ -44,13 +45,15 @@ class AdminUsuarioControllerTest {
 
     @Mock
     AdminUsuarioService usuarioService;
+    @Mock
+    ContaService contaService;
 
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AdminUsuarioController(usuarioService))
+                .standaloneSetup(new AdminUsuarioController(usuarioService, contaService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -187,6 +190,15 @@ class AdminUsuarioControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(usuarioService).excluirCompra(5L, 1L);
+    }
+
+    @Test
+    void exportaOsDadosDoTitularSoComAdmin() throws Exception {
+        mockMvc.perform(get("/api/admin/usuarios/5/exportar")).andExpect(status().isForbidden());
+        verify(contaService, never()).exportar(any());
+
+        mockMvc.perform(get("/api/admin/usuarios/5/exportar").principal(adminAuth())).andExpect(status().isOk());
+        verify(contaService).exportar(5L);
     }
 
     private static UsernamePasswordAuthenticationToken adminAuth() {

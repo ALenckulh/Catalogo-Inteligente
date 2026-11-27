@@ -23,6 +23,8 @@ A numeração tem lacunas (M4, M10 a M12, M14 e M15 saíram por esse critério) 
 | M19 | Associar o histórico recalcula as notas | Regra | [04 §7.3](04-ESPECIFICACAO-TECNICA.md), RF19 |
 | M20 | Sem fingerprint e sem IP | Remoção | [04 §7.2](04-ESPECIFICACAO-TECNICA.md), RF18 |
 | M21 | Nova calibração padrão dos pesos e da meia-vida | Regra | [04 §3.1 e §5](04-ESPECIFICACAO-TECNICA.md), RF25 |
+| M22 | Opções de privacidade ligadas por legítimo interesse, ocultação no admin e cópia por e-mail | Regra | [04 §10](04-ESPECIFICACAO-TECNICA.md), RF04, RF21, RF22, RF29 |
+| M23 | Banner de cookies só com "Aceitar"; Política no formato do modal, também na conta | Interface | [03 §4.0 e S4](03-PAGINAS-E-UX.md), RF27, RF28 |
 
 ---
 
@@ -87,6 +89,24 @@ A numeração tem lacunas (M4, M10 a M12, M14 e M15 saíram por esse critério) 
 - **Justificativa:** navegar mostra curiosidade; favoritar e chamar mostram intenção. A compra não subiu porque não esfria: com peso alto, um cliente antigo ficaria Quente para sempre.
 - **Limites:** a amostra é pequena (5 conversões no teste de precisão; a calibração nova encontra 4 antes de acontecerem, a anterior 5, as duas sem falso positivo), e o nível pretendido de cada cliente foi definido com os pesos anteriores. Os bônus ficam em 0% por falta de dado. Ler o mesmo produto 5 vezes na semana ainda dá Quente (75).
 - **Rastreabilidade:** RF25; `CalibracaoPadraoTest`.
+
+### M22 — Privacidade: legítimo interesse, ocultação e cópia por e-mail
+
+- **Especificação:** consentimentos opcionais fora do aceite; contato proativo inicia desligado; exportação em JSON ou CSV na tela Conta.
+- **Situação anterior:** o admin via contato e nota de quem desligava as opções, e o catálogo continuava personalizado. Visitante não tinha como desfazer o "Aceitar todos".
+- **Decisão:** conta nova começa com as duas opções ligadas, por legítimo interesse e com aviso antes do aceite; cada opção desligada oculta o seu dado do admin, na consulta; a cópia dos dados é pedida por e-mail e gerada pela API do admin; visitante muda a escolha de cookies na Política. Contas existentes não mudam.
+- **Justificativa:** a loja precisa do sinal de interesse para atender, e quem cria conta espera o contato; a saída é simples e tem efeito real.
+- **Limites:** para cookies, legítimo interesse é mais frágil que consentimento ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)). Faltam na Política o CNPJ e, se houver, o nome do encarregado. Rever com advogado antes de uso comercial.
+- **Rastreabilidade:** RF04, RF21, RF22, RF28, RF29, RNF08; `AdminUsuarioServiceCompraTest`, `AdminAnalyticsRepositoryTest`, `CatalogServiceTest`.
+
+### M23 — Banner de cookies só com "Aceitar"
+
+- **Especificação:** banner com Aceitar todos, Apenas essenciais e Personalizar (modal).
+- **Situação anterior:** três botões e um modal repetiam o switch que já existe na Política e na conta.
+- **Decisão:** o banner tem só **Aceitar cookies e continuar** e o link Privacidade. Recusar ou mudar a escolha é no switch da seção 4 da Política (visitante) ou na aba Privacidade da conta. A Política passa a usar o formato do modal do cadastro e aparece também no fim dessa aba.
+- **Justificativa:** um único lugar para a escolha, e o banner fica mais leve.
+- **Limites:** a ANPD orienta que recusar seja tão fácil quanto aceitar; sem um botão de recusa no banner, a recusa fica a um clique a mais. Rever com advogado antes de uso comercial.
+- **Rastreabilidade:** RF27, RF28; `CookieBanner.test.tsx`, `app/(public)/privacidade/page.test.tsx`.
 
 ## Configuração do score (A9)
 

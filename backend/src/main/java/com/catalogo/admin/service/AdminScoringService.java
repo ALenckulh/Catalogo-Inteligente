@@ -33,6 +33,7 @@ import com.catalogo.admin.dto.SimulacaoResponse.MudancaCategoria;
 import com.catalogo.admin.dto.SimulacaoResponse.MudancaCliente;
 import com.catalogo.admin.dto.SimulacaoResponse.NivelContagem;
 import com.catalogo.admin.dto.SimulacaoResponse.Precisao;
+import com.catalogo.auth.domain.TipoConsentimento;
 import com.catalogo.auth.domain.TipoUsuario;
 import com.catalogo.auth.entity.Usuario;
 import com.catalogo.catalog.entity.Compra;
@@ -86,7 +87,7 @@ public class AdminScoringService {
 
     /**
      * Prévia da tela de Configuração, sem gravar nada (readOnly): compara parâmetros atuais × propostos
-     * com os dados reais. Impacto = quantos clientes mudam de nível e de categoria favorita;
+     * com os dados reais. Só entram no impacto os clientes que aceitam personalização. Impacto = quantos clientes mudam de nível e de categoria favorita;
      * Precisão = backtest de quanto cada cenário acerta quem converteu depois.
      */
     @Transactional(readOnly = true)
@@ -100,9 +101,17 @@ public class AdminScoringService {
         List<Cliente> clientes = em.createQuery("""
                         SELECT u FROM Usuario u
                         WHERE u.deletedAt IS NULL AND u.tipo <> :admin
+                          AND EXISTS (
+                              SELECT 1 FROM ConsentimentoLgpd c
+                              WHERE c.usuario = u AND c.tipo = :cookies AND c.aceito = TRUE
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM ConsentimentoLgpd d
+                                    WHERE d.usuario = u AND d.tipo = :cookies
+                                      AND (d.aceitoEm > c.aceitoEm OR (d.aceitoEm = c.aceitoEm AND d.id > c.id))))
                         ORDER BY u.id
                         """, Usuario.class)
                 .setParameter("admin", TipoUsuario.ADMIN)
+                .setParameter("cookies", TipoConsentimento.COOKIES_COMPORTAMENTAIS)
                 .getResultList()
                 .stream()
                 .map(u -> new Cliente(u.getId(), nome(u)))

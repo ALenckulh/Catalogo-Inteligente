@@ -141,7 +141,7 @@ Em `notification`/`Alert`/`message` que exibam **apenas um ícone** (sem texto a
 - O wrapper `Table` já vem com `size="small"` e `tableLayout="fixed"`.
 - **Largura:** coluna curta (nota, data, status, ações) declara `width`; a de texto longo fica sem, para receber a sobra, ou usa porcentagem. Tabela com muitas colunas define `scroll.x`.
 - **Altura da linha:** texto longo usa `TextoCelula` (12px, uma linha, com a dica do texto inteiro). A coluna que identifica a linha usa `principal` (14px). Duas linhas (`linhas={2}`) só quando outra coluna já ocupa duas. A linha não passa de 54px, fora as que têm campos.
-- Células repetidas ficam em `components/admin/celulas.tsx`: `TextoCelula`, `NotaCelula`, `AtivoTag` e `DataCelula` (data, com a hora na dica).
+- Células repetidas ficam em `components/admin/celulas.tsx`: `TextoCelula`, `NotaCelula`, `AtivoTag`, `DataCelula` (data, com a hora na dica) e `NaoCompartilhado`.
 - `pagination` com `pageSize` razoável (10/20/50).
 - "Nenhum registro" via `Empty` — não via string crua "No data".
 
@@ -361,10 +361,14 @@ Antes de adicionar um clique, uma etapa ou uma confirmação, pergunte se o sist
 - **URL é a fonte de verdade:** filtro, busca e página vivem na query string e são lidos dela. Link compartilhado, voltar e recarregar mantêm o estado.
 - **Nunca perder o contexto:** todo caminho para login ou cadastro leva `?next=`, passado adiante entre `/entrar` e `/cadastro`, sempre validado por `safeNext` (`lib/navigation.ts`). Link que sai de um formulário abre em nova aba.
 - **Desfazer em vez de confirmar:** ver §3.
-- **Bom default:** comece pela opção mais provável para o público (cadastro inicia em PJ) e reaproveite o que já se sabe (consentimento dado no banner vem marcado no cadastro).
+- **Bom default:** comece pela opção mais provável para o público (cadastro inicia em PJ) e reaproveite o que já se sabe (recusa dada no banner continua valendo depois do cadastro).
 - **Pedir só o necessário:** campo opcional fica rotulado "(opcional)" ou recolhido em `Collapse`.
-- **Aceite único, documento à mão:** o cadastro tem um só checkbox obrigatório. O texto dele abre os documentos em modal, sem sair do formulário, e "Li e aceito" no modal já marca o checkbox. Abrir o modal nunca marca nada sozinho.
-- **Consentimento opcional não entra no aceite:** cookies comportamentais e contato proativo nunca vão embutidos nos termos (LGPD art. 8º §4). Ficam no banner e em `/conta`, onde também são revogados.
+- **Aceite único, documento à mão:** o cadastro tem um só checkbox obrigatório. Marcar abre os documentos em modal, sem sair do formulário, e só "Li e aceito" marca. Abrir ou fechar o modal nunca marca nada; desmarcar é direto.
+- **O que começa ligado é avisado antes:** cookies comportamentais e contato proativo começam ligados por legítimo interesse, nunca como consentimento embutido nos termos (LGPD art. 8º §4º). Isso está na cláusula 4 dos Termos e da Política, que o modal exibe por inteiro, e os dois se desligam em `/conta` ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)).
+- **Texto legal tem uma fonte:** `/termos`, `/privacidade` e o modal exibem `components/LegalConteudo.tsx`. Nada de resumo próprio em outra tela.
+- **Texto legal no formato ABNT:** redação formal, impessoal e condensada (“o Titular”, “a Controladora”), justificada, com numeração progressiva (NBR 6024) gerada pelo componente: nunca digitar o número. No modal, os dois documentos em sequência, sem abas, em `--font-size-base`.
+- **Ajuda diz o que fazer:** resposta em passos numerados; cada passo começa com verbo e faz uma coisa só; o botão vai entre aspas, com o nome exato da tela, e o passo diz onde ele fica; no máximo três passos; nenhum termo técnico (“janela bloqueada”, não “pop-up”).
+- **Oculto não é vazio:** dado que o cliente desligou aparece como “Oculto” (`NaoCompartilhado`), não como “—”.
 - **Saída fica longe:** "Sair" não aparece em header, menu ou Drawer. Ação rara e que encerra a sessão fica no fim da tela de conta, como `variant="text"`, tanto na área pública quanto no admin.
 - **Busca sempre à mão:** o header oferece busca fora do catálogo, para não exigir navegação antes de buscar.
 - **Um gate, uma verdade:** o estado que controla o comportamento é o estado mostrado. O switch de cookies lê o consentimento local que libera a coleta, não uma cópia do servidor.
@@ -414,5 +418,5 @@ Marcar antes de abrir PR:
 - [ ] Nenhum "Aplicar"/"Salvar" onde dá para aplicar sozinho; estado de lista na URL.
 - [ ] Caminho para login/cadastro preserva `?next=`, validado por `safeNext`.
 - [ ] Ação reversível usa Desfazer, não confirmação.
-- [ ] "Sair" só na tela de conta; consentimento opcional fora do aceite de termos.
+- [ ] "Sair" só na tela de conta; o que começa ligado é avisado no modal do aceite.
 - [ ] Página trata carregando, erro com retry, vazio e dados (§21).

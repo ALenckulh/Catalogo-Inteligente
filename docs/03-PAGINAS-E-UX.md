@@ -82,6 +82,7 @@ Cadastro de admins feito pela TI; sem auto-signup. Rota separada da área públi
 | S1 | Política de Privacidade | `/privacidade` | Exigência LGPD |
 | S2 | Termos de Uso | `/termos` | Exigência LGPD |
 | S3 | Erro 404 | — | Boa prática de UX |
+| S5 | Ajuda | `/ajuda` | Pública: quem não consegue entrar também precisa dela |
 | S4 | Banner de cookies | — (global) | LGPD; primeira visita ([RF27](02-REQUISITOS.md)) |
 
 ---
@@ -105,12 +106,12 @@ Convenção de seções em cada tela: **Objetivo · Rota/auth · Layout · Conte
 
 ### 4.0 Comportamentos globais
 
-- **Banner de cookies (S4):** barra `sticky` inferior na primeira visita, em uma linha a partir de 768px (texto curto + link para Privacidade); não cobre o footer. Ações: Aceitar todos / Apenas essenciais / Personalizar. **Personalizar** abre `Modal` com Alert (essenciais sempre ativos), `Checkbox` de cookies comportamentais e “Salvar preferências”. Sem consentimento comportamental → sem coleta de eventos; recomendação só por Popularidade Global ([04 §10.2](04-ESPECIFICACAO-TECNICA.md)). Preferência válida 12 meses.
+- **Banner de cookies (S4):** barra `sticky` inferior na primeira visita (padding vertical `--space-6`, texto `--font-size-xl`, botão `large` com texto `--font-size-2xl`, 48px de altura e 192px de largura mínima), em uma linha a partir de 768px (texto sobre o uso dos cookies e onde mudar a escolha + link para Privacidade); não cobre o footer. Uma única ação: **Aceitar cookies e continuar** ([13 M23](13-MUDANCAS-DE-ESCOPO.md)). Logado numa conta que já aceitou, o banner não aparece: o navegador sem escolha adota o aceite da conta. Para recusar ou mudar depois: seção 4 da Política (`/privacidade`, switch deste navegador) ou aba Privacidade da conta. Sem consentimento comportamental → sem coleta de eventos; recomendação só por Popularidade Global ([04 §10.2](04-ESPECIFICACAO-TECNICA.md)). Preferência válida 12 meses.
 - **Eventos:** `POST /api/eventos` publica na fila e retorna rápido — não bloqueia UI ([RNF02](02-REQUISITOS.md)).
 - **Desktop-first**, responsivo; WCAG 2.1 AA ([RNF10](02-REQUISITOS.md), [RNF11](02-REQUISITOS.md)). Telas-alvo e padrões de layout, tipografia e fluxo: [09 §16–§21](09-NORMAS-DE-USABILIDADE.md).
 - **Skip-link:** layout público inclui link “Pular para o conteúdo” → `#main-content`.
 - **Header público:** sticky; logo → `/`; links Catálogo, Sobre (estado ativo conforme pathname); busca a partir de 992px, oculta em `/produtos` (Enter → `/produtos?q=`); se autenticado: Favoritos, Conta (label = `displayName`: nome/razão/e-mail, truncado com tooltip); se visitante: Entrar (leva `?next=` com a URL atual) / Cadastrar. Abaixo de 768px, nav e ações ficam em `Drawer`. Sem “Sair” (fica em `/conta`, [09 §20](09-NORMAS-DE-USABILIDADE.md)). Sem link para `/admin`.
-- **Footer público:** marca + links Catálogo / Sobre / Privacidade / Termos de Uso + linha de copyright “Uso acadêmico (TCC)”.
+- **Footer público:** marca + links Catálogo / Sobre / Ajuda / Privacidade / Preferências de cookies (seção Suas escolhas da Política) / Termos de Uso + linha de copyright “Uso acadêmico (TCC)”.
 - **Redirect `?next=`:** `/entrar` e `/cadastro` leem `next` (default `/`, só caminho interno via `safeNext`), repassam entre si e redirecionam após login, cadastro ou se já autenticado. Visitante em rotas autenticadas e CTAs “Entrar para…” usam o mesmo padrão (`/entrar?next=…`). No admin, `/admin/entrar?next=…` volta à tela pedida (só caminhos de `/admin`, `safeAdminNext`); ao sair pela Conta, não.
 - **Header admin:** sider (“Catálogo Inteligente” / subtítulo “Admin”), colapsável (`breakpoint=lg`; recolhido mostra só o símbolo); menu Dashboard, Usuários, Produtos, Configuração, **Design system**, Conta; top bar com e-mail do admin; “Sair da conta” fica em A8. `/admin/entrar` renderiza **fora** do shell (sem sider). Visitante no shell: CTA “Entrar” → `/admin/entrar`.
 - **ProdutoCard:** componente compartilhado (vitrine, catálogo, favoritos): `Card` hoverable, capa 4:3 (`contain`, com placeholder sem imagem), `Tag` categoria, nome (2 linhas + tooltip), preço BRL em destaque; clique → `/produtos/[slug]`.
@@ -176,10 +177,10 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 | **Objetivo** | Criar conta PF ou PJ com consentimentos LGPD. |
 | **Rota / auth** | Pública. Autenticado → `/`. |
 | **Layout** | `Card` (640px), duas colunas a partir de 576px; `Radio` PJ/PF no topo (inicia em PJ); identificação → e-mail/senha → telefone; `Collapse` “Mais dados (opcional)”; checkbox de aceite; submit; link “Já tem conta? Entrar” → `/entrar` (preserva `next`). |
-| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade; o texto abre `Modal` com abas dos dois documentos e botões Fechar / “Li e aceito” (marca o checkbox). Cookies comportamentais não têm campo: seguem a escolha do banner. Contato proativo inicia desligado. Os dois vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta`. Tooltips nos campos com label. |
-| **Componentes** | `Card`, `Form`, `Radio`, `Input`, `Input.Password`, `Collapse`, `Checkbox`, `Button`, `Modal` + `Tabs` (termos), `Modal` (migração). |
+| **Conteúdo e campos** | Comuns: `email`, senha (mín. 6), `telefone` (opc), `email_alternativo` (opc, no `Collapse`). **PF:** `cpf`, `nome_completo`, `idade` (opc, no `Collapse`). **PJ:** `cnpj`, `razao_social`. LGPD: um único checkbox obrigatório para Termos + Privacidade. Marcar **abre o `Modal`** e não marca: só “Li e aceito” marca (Fechar, X e Esc não); desmarcar é direto. O modal mostra, numa única área rolável e sem abas, os Termos e depois a Política, completos, em 12px (a mesma fonte de `/termos` e `/privacidade`); o que começa ligado na conta está na cláusula 4 dos dois. Cookies comportamentais e contato proativo não têm campo: começam ligados, vão para `consentimento_lgpd` ([08 §4.3](08-MODELO-DE-DADOS.md)) e são alterados em `/conta` ([04 §10.1](04-ESPECIFICACAO-TECNICA.md)). Tooltips nos campos com label. |
+| **Componentes** | `Card`, `Form`, `Radio`, `Input`, `Input.Password`, `Collapse`, `Checkbox`, `Button`, `Modal` (termos), `Modal` (migração). |
 | **APIs** | `POST /api/auth/signup`; após sucesso, se houver visitante: endpoint de migração (detalhe em [04 §7](04-ESPECIFICACAO-TECNICA.md)). |
-| **Eventos / triggers** | Sem métrica de interesse. O cadastro não altera o gate de coleta (§4.0.1): se o banner estiver sem decisão, ele segue aberto. Pós-sucesso: toast “Conta criada”, redirect para `next`, modal migração de histórico se houver visitante. |
+| **Eventos / triggers** | Sem métrica de interesse. Gate de coleta (§4.0.1): se este navegador ainda não escolheu, o cadastro liga a coleta nele e o banner some; quem desligou os cookies comportamentais neste navegador continua sem coleta nele. Pós-sucesso: toast “Conta criada”, redirect para `next`, modal migração de histórico se houver visitante. |
 | **Estados** | Validação CPF/CNPJ/e-mail; submit bloqueado sem aceite; Modal “Associar histórico de navegação?” Sim, associar / Não associar (descarta o histórico; o texto avisa). X e Esc fecham sem descartar, e a pergunta volta no próximo login. |
 | **Rastreabilidade** | RF01–RF04, RF19, RNF08, RNF09 |
 
@@ -245,12 +246,12 @@ Heatmap ([04 §3.4](04-ESPECIFICACAO-TECNICA.md)): fora de escopo — Trabalho F
 |---|---|
 | **Objetivo** | Gerir dados, consentimentos LGPD e pedidos de direitos do titular; ajuda. |
 | **Rota / auth** | Autenticado PF/PJ. Visitante → `/entrar?next=/conta`. |
-| **Layout** | `Tabs`: Dados · Privacidade · Ajuda. Abaixo das abas, após `Divider`, “Sair da conta” (`text` + `danger`) → `/`. |
-| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (valor da **conta**; alternar muda a conta e este navegador) e CONTATO_PROATIVO, que salvam ao alternar. Se a conta aceita e este navegador não, um `Alert` avisa e oferece "Aceitar neste navegador". A escolha do navegador só vai para a conta que nunca decidiu; separados por `Divider`, Exportar em JSON ou CSV / Solicitar exclusão (registra `solicitacao_lgpd`). **Ajuda:** `Collapse` com 3 itens (contato WhatsApp; cookies/recomendações; suporte com links `/sobre` e `/privacidade`). |
+| **Layout** | `Tabs`: Dados · Privacidade · Ajuda, com a aba na URL (`?aba=`). Abaixo das abas, após `Divider`, “Sair da conta” (`text` + `danger`) → `/`. |
+| **Conteúdo e campos** | **Dados:** somente leitura — e-mail, CPF/CNPJ, razão social (PJ). Editáveis — `nomeCompleto` (PF), `telefone` (máscara no blur), `emailAlternativo`; Salvar → toast “Dados salvos”. **Privacidade:** `Switch` COOKIES_COMPORTAMENTAIS (valor da **conta**; alternar muda a conta e este navegador) e CONTATO_PROATIVO, que salvam ao alternar. Se a conta aceita e este navegador não, um `Alert` avisa e oferece "Aceitar neste navegador". A escolha do navegador só vai para a conta que nunca decidiu; separados por `Divider`, Solicitar exclusão (registra `solicitacao_lgpd`). **Ajuda:** o mesmo componente de S5; é onde se pede a cópia dos dados, por e-mail. |
 | **Componentes** | `Tabs`, `Descriptions`, `Form`, `Switch`, `Button`, `modal.confirm` de `App.useApp()` (exclusão), `Alert`, `Collapse` (FAQ), `notification`. |
-| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `GET /api/conta/exportar`; `DELETE /api/conta`. |
+| **APIs** | `GET/PATCH /api/conta`; `POST /api/conta/consentimentos`; `DELETE /api/conta`. |
 | **Eventos / triggers** | Sem métrica de interesse. **Gate:** revogar `COOKIES_COMPORTAMENTAIS` → parar coleta imediatamente ([04 §11](04-ESPECIFICACAO-TECNICA.md)); ver §4.0.1. |
-| **Estados** | Confirmação destrutiva com verbo “Excluir conta”, com o foco em “Cancelar” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. Export: download do arquivo JSON ou CSV. |
+| **Estados** | Confirmação destrutiva com verbo “Excluir conta”, com o foco em “Cancelar” ([09 §3](09-NORMAS-DE-USABILIDADE.md)); após exclusão: `logout` + redirect `/`. |
 | **Rastreabilidade** | RF28–RF30, RNF08, RNF09 |
 
 ---
@@ -280,7 +281,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Objetivo** | Visão rápida de saúde do catálogo (KPIs + gráficos). |
 | **Rota / auth** | Admin. |
 | **Layout** | Faixa de `Statistic` (KPIs com help) + tabela de leads + 3 gráficos (`series`). |
-| **Conteúdo e campos** | KPIs num card **Indicadores** (tooltip ⓘ em linguagem simples; link **Ver** ao lado do número): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; Ver → `/admin/produtos`. **Contatos (7 dias)** — eventos `CONTATO_WHATSAPP`. **Clientes com alto interesse** — clientes ativos com `score_produto` máx. **≥ 70** (= faixa Quente); Ver → `/admin/usuarios?nivel=QUENTE&status=ativo`. **Clientes para contatar primeiro:** os 5 primeiros `leads` da API (nome com link para A4, nível e nota, categoria, próxima compra provável). Gráficos (cada um com título, ícone de ajuda em linguagem simples (o que é, como ler, por que importa), títulos de eixo, tooltip em pt-BR e estado vazio): **Nível de interesse dos clientes** — barras horizontais com usuários ativos pelo score máx. de produto: Quente (≥ 70, = KPI Clientes com alto interesse), Morno (40–69), Frio (< 40), Sem interação (sem score); rótulo "n · %"; soma = Usuários ativos; **Contatos pelo WhatsApp — últimos 14 dias** — contatos por dia, dias sem contato = 0; **Categoria favorita dos clientes** — usuários cuja categoria de maior score é a categoria (top 10; empates contam nas duas). |
+| **Conteúdo e campos** | KPIs num card **Indicadores** (tooltip ⓘ em linguagem simples; link **Ver** ao lado do número): **Usuários ativos** — PF/PJ com `deleted_at` nulo (exclui ADMIN); Ver → `/admin/usuarios`. **Produtos ativos** — `ativo=true`; Ver → `/admin/produtos`. **Contatos (7 dias)** — eventos `CONTATO_WHATSAPP`. **Clientes com alto interesse** — clientes ativos com `score_produto` máx. **≥ 70** (= faixa Quente); Ver → `/admin/usuarios?nivel=QUENTE&status=ativo`. **Clientes para contatar primeiro:** os 5 primeiros `leads` da API, só de quem aceita contato e personalização (nome com link para A4, nível e nota, categoria, próxima compra provável). Gráficos (cada um com título, ícone de ajuda em linguagem simples (o que é, como ler, por que importa), títulos de eixo, tooltip em pt-BR e estado vazio): **Nível de interesse dos clientes** — barras horizontais com usuários ativos pelo score máx. de produto: Quente (≥ 70, = KPI Clientes com alto interesse), Morno (40–69), Frio (< 40), Sem interação (sem score); rótulo "n · %"; só de quem aceita personalização; **Contatos pelo WhatsApp — últimos 14 dias** — contatos por dia, dias sem contato = 0; **Categoria favorita dos clientes** — usuários cuja categoria de maior score é a categoria (top 10; empates contam nas duas). |
 | **Componentes** | `Statistic`, `Tooltip` + `InfoCircleOutlined`, `Button`/`Link` (Eye), `Row`/`Col`, `Card`, `@ant-design/charts` (`Column`, `Line`, `Bar`), `Spin`. |
 | **APIs** | `GET /api/admin/dashboard`. |
 | **Eventos / triggers** | Sem métrica de interesse (somente leitura de agregados já calculados). |
@@ -298,7 +299,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Componentes** | `Table`, `Select`, `Input.Search`, `Tag`, `Button` icon-only `EyeOutlined` + tooltip (abrir detalhe). |
 | **APIs** | `GET /api/admin/usuarios?…`. |
 | **Eventos / triggers** | Sem métrica de interesse. |
-| **Estados** | Loading auth/dados: Spin. |
+| **Estados** | Loading auth/dados: Spin. O que o cliente desligou em `/conta` aparece como “Oculto” (diferente de “—”, sem dado): contato proativo esconde o contato; cookies comportamentais, score, categoria, próxima compra e última atividade. A busca por e-mail, documento ou telefone e os filtros e a ordenação também não os revelam. |
 | **Rastreabilidade** | RF21 |
 
 #### A4 — Detalhe de usuário (`/admin/usuarios/[id]`)
@@ -312,7 +313,7 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 | **Componentes** | `Descriptions`, `Tabs`, `Table`, `Form`, `Select` (`showSearch`), `DatePicker`, `InputNumber`, `Alert`, `Button`, `notification`. |
 | **APIs** | `GET /api/admin/usuarios/{id}`; `POST /api/admin/usuarios/{id}/compras`; `PUT`/`DELETE …/compras/{compraId}`; `GET /api/admin/produtos` (`q`, `page`, `limit`) no seletor de produto. |
 | **Eventos / triggers** | Sem `tipo_evento` comportamental. **Histórico de compras ([04 §3.3](04-ESPECIFICACAO-TECNICA.md)):** submit do form “Registrar compra” → insert `compra` (não fila de eventos). WhatsApp do dono do catálogo é contato externo — **não** dispara `CONTATO_WHATSAPP` do consumidor. Ver §4.0.1. |
-| **Estados** | Sem telefone: desabilitar WhatsApp + tooltip. Loading: Spin. |
+| **Estados** | Sem telefone ou com o contato oculto: desabilitar WhatsApp + tooltip com o motivo. Interesses ocultos: `Empty` em Notas e Faixa de preço. Compras e nome continuam. Loading: Spin. |
 | **Rastreabilidade** | RF22, RF24 |
 
 #### A5 — Catálogo admin (`/admin/produtos`)
@@ -411,11 +412,15 @@ Papel acessado pela conta `usuario.tipo = ADMIN` — referido no texto como **"d
 
 #### S1 — Política de Privacidade (`/privacidade`)
 
-Texto legal LGPD (versão 1.0); link no cadastro e footer. Seções: **Dados coletados** · **Finalidade** · **Direitos do titular**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal LGPD (versão 1.0); modal do cadastro e footer. Fonte única em `components/LegalConteudo.tsx`, em redação formal e condensada, com numeração progressiva da ABNT NBR 6024 (seção `1 TÍTULO`, item `1.1`, alíneas `a)` com `;` e `.` na última) gerada pelo componente. Exibida no mesmo formato do modal do cadastro (`DocumentoLegalCompacto`): título centralizado, versão e data, seções com âncora em texto compacto. O mesmo bloco aparece no fim da aba Privacidade de `/conta`. Seções: **1 Controladora** · **2 Dados tratados** · **3 Finalidades e bases legais** · **4 Opções do Titular** · **5 Cookies** · **6 Compartilhamento** · **7 Retenção** · **8 Segurança** · **9 Direitos do Titular** · **10 Menores de idade** · **11 Alterações**. Na seção 4, quem tem conta vai para `/conta?aba=privacidade`; visitante liga ou desliga os cookies deste navegador. Mudou o texto: suba `VERSAO_TERMOS` (`lib/config.ts` e `ConsentimentoLgpd.java`) e a data. **Eventos / triggers:** sem métrica de interesse.
 
 #### S2 — Termos de Uso (`/termos`)
 
-Texto legal (versão 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Seções: **Objeto** · **Contas** · **Uso aceitável**. **Eventos / triggers:** sem métrica de interesse.
+Texto legal (versão 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS.md)). Mesma fonte, formato e layout de S1. Seções: **1 Objeto** · **2 Conta** · **3 Preços e disponibilidade** · **4 Recomendações e contato** · **5 Uso adequado** · **6 Propriedade intelectual** · **7 Responsabilidade** · **8 Encerramento** · **9 Disposições finais e foro**. **Eventos / triggers:** sem métrica de interesse.
+
+#### S5 — Ajuda (`/ajuda` e aba Ajuda de `/conta`)
+
+Um só componente (`components/Ajuda.tsx`) para os dois lugares; link no footer e em `/entrar`. Busca sem acento (pergunta, passos, observação e sinônimos), perguntas em `Collapse` por grupo (**Comprar e pedir orçamento** · **Acesso e conta** · **Favoritos e recomendações** · **Privacidade**). Cada resposta é um passo a passo numerado (com uma frase de contexto quando precisa e uma observação no fim) e, quando há, o botão que resolve; regras de escrita em [09 §20](09-NORMAS-DE-USABILIDADE.md). `Empty` quando nada casa. No fim, WhatsApp, telefone, e-mail e horário. **Eventos / triggers:** sem métrica de interesse.
 
 #### S3 — 404
 
@@ -423,7 +428,7 @@ Texto legal (versão 1.0); aceite obrigatório no cadastro ([RF03](02-REQUISITOS
 
 #### S4 — Banner de cookies (global)
 
-Ver §4.0 e §4.0.1. Componente no root layout; não é rota. Banner `sticky` inferior + Modal Personalizar. **Trigger de gate:** Aceitar todos / Personalizar com cookies comportamentais → habilita coleta; Apenas essenciais / rejeitar → zero `POST /api/eventos`, ordenação só Popularidade Global.
+Ver §4.0 e §4.0.1. Componente no root layout; não é rota. Banner `sticky` inferior com o botão **Aceitar cookies e continuar**. **Trigger de gate:** Aceitar → habilita coleta; switch desligado em `/privacidade` ou na conta → zero `POST /api/eventos`, ordenação só Popularidade Global.
 
 ---
 

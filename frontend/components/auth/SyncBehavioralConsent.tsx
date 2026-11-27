@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { getConta, updateConsentimentos } from '@/lib/api/conta'
 import { USE_MOCK } from '@/lib/api/config'
 import { liberarEventos } from '@/lib/api/eventos'
+import { VERSAO_TERMOS } from '@/lib/config'
 import { contaJaDecidiu, marcarContaDecidida, registrarEnvioInicial } from '@/lib/consentSync'
 import { useCookieConsent } from '@/lib/contexts/CookieConsent/CookieConsentContext'
 import { useCurrentUser } from '@/lib/contexts/CurrentUser/CurrentUserContext'
@@ -27,7 +28,7 @@ export function SyncBehavioralConsent() {
       // De novo depois da espera: a pessoa pode ter trocado em /conta nesse meio-tempo.
       if (!decidida && !contaJaDecidiu(id)) {
         await updateConsentimentos(id, [
-          { tipo: 'COOKIES_COMPORTAMENTAIS', aceito: canTrackBehavioral, versaoTermos: '1.0' },
+          { tipo: 'COOKIES_COMPORTAMENTAIS', aceito: canTrackBehavioral, versaoTermos: VERSAO_TERMOS },
         ])
       }
       marcarContaDecidida(id)

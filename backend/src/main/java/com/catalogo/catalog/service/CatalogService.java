@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.dto.CategoriaResponse;
 import com.catalogo.catalog.dto.ProdutoResponse;
 import com.catalogo.catalog.entity.Categoria;
@@ -37,19 +38,22 @@ public class CatalogService {
     private final EventoRepository eventoRepository;
     private final ScoreProdutoRepository scoreProdutoRepository;
     private final RankingService rankingService;
+    private final ConsentimentoService consentimentoService;
 
     public CatalogService(
             ProdutoRepository produtoRepository,
             CategoriaRepository categoriaRepository,
             EventoRepository eventoRepository,
             ScoreProdutoRepository scoreProdutoRepository,
-            RankingService rankingService
+            RankingService rankingService,
+            ConsentimentoService consentimentoService
     ) {
         this.produtoRepository = produtoRepository;
         this.categoriaRepository = categoriaRepository;
         this.eventoRepository = eventoRepository;
         this.scoreProdutoRepository = scoreProdutoRepository;
         this.rankingService = rankingService;
+        this.consentimentoService = consentimentoService;
     }
 
     /**
@@ -87,6 +91,11 @@ public class CatalogService {
         // Só ids: todos os produtos entram no ranking sem carregar descrição, ficha e imagens de cada um.
         List<Long> ids = new ArrayList<>(produtoRepository.searchIds(query, categoriaIds, precoMin, precoMax));
 
+        // Desligou a personalização em /conta: as notas já gravadas também deixam de ordenar o catálogo.
+        if (usuarioId != null && !consentimentoService.aceitaCookies(usuarioId)) {
+            usuarioId = null;
+            visitanteId = null;
+        }
         long interactions = 0;
         boolean hasScores = false;
         if (usuarioId != null) {

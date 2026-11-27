@@ -48,6 +48,17 @@ export function NotaCelula({ nota }: { nota: number | null }) {
   )
 }
 
+/** Dado que o cliente desligou em /conta: diferente de "—", que é não ter o dado. */
+export function NaoCompartilhado() {
+  return (
+    <Tooltip title="O cliente optou por não compartilhar">
+      <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-base)' }}>
+        Oculto
+      </Typography.Text>
+    </Tooltip>
+  )
+}
+
 export function AtivoTag({ ativo }: { ativo: boolean }) {
   return <Tag color={ativo ? 'success' : 'default'}>{ativo ? 'Ativo' : 'Inativo'}</Tag>
 }

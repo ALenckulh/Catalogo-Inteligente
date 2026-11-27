@@ -81,6 +81,10 @@ export function CookieConsentProvider({ children }: Props) {
     (behavioral: boolean) => persist('custom', behavioral),
     [persist],
   )
+  // Lê o que está gravado, e não o estado: uma recusa durante o envio do cadastro não pode ser desfeita.
+  const acceptIfUndecided = useCallback(() => {
+    if (readStored().decidedAt === null) persist('custom', true)
+  }, [persist])
 
   const value = useMemo<CookieConsentValue>(
     () => ({
@@ -89,9 +93,10 @@ export function CookieConsentProvider({ children }: Props) {
       acceptAll,
       acceptEssential,
       acceptCustom,
+      acceptIfUndecided,
       canTrackBehavioral: preferences.behavioral,
     }),
-    [preferences, hydrated, acceptAll, acceptEssential, acceptCustom],
+    [preferences, hydrated, acceptAll, acceptEssential, acceptCustom, acceptIfUndecided],
   )
 
   return (

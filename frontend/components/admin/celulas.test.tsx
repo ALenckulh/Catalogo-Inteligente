@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { AtivoTag, DataCelula, NotaCelula, TextoCelula } from './celulas'
+import { AtivoTag, DataCelula, NaoCompartilhado, NotaCelula, TextoCelula } from './celulas'
 
 afterEach(cleanup)
 
@@ -32,6 +32,12 @@ it('nota: valor com o nível, ou travessão sem nota (0 é nota)', () => {
   expect(screen.getByText('0')).toBeInTheDocument()
   render(<NotaCelula nota={null} />)
   expect(screen.getByText('—')).toBeInTheDocument()
+})
+
+it('dado desligado pelo cliente não se confunde com dado que não existe', () => {
+  render(<NaoCompartilhado />)
+  expect(screen.getByText('Oculto')).toBeInTheDocument()
+  expect(screen.queryByText('—')).toBeNull()
 })
 
 it('ativo e inativo', () => {

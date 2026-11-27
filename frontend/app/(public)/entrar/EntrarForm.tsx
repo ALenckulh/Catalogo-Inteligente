@@ -103,6 +103,9 @@ export function EntrarForm() {
             Criar conta
           </Link>
         </Text>
+        <Text>
+          <Link href="/ajuda">Preciso de ajuda</Link>
+        </Text>
       </Flex>
     </Card>
   )

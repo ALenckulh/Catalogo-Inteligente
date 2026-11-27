@@ -76,6 +76,8 @@ export async function listAdminUsuarios(params?: {
       ultimaAtividade: lead?.ultimaAtividade ?? null,
       proximaCompra: lead?.proximaCompra ?? null,
       ativo: true,
+      contatoVisivel: true,
+      interesseVisivel: true,
     }
   })
   if (params?.categoria) {
@@ -123,7 +125,8 @@ export async function getAdminUsuario(id: number): Promise<AdminUsuarioDetalhe> 
   const compras = mockCompras.filter((c) => c.usuarioId === id)
   return {
     usuario: { ...user },
-    contatoProativo: false,
+    contatoVisivel: true,
+    interesseVisivel: true,
     scoresProduto: mockProdutos.slice(0, 3).map((p, i) => ({
       produtoId: p.id,
       produtoNome: p.nome,

@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -26,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
+import com.catalogo.auth.service.ConsentimentoService;
 import com.catalogo.catalog.dto.ProdutoResponse;
 import com.catalogo.catalog.entity.Categoria;
 import com.catalogo.catalog.entity.Produto;
@@ -50,6 +53,8 @@ class CatalogServiceTest {
     ScoreProdutoRepository scoreProdutoRepository;
     @Mock
     RankingService rankingService;
+    @Mock
+    ConsentimentoService consentimentoService;
 
     CatalogService catalogService;
 
@@ -60,7 +65,8 @@ class CatalogServiceTest {
                 categoriaRepository,
                 eventoRepository,
                 scoreProdutoRepository,
-                rankingService
+                rankingService,
+                consentimentoService
         );
     }
 
@@ -83,6 +89,21 @@ class CatalogServiceTest {
 
         var page = catalogService.listProdutos(null, 1L, null, null, 0, 20, false);
         assertEquals(0, page.total());
+    }
+
+    /** Desligou a personalização: as notas já gravadas não ordenam mais o catálogo. */
+    @Test
+    void semPersonalizacaoUsaSoPopularidade() {
+        when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of());
+        when(consentimentoService.aceitaCookies(7L)).thenReturn(false);
+        when(rankingService.personalWeight(0, false, false)).thenReturn(0.0);
+        when(rankingService.personalScores(null, null)).thenReturn(Map.of());
+        when(rankingService.loadPopularidade()).thenReturn(Map.of());
+
+        catalogService.listProdutos(null, null, null, null, 0, 20, false, 7L, null);
+
+        verify(rankingService).sortByRank(any(), eq(0.0), eq(Map.of()), any(), eq(false));
+        verifyNoInteractions(eventoRepository, scoreProdutoRepository);
     }
 
     @Test
@@ -140,6 +161,7 @@ class CatalogServiceTest {
 
     @Test
     void highInteractionPrefersPersonalWeight() {
+        when(consentimentoService.aceitaCookies(1L)).thenReturn(true);
         when(produtoRepository.searchIds(isNull(), isNull(), isNull(), isNull())).thenReturn(List.of());
         when(eventoRepository.countByUsuario_IdAndDeletedAtIsNull(1L)).thenReturn(12L);
         when(scoreProdutoRepository.countByUsuarioId(1L)).thenReturn(3L);

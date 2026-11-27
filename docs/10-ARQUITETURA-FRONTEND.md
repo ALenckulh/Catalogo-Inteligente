@@ -60,7 +60,8 @@ frontend/
 │   │   │   ├── _components/
 │   │   │   └── [slug]/page.tsx       # /produtos/{slug}
 │   │   ├── favoritos/page.tsx
-│   │   ├── conta/page.tsx
+│   │   ├── conta/page.tsx            # /conta (abas em _components/)
+│   │   ├── ajuda/page.tsx            # /ajuda (S5)
 │   │   ├── sobre/page.tsx            # /sobre — página da empresa (S0)
 │   │   ├── privacidade/page.tsx      # /privacidade (S1)
 │   │   └── termos/page.tsx           # /termos (S2)
@@ -79,6 +80,9 @@ frontend/
 │   ├── admin/                        # componentes compartilhados do admin
 │   ├── auth/                         # migração de histórico, sincronização de consentimento
 │   ├── layout/                       # header, footer, shell admin, banner de cookies, estados de página
+│   ├── Ajuda.tsx                     # /ajuda e aba Ajuda de /conta
+│   ├── LegalConteudo.tsx             # fonte única dos Termos e da Política
+│   ├── PaginaLegal.tsx               # layout de /termos (/privacidade usa DocumentoLegalCompacto)
 │   ├── ProdutoCard.tsx
 │   └── ui/                           # wrappers e re-exports do antd (barrel index.ts)
 │       ├── Alert/  Button/  Card/  Form/  Image/  Input/  Select/  Upload/

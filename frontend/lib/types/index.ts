@@ -109,8 +109,6 @@ export interface SignupRequest {
   razaoSocial?: string
   aceitaTermos: boolean
   aceitaPrivacidade: boolean
-  cookiesComportamentais?: boolean
-  contatoProativo?: boolean
 }
 
 export interface ProdutosQuery {

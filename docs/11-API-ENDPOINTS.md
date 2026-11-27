@@ -61,7 +61,7 @@ IDs de tela conforme [03](03-PAGINAS-E-UX.md).
 | 5 Catálogo | `/produtos` | `GET /api/produtos`, `GET /api/categorias`, `POST /api/eventos` |
 | 6 Produto | `/produtos/[slug]` | `GET /api/produtos/{slug}`, favoritos, `POST /api/eventos` |
 | 7 Favoritos | `/favoritos` | `GET/DELETE /api/favoritos…`, `POST /api/eventos` |
-| 8 Conta | `/conta` | `GET/PATCH /api/conta`, `POST …/consentimentos`, `GET …/exportar`, `DELETE /api/conta` |
+| 8 Conta | `/conta` | `GET/PATCH /api/conta`, `POST …/consentimentos`, `DELETE /api/conta` |
 | Global | primeiro evento / saída | `POST /api/visitantes/sessao`, `POST /api/auth/logout` |
 | A1 | `/admin/entrar` | `POST /api/admin/auth/login` |
 | A2 | `/admin` | `GET /api/admin/dashboard` |
@@ -74,7 +74,7 @@ IDs de tela conforme [03](03-PAGINAS-E-UX.md).
 | A9 | `/admin/configuracao` | `GET/PATCH …/pesos`, `GET/PATCH …/decay`, `DELETE …/decay/{categoriaId}`, `POST …/simular`, `POST …/recalcular` |
 | A11 | `/admin/projeto` | `GET …/pesos`, `GET …/decay` |
 
-S0–S3 e A10 (design-system): sem API de negócio. Sem tela: `POST /api/conta/solicitacoes-lgpd`, `GET/PATCH /api/admin/solicitacoes-lgpd`, `DELETE /api/admin/produtos/{id}` e `GET /api/health`.
+S0–S3, S5 e A10 (design-system): sem API de negócio. Sem tela: `GET /api/conta/exportar`, `GET /api/admin/usuarios/{id}/exportar`, `POST /api/conta/solicitacoes-lgpd`, `GET/PATCH /api/admin/solicitacoes-lgpd`, `DELETE /api/admin/produtos/{id}` e `GET /api/health`.
 
 ---
 
@@ -103,7 +103,7 @@ Formato de cada entrada: **Method Path** — auth · telas · RF · entidades ·
 | **Telas** | 3 |
 | **RF** | RF01–RF04 |
 | **Entidades** | `usuario`, `consentimento_lgpd` |
-| **Body** | `tipo` (`PF`\|`PJ`), `email`, `senha`, `telefone?`, `emailAlternativo?`; **PF:** `cpf`, `nomeCompleto`, `idade?`; **PJ:** `cnpj`, `razaoSocial`; `aceitaTermos` (bool), `aceitaPrivacidade` (bool), `cookiesComportamentais?`, `contatoProativo?` |
+| **Body** | `tipo` (`PF`\|`PJ`), `email`, `senha`, `telefone?`, `emailAlternativo?`; **PF:** `cpf`, `nomeCompleto`, `idade?`; **PJ:** `cnpj`, `razaoSocial`; `aceitaTermos` (bool), `aceitaPrivacidade` (bool), `cookiesComportamentais?`, `contatoProativo?` (ausentes = `true`, [04 §10.1](04-ESPECIFICACAO-TECNICA.md); o front não envia) |
 | **Resposta** | `201` + `AuthSession` |
 
 #### `POST /api/auth/login`
@@ -317,7 +317,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | | |
 |---|---|
 | **Auth** | auth |
-| **Telas** | 8 |
+| **Telas** | — (o titular pede por e-mail) |
 | **RF** | RF29 |
 | **Query** | `formato=json\|csv` |
 | **Notas** | Portabilidade: usuário, consentimentos vigentes, favoritos, eventos, compras (sem as observações internas) e solicitações. No CSV, texto que começa com `=`, `+`, `-` ou `@` ganha um apóstrofo, para a planilha não executar. Síncrono; grava uma `solicitacao_lgpd` `EXPORTACAO` já `ATENDIDA`. |
@@ -332,7 +332,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Entidades** | `solicitacao_lgpd` |
 | **Body** | `tipo` (`EXPORTACAO`\|`EXCLUSAO`\|`REVOGACAO_CONSENTIMENTO`\|`CORRECAO`), `detalhes?` |
 | **Resposta** | `201` + status `PENDENTE` |
-| **Notas** | Nenhuma tela usa: a exportação e a exclusão da tela Conta têm rotas próprias. |
+| **Notas** | Nenhuma tela usa: a exclusão da tela Conta tem rota própria e a cópia dos dados é pedida por e-mail. |
 
 #### `DELETE /api/conta`
 
@@ -356,8 +356,8 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **RF** | RF20 |
 | **Resposta** | `AdminDashboard`: |
 | | `kpis`: `{ usuariosAtivos, produtosAtivos, contatos7d, leadsScoreAlto }` |
-| | `leads[]`: `{ usuarioId, nome, tipo, email, telefone, scoreMaxProduto, topCategoria, ultimaAtividade, proximaCompra }` — os 10 clientes com maior nota |
-| | `series`: `{ distribuicaoScores[{ faixa, quantidade }], contatosPorDia[{ data, quantidade }], leadsPorCategoria[{ categoria, quantidade }] }` — `distribuicaoScores`: sempre 4 níveis, nesta ordem, em `faixa`: `QUENTE` (score máx. de produto ≥ 70), `MORNO` (≥ 40), `FRIO` (< 40), `SEM_SCORE` (sem score); `quantidade` = usuários ativos (não ADMIN); a soma = `kpis.usuariosAtivos`. `contatosPorDia`: 14 dias corridos até hoje, com `quantidade = 0` nos dias sem contato. `leadsPorCategoria`: top 10, `quantidade` = usuários ativos cuja categoria de maior score é a categoria. |
+| | `leads[]`: `{ usuarioId, nome, tipo, email, telefone, scoreMaxProduto, topCategoria, ultimaAtividade, proximaCompra }` — os 10 clientes com maior nota, entre os que aceitam contato e personalização |
+| | `series`: `{ distribuicaoScores[{ faixa, quantidade }], contatosPorDia[{ data, quantidade }], leadsPorCategoria[{ categoria, quantidade }] }` — `distribuicaoScores`: sempre 4 níveis, nesta ordem, em `faixa`: `QUENTE` (score máx. de produto ≥ 70), `MORNO` (≥ 40), `FRIO` (< 40), `SEM_SCORE` (sem score); `quantidade` = usuários ativos (não ADMIN) que aceitam personalização. `kpis.leadsScoreAlto` e `leadsPorCategoria` também só contam esses. `contatosPorDia`: 14 dias corridos até hoje, com `quantidade = 0` nos dias sem contato. `leadsPorCategoria`: top 10, `quantidade` = usuários ativos cuja categoria de maior score é a categoria. |
 
 #### `GET /api/admin/usuarios`
 
@@ -367,7 +367,7 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Telas** | A3 |
 | **RF** | RF21 |
 | **Query** | `tipo?`, `categoria?` (**nome** da categoria, match case-insensitive em `topCategoria`), `scoreMin?` †, `nivel?` (`QUENTE` ≥ 70, `MORNO` ≥ 40, `FRIO` < 40, `SEM_SCORE` sem score — pelo score máx. de produto; enum `NivelInteresse`), `q?` (nome, e-mail; com 3 dígitos ou mais, também CPF, CNPJ e telefone), `ativo?` (boolean), `page?`, `limit?` (até 100 por página), `sort?` (`campo,asc\|desc`; campos `nome`, `email`, `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`; outro valor = mais recentes primeiro) |
-| **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`), `proximaCompra` (nome do produto ativo de maior nota sem compra nos últimos 30 dias; null se não houver) |
+| **Resposta** | `Page<AdminUsuarioListItem>` — campos de `Usuario` + `scoreMaxProduto`, `topCategoria`, `ultimaAtividade`, **`ativo`** (`deleted_at IS NULL`), `proximaCompra` (nome do produto ativo de maior nota sem compra nos últimos 30 dias; null se não houver), `contatoVisivel` e `interesseVisivel`. Sem o primeiro, e-mail, telefone, documento e idade vêm nulos e não são achados pela busca; sem o segundo, nota, categoria, última atividade e próxima compra vêm nulas e o cliente não entra em nenhum `nivel` |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria` |
 
 † Front ainda não envia `scoreMin`.
@@ -379,8 +379,18 @@ Tipos principais: `VISUALIZACAO_PRODUTO`, `FAVORITAR`, `DESFAVORITAR`, `CONTATO_
 | **Auth** | admin |
 | **Telas** | A4 |
 | **RF** | RF22 |
-| **Resposta** | `AdminUsuarioDetalhe`: `{ usuario, contatoProativo (boolean ou null = nunca respondeu), scoresProduto[{ produtoId, produtoNome, valor }], scoresCategoria[{ categoriaId, categoriaNome, valor }], faixaPreco[{ medianaComConversao, medianaSemConversao, gapPreco }], compras[] }` |
+| **Resposta** | `AdminUsuarioDetalhe`: `{ usuario, contatoVisivel, interesseVisivel (mesma regra da lista), scoresProduto[{ produtoId, produtoNome, valor }], scoresCategoria[{ categoriaId, categoriaNome, valor }], faixaPreco[{ medianaComConversao, medianaSemConversao, gapPreco }], compras[] }` |
 | **Entidades** | `usuario`, `score_produto`, `score_categoria`, `faixa_preco_usuario`, `compra` |
+
+#### `GET /api/admin/usuarios/{id}/exportar`
+
+| | |
+|---|---|
+| **Auth** | admin |
+| **Telas** | — |
+| **RF** | RF29 |
+| **Resposta** | A mesma de `GET /api/conta/exportar` em JSON |
+| **Notas** | Para atender o pedido que o titular fez por e-mail; inclui o que fica oculto nas telas. Grava uma `solicitacao_lgpd` `EXPORTACAO` já `ATENDIDA`. `404` para conta excluída. |
 
 #### `POST /api/admin/usuarios/{id}/compras`
 
@@ -588,6 +598,7 @@ Itens que não estavam no esboço inicial da arquitetura:
 | `GET/PATCH /api/admin/conta` | RF26 / A8 |
 | `GET/PATCH /api/admin/configuracao/decay`, `DELETE …/decay/{categoriaId}` | RF25 λ / A9 |
 | `GET /api/admin/produtos/{id}` | A7 pré-preenche formulário |
+| `GET /api/admin/usuarios/{id}/exportar` | RF29: cópia pedida por e-mail |
 
 **Este arquivo é a fonte de verdade** da API.
 
