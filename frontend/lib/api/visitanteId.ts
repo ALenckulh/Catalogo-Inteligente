@@ -18,7 +18,7 @@ export function readVisitanteId(): string | null {
   try {
     const id = window.localStorage.getItem(VISITANTE_COOKIE_KEY)
     if (!id) return null
-    const desde = Number(window.localStorage.getItem(VISITANTE_DESDE_KEY) ?? NaN)
+    const desde = Number(window.localStorage.getItem(VISITANTE_DESDE_KEY) ?? Number.NaN)
     if (Date.now() - desde < VISITANTE_VALIDADE_MS) return id
   } catch {
     return null

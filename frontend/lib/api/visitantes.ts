@@ -45,7 +45,7 @@ function readSessaoAtiva(): number | undefined {
   const id = readSessaoId()
   if (id === undefined) return undefined
   try {
-    const ativaEm = Number(window.localStorage.getItem(SESSAO_ATIVA_EM_KEY) ?? NaN)
+    const ativaEm = Number(window.localStorage.getItem(SESSAO_ATIVA_EM_KEY) ?? Number.NaN)
     return Date.now() - ativaEm < SESSAO_INATIVIDADE_MS ? id : undefined
   } catch {
     return undefined

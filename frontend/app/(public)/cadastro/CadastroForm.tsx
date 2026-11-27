@@ -396,7 +396,7 @@ export function CadastroForm() {
           role="region"
           aria-label="Termos de Uso e Política de Privacidade"
           // Rola com o teclado; os botões do modal ficam sempre à vista.
-          tabIndex={0}
+          tabIndex={0} // NOSONAR: região rolável precisa de foco pelo teclado (WCAG 2.1.1)
           style={{
             maxHeight: 'clamp(240px, calc(100dvh - 240px), 560px)',
             overflowY: 'auto',
